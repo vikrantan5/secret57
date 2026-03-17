@@ -32,6 +32,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email, password, role) => {
     try {
       set({ loading: true });
+
+       console.log('=== LOGIN ATTEMPT ===');
+      console.log('Email:', email);
+      console.log('Role:', role);
       
       // Sign in with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
@@ -40,29 +44,60 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
 
       if (authError) {
+        console.error('Auth error:', authError);
         set({ loading: false });
         return { success: false, error: authError.message };
       }
 
       if (!authData.user) {
+          console.error('No user returned from auth');
         set({ loading: false });
         return { success: false, error: 'Login failed' };
       }
 
+        console.log('Auth successful, user ID:', authData.user.id);
+
       // Fetch user data from users table
-      const { data: userData, error: userError } = await supabase
+       console.log('Fetching user data from public.users...');
+      let { data: userData, error: userError } = await supabase
         .from('users')
         .select('*')
         .eq('id', authData.user.id)
         .single();
-
+        
+         console.log('User query result:', { userData, userError });
       if (userError || !userData) {
+        console.error('User fetch error:', userError);
+        console.error('Attempting to create user record...');
+        
+        // Try to create user record if it doesn't exist
+        const { data: newUser, error: insertError } = await supabaseAdmin
+          .from('users')
+          .insert([{
+            id: authData.user.id,
+            name: authData.user.email?.split('@')[0] || 'User',
+            email: authData.user.email || email,
+            phone: '0000000000',
+            role: role,
+            seller_status: role === 'seller' ? 'pending' : null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }])
+          .select()
+          .single();
+
+        if (insertError || !newUser) {
+          console.error('Failed to create user record:', insertError);
         set({ loading: false });
-        return { success: false, error: 'User not found' };
+         return { success: false, error: 'User not found. Please register first or contact support.' };
+        }
+
+        console.log('User record created successfully');
+        userData = newUser;
       }
 
       // Check if role matches
-      if (userData.role !== role) {
+      if (userData && userData.role !== role) {
         await supabase.auth.signOut();
         set({ loading: false });
         return { success: false, error: `This account is not registered as a ${role}` };

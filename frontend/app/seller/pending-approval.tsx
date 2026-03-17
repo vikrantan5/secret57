@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/authStore';
 import { useSellerStore } from '../../src/store/sellerStore';
 import { colors, spacing, typography, borderRadius } from '../../src/constants/theme';
-import Button from '../../src/components/ui/Button';
+import {Button} from '../../src/components/ui/Button';
 
 export default function PendingApprovalScreen() {
   const router = useRouter();

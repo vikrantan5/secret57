@@ -16,8 +16,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../src/store/authStore';
 import { useSellerStore } from '../../src/store/sellerStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
-import Button from '../../src/components/ui/Button';
-import Input from '../../src/components/ui/Input';
+import {Button} from '../../src/components/ui/Button';
+import {Input} from '../../src/components/ui/Input';
 
 export default function CompanySetupScreen() {
   const router = useRouter();
@@ -45,11 +45,11 @@ export default function CompanySetupScreen() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: type === 'logo' ? [1, 1] : [4, 3],
-      quality: 0.8,
-    });
+  mediaTypes: ['images'], // ✅ ONLY THIS (no MediaType, no MediaTypeOptions)
+  allowsEditing: true,
+  aspect: type === 'logo' ? [1, 1] : [4, 3],
+  quality: 0.8,
+});
 
     if (!result.canceled && result.assets[0]) {
       if (type === 'logo') {
@@ -69,9 +69,9 @@ export default function CompanySetupScreen() {
     if (!state.trim()) newErrors.state = 'State is required';
     if (!pincode.trim()) {
       newErrors.pincode = 'Pincode is required';
-    } else if (!/^d{6}$/.test(pincode)) {
-      newErrors.pincode = 'Invalid pincode format';
-    }
+    } else if (!/^\d{6}$/.test(pincode)) {
+  newErrors.pincode = 'Invalid pincode format';
+}
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
