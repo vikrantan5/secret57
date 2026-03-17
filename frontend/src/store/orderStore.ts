@@ -39,6 +39,7 @@ interface OrderState {
   
   fetchOrders: (userId: string) => Promise<void>;
   fetchOrderById: (id: string) => Promise<void>;
+   fetchSellerOrders: (sellerId: string) => Promise<void>;
   createOrder: (order: Partial<Order>, items: any[]) => Promise<{ success: boolean; error?: string; order?: Order }>;
   updateOrderStatus: (id: string, status: string) => Promise<{ success: boolean; error?: string }>;
   updatePaymentStatus: (orderId: string, paymentData: any) => Promise<{ success: boolean; error?: string }>;
@@ -99,6 +100,50 @@ export const useOrderStore = create<OrderState>((set, get) => ({
       set({ selectedOrder: data, loading: false });
     } catch (error: any) {
       console.error('Error in fetchOrderById:', error);
+      set({ error: error.message, loading: false });
+    }
+  },
+
+   fetchSellerOrders: async (sellerId: string) => {
+    try {
+      set({ loading: true, error: null });
+      
+      const { data, error } = await supabase
+        .from('order_items')
+        .select(`
+          *,
+          order:orders(*)
+        `)
+        .eq('seller_id', sellerId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching seller orders:', error);
+        set({ error: error.message, loading: false });
+        return;
+      }
+
+      // Group by order and format
+      const ordersMap = new Map();
+      data?.forEach((item: any) => {
+        if (item.order) {
+          const orderId = item.order.id;
+          if (!ordersMap.has(orderId)) {
+            ordersMap.set(orderId, {
+              ...item.order,
+              items: [item],
+              customer_name: item.order.shipping_name,
+            });
+          } else {
+            ordersMap.get(orderId).items.push(item);
+          }
+        }
+      });
+
+      const orders = Array.from(ordersMap.values());
+      set({ orders, loading: false });
+    } catch (error: any) {
+      console.error('Error in fetchSellerOrders:', error);
       set({ error: error.message, loading: false });
     }
   },

@@ -1,133 +1,176 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  SafeAreaView,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
-  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useAdminStore } from '../../src/store/adminStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
+import { supabase } from '../../src/services/supabase';
 
 export default function AdminDashboardScreen() {
   const router = useRouter();
-  const { user } = useAuthStore();
-  const { stats, loading, fetchPlatformStats } = useAdminStore();
+  const { user, logout } = useAuthStore();
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalSellers: 0,
+    pendingSellers: 0,
+    totalProducts: 0,
+    totalOrders: 0,
+    totalRevenue: 0,
+  });
 
   useEffect(() => {
-    // Check if user is admin
     if (user?.role !== 'admin') {
-      router.replace('/(tabs)/home');
+      Alert.alert('Access Denied', 'You do not have admin privileges', [
+        { text: 'OK', onPress: () => router.replace('/') },
+      ]);
       return;
     }
-    
-    fetchPlatformStats();
+    loadStats();
   }, [user]);
 
-  if (loading || !stats) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
+  const loadStats = async () => {
+    try {
+      // Get total users
+      const { count: usersCount } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true });
 
-  const menuItems = [
+      // Get total sellers
+      const { count: sellersCount } = await supabase
+        .from('sellers')
+        .select('*', { count: 'exact', head: true });
+
+      // Get pending sellers
+      const { count: pendingCount } = await supabase
+        .from('sellers')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+
+      // Get total products
+      const { count: productsCount } = await supabase
+        .from('products')
+        .select('*', { count: 'exact', head: true });
+
+      // Get total orders
+      const { count: ordersCount } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true });
+
+      // Get total revenue
+      const { data: ordersData } = await supabase
+        .from('orders')
+        .select('total_amount')
+        .eq('payment_status', 'paid');
+
+      const totalRevenue = ordersData?.reduce((sum, order) => sum + order.total_amount, 0) || 0;
+
+      setStats({
+        totalUsers: usersCount || 0,
+        totalSellers: sellersCount || 0,
+        pendingSellers: pendingCount || 0,
+        totalProducts: productsCount || 0,
+        totalOrders: ordersCount || 0,
+        totalRevenue,
+      });
+    } catch (error) {
+      console.error('Error loading stats:', error);
+    }
+  };
+
+  const adminMenuItems = [
     {
-      id: 'pending-sellers',
-      title: 'Pending Sellers',
-      icon: 'people',
-      count: stats.pending_sellers,
+      id: '1',
+      title: 'Pending Approvals',
+      icon: 'time' as const,
+      count: stats.pendingSellers,
       color: colors.warning,
       route: '/admin/pending-sellers',
     },
     {
-      id: 'users',
-      title: 'Manage Users',
-      icon: 'person',
-      count: stats.total_users,
+      id: '2',
+      title: 'All Users',
+      icon: 'people' as const,
+      count: stats.totalUsers,
       color: colors.primary,
       route: '/admin/users',
     },
     {
-      id: 'orders',
-      title: 'All Orders',
-      icon: 'receipt',
-      count: stats.total_orders,
-      color: colors.success,
-      route: '/admin/orders',
+      id: '3',
+      title: 'All Sellers',
+      icon: 'business' as const,
+      count: stats.totalSellers,
+      color: colors.secondary,
+      route: '/admin/sellers',
     },
     {
-      id: 'products',
-      title: 'Products',
-      icon: 'cube',
-      count: stats.total_products,
-      color: colors.secondary,
+      id: '4',
+      title: 'All Products',
+      icon: 'cube' as const,
+      count: stats.totalProducts,
+      color: colors.success,
       route: '/admin/products',
+    },
+    {
+      id: '5',
+      title: 'All Orders',
+      icon: 'receipt' as const,
+      count: stats.totalOrders,
+      color: colors.info,
+      route: '/admin/orders',
     },
   ];
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Admin Panel</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Stats Cards */}
-        <View style={styles.statsContainer}>
-          <View style={[styles.statCard, shadows.md, { backgroundColor: colors.primary }]}>
-            <Ionicons name="cash" size={32} color={colors.surface} />
-            <Text style={styles.statValue}>₹{stats.total_revenue.toFixed(0)}</Text>
-            <Text style={styles.statLabel}>Total Revenue</Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>Admin Dashboard</Text>
+            <Text style={styles.subtitle}>Platform Management</Text>
           </View>
-
-          <View style={[styles.statCard, shadows.md, { backgroundColor: colors.success }]}>
-            <Ionicons name="cart" size={32} color={colors.surface} />
-            <Text style={styles.statValue}>{stats.total_orders}</Text>
-            <Text style={styles.statLabel}>Total Orders</Text>
-          </View>
-
-          <View style={[styles.statCard, shadows.md, { backgroundColor: colors.secondary }]}>
-            <Ionicons name="calendar" size={32} color={colors.surface} />
-            <Text style={styles.statValue}>{stats.total_bookings}</Text>
-            <Text style={styles.statLabel}>Total Bookings</Text>
-          </View>
-
-          <View style={[styles.statCard, shadows.md, { backgroundColor: colors.warning }]}>
-            <Ionicons name="storefront" size={32} color={colors.surface} />
-            <Text style={styles.statValue}>{stats.total_sellers}</Text>
-            <Text style={styles.statLabel}>Total Sellers</Text>
-          </View>
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={() => {
+              Alert.alert('Logout', 'Are you sure you want to logout?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Logout', style: 'destructive', onPress: logout },
+              ]);
+            }}
+          >
+            <Ionicons name="log-out-outline" size={24} color={colors.error} />
+          </TouchableOpacity>
         </View>
 
-        {/* Menu Items */}
-        <View style={styles.menuContainer}>
-          {menuItems.map((item) => (
+        {/* Revenue Card */}
+        <View style={[styles.revenueCard, shadows.md]}>
+          <Text style={styles.revenueLabel}>Total Platform Revenue</Text>
+          <Text style={styles.revenueValue}>₹{stats.totalRevenue.toLocaleString()}</Text>
+          <Text style={styles.revenueNote}>From all completed transactions</Text>
+        </View>
+
+        {/* Admin Menu */}
+        <View style={styles.menuGrid}>
+          {adminMenuItems.map((item) => (
             <TouchableOpacity
               key={item.id}
-              style={[styles.menuItem, shadows.sm]}
+              style={[styles.menuCard, shadows.sm]}
               onPress={() => router.push(item.route as any)}
-              data-testid={`admin-menu-${item.id}`}
             >
-              <View style={[styles.menuIcon, { backgroundColor: item.color + '20' }]}>
-                <Ionicons name={item.icon as any} size={28} color={item.color} />
+              <View style={[styles.iconBox, { backgroundColor: item.color + '20' }]}>
+                <Ionicons name={item.icon} size={28} color={item.color} />
               </View>
-              <View style={styles.menuContent}>
-                <Text style={styles.menuTitle}>{item.title}</Text>
-                <Text style={styles.menuCount}>{item.count} items</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
+              <Text style={styles.menuCount}>{item.count}</Text>
+              <Text style={styles.menuTitle}>{item.title}</Text>
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} style={styles.menuArrow} />
             </TouchableOpacity>
           ))}
         </View>
@@ -137,19 +180,31 @@ export default function AdminDashboardScreen() {
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           
           <TouchableOpacity
-            style={[styles.actionButton, shadows.sm]}
-            onPress={() => fetchPlatformStats()}
+            style={[styles.actionCard, shadows.sm]}
+            onPress={() => router.push('/admin/categories' as any)}
           >
-            <Ionicons name="refresh" size={20} color={colors.primary} />
-            <Text style={styles.actionText}>Refresh Stats</Text>
+            <View style={[styles.actionIcon, { backgroundColor: colors.primary + '20' }]}>
+              <Ionicons name="apps" size={24} color={colors.primary} />
+            </View>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionTitle}>Manage Categories</Text>
+              <Text style={styles.actionSubtitle}>Add, edit, or remove categories</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.actionButton, shadows.sm]}
-            onPress={() => router.push('/admin/analytics')}
+            style={[styles.actionCard, shadows.sm]}
+            onPress={loadStats}
           >
-            <Ionicons name="bar-chart" size={20} color={colors.primary} />
-            <Text style={styles.actionText}>View Analytics</Text>
+            <View style={[styles.actionIcon, { backgroundColor: colors.success + '20' }]}>
+              <Ionicons name="refresh" size={24} color={colors.success} />
+            </View>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionTitle}>Refresh Statistics</Text>
+              <Text style={styles.actionSubtitle}>Update dashboard data</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -162,103 +217,122 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-  },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingTop: spacing.xl,
   },
-  backButton: {
-    width: 40,
-  },
-  headerTitle: {
-    ...typography.h3,
+  greeting: {
+    ...typography.h2,
     color: colors.text,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  statCard: {
-    width: '48%',
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-  },
-  statValue: {
-    ...typography.h2,
-    color: colors.surface,
-    fontWeight: '700',
-    marginTop: spacing.sm,
-  },
-  statLabel: {
-    ...typography.bodySmall,
-    color: colors.surface,
-    opacity: 0.9,
+  subtitle: {
+    ...typography.body,
+    color: colors.textSecondary,
     marginTop: spacing.xs,
   },
-  menuContainer: {
-    padding: spacing.lg,
-    gap: spacing.md,
+  logoutButton: {
+    padding: spacing.sm,
   },
-  menuItem: {
-    flexDirection: 'row',
+  revenueCard: {
+    backgroundColor: colors.primary,
+    margin: spacing.lg,
+    padding: spacing.xl,
+    borderRadius: borderRadius.lg,
     alignItems: 'center',
+  },
+  revenueLabel: {
+    ...typography.body,
+    color: colors.white,
+    opacity: 0.9,
+  },
+  revenueValue: {
+    ...typography.h1,
+    color: colors.white,
+    fontWeight: '700',
+    marginVertical: spacing.sm,
+  },
+  revenueNote: {
+    ...typography.caption,
+    color: colors.white,
+    opacity: 0.8,
+  },
+  menuGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  menuCard: {
     backgroundColor: colors.surface,
+    width: '47%',
     padding: spacing.lg,
     borderRadius: borderRadius.lg,
-    gap: spacing.md,
+    position: 'relative',
   },
-  menuIcon: {
+  iconBox: {
     width: 56,
     height: 56,
     borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: spacing.md,
   },
-  menuContent: {
-    flex: 1,
+  menuCount: {
+    ...typography.h2,
+    color: colors.text,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
   },
   menuTitle: {
     ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
-    marginBottom: spacing.xs,
-  },
-  menuCount: {
-    ...typography.bodySmall,
     color: colors.textSecondary,
+    fontSize: 13,
+  },
+  menuArrow: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
   },
   section: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
   },
   sectionTitle: {
     ...typography.h4,
     color: colors.text,
     marginBottom: spacing.md,
   },
-  actionButton: {
+  actionCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
     padding: spacing.md,
     borderRadius: borderRadius.md,
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
-  actionText: {
+  actionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  actionContent: {
+    flex: 1,
+  },
+  actionTitle: {
     ...typography.body,
-    color: colors.primary,
+    color: colors.text,
     fontWeight: '600',
+    marginBottom: spacing.xs / 2,
+  },
+  actionSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
   },
 });

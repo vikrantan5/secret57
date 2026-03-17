@@ -7,7 +7,7 @@ export interface Service {
   category_id: string;
   name: string;
   description: string;
-  price: number;
+ price: number;
   duration: number | null; // in minutes
   images: string[] | null;
   location_type: 'visit_customer' | 'customer_visits' | 'both' | null;
