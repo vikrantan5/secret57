@@ -1,3 +1,4 @@
+import React from 'react';
 import { create } from 'zustand';
 import { supabase, User } from '../services/supabase';
 

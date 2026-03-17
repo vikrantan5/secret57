@@ -2,23 +2,50 @@ import { useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../src/store/authStore';
+import { useSellerStore } from '../src/store/sellerStore';
 import { colors, spacing, typography } from '../src/constants/theme';
 
 export default function SplashScreen() {
   const router = useRouter();
-  const { isAuthenticated, loading } = useAuthStore();
+  const { user, isAuthenticated, loading } = useAuthStore();
+  const { fetchSellerProfile, seller } = useSellerStore();
 
   useEffect(() => {
-    if (!loading) {
-      setTimeout(() => {
-        if (isAuthenticated) {
-          router.replace('/(tabs)/home');
-        } else {
-          router.replace('/auth/role-selection');
+     const checkUserStatus = async () => {
+      if (!loading && isAuthenticated && user) {
+        // If user is a seller, check if they have completed company setup
+        if (user.role === 'seller') {
+          await fetchSellerProfile(user.id);
         }
+
+        // Navigate based on user status
+      setTimeout(() => {
+         if (user.role === 'seller') {
+            if (!seller) {
+              // Seller hasn't completed company setup
+              router.replace('/seller/company-setup');
+            } else if (seller.status === 'pending' || seller.status === 'rejected') {
+              // Seller is waiting for approval
+              router.replace('/seller/pending-approval');
+            } else if (seller.status === 'approved') {
+              // Approved seller goes to dashboard
+              router.replace('/seller/dashboard');
+            }
+          } else {
+            // Customer goes to home
+          router.replace('/(tabs)/home');
+           }
+        }, 1500);
+      } else if (!loading && !isAuthenticated) {
+        setTimeout(() => {
+          router.replace('/auth/role-selection');
+        
       }, 1500);
     }
-  }, [loading, isAuthenticated]);
+ };
+
+    checkUserStatus();
+  }, [loading, isAuthenticated, user, seller]);
 
   return (
     <View style={styles.container}>
