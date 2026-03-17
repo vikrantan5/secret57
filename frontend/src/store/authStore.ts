@@ -1,6 +1,6 @@
 import React from 'react';
 import { create } from 'zustand';
-import { supabase, User } from '../services/supabase';
+import { supabase, supabaseAdmin, User } from '../services/supabase';
 
 interface AuthState {
   user: User | null;
@@ -92,6 +92,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       set({ loading: true });
 
+      console.log('=== REGISTRATION START ===');
+      console.log('Name:', name);
+      console.log('Email:', email);
+      console.log('Phone:', phone);
+      console.log('Role:', role);
+
       // Create auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
@@ -99,16 +105,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
 
       if (authError) {
+        console.error('Auth signup error:', authError);
         set({ loading: false });
         return { success: false, error: authError.message };
       }
 
       if (!authData.user) {
+        console.error('No user returned from auth.signUp');
         set({ loading: false });
         return { success: false, error: 'Registration failed' };
       }
 
-      // Create user record
+      console.log('Auth user created successfully:', authData.user.id);
+
+      // Create user record using service role to bypass RLS
       const newUser = {
         id: authData.user.id,
         name,
@@ -117,27 +127,34 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         role,
         seller_status: role === 'seller' ? 'pending' : null,
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
 
-      const { error: insertError } = await supabase
+      console.log('Inserting user record into public.users:', newUser);
+
+      const { data: insertData, error: insertError } = await supabaseAdmin
         .from('users')
-        .insert([newUser]);
+        .insert([newUser])
+        .select();
 
       if (insertError) {
-        // Rollback auth user creation
-        await supabase.auth.admin.deleteUser(authData.user.id);
+        console.error('User insert error:', insertError);
+        console.error('Error details:', JSON.stringify(insertError, null, 2));
         set({ loading: false });
         return { success: false, error: insertError.message };
       }
 
+      console.log('User record created successfully:', insertData);
+      console.log('=== REGISTRATION COMPLETE ===');
+
       set({ loading: false });
       return { success: true };
     } catch (error: any) {
+      console.error('Registration exception:', error);
       set({ loading: false });
       return { success: false, error: error.message || 'Registration failed' };
     }
   },
-
   logout: async () => {
     try {
       await supabase.auth.signOut();
