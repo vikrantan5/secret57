@@ -19,6 +19,7 @@ import { useCategoryStore } from '../../src/store/categoryStore';
 import { ProductCard } from '../../src/components/cards/ProductCard';
 import { ServiceCard } from '../../src/components/cards/ServiceCard';
 import { useCartStore } from '../../src/store/cartStore';
+import { useNotificationStore } from '../../src/store/notificationStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 
 const getIconName = (icon: string): any => {
@@ -41,14 +42,17 @@ export default function HomeScreen() {
   const { products, fetchProducts } = useProductStore();
   const { services, fetchServices } = useServiceStore();
   const { addItem } = useCartStore();
-
+  const { unreadCount, fetchNotifications } = useNotificationStore();
   useEffect(() => {
     fetchCategories();
     // Fetch recent products and services
     fetchProducts();
     fetchServices();
-  }, []);
-
+    // Fetch notifications
+    if (user?.id) {
+      fetchNotifications(user.id);
+    }
+  }, [user]);
   const handleAddToCart = (product: any) => {
     addItem({
       id: product.id,
@@ -69,27 +73,29 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Hello,</Text>
-            <Text style={styles.userName}>{user?.name || 'Guest'}</Text>
-          </View>
-          <TouchableOpacity style={styles.notificationButton}>
-            <Ionicons name="notifications" size={24} color={colors.text} />
-            <View style={styles.badge} />
-          </TouchableOpacity>
-        </View>
+{/* Header */}
+<View style={styles.header}>
+  <View>
+    <Text style={styles.greeting}>Hello,</Text>
+    <Text style={styles.userName}>{user?.name || 'Guest'}</Text>
+  </View>
 
-        {/* Search Bar */}
-        <TouchableOpacity 
-          style={[styles.searchBar, shadows.sm]}
-          onPress={() => router.push('/(tabs)/categories')}
-          data-testid="search-bar"
-        >
-          <Ionicons name="search" size={20} color={colors.textSecondary} />
-          <Text style={styles.searchPlaceholder}>Search services or products...</Text>
-        </TouchableOpacity>
+  <TouchableOpacity 
+    style={styles.notificationButton}
+    onPress={() => router.push('/notifications')}
+    data-testid="notification-bell"
+  >
+    <Ionicons name="notifications" size={24} color={colors.text} />
+    {unreadCount > 0 && (
+      <View style={styles.badge}>
+        <Text style={styles.badgeText}>
+          {unreadCount > 9 ? '9+' : unreadCount}
+        </Text>
+      </View>
+    )}
+  </TouchableOpacity>
+
+</View>  {/* ✅ THIS WAS MISSING */}
 
         {/* Welcome Card */}
         <View style={[styles.welcomeCard, shadows.md]}>
@@ -213,12 +219,21 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+ top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: colors.error,
+     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    ...typography.caption,
+    color: colors.surface,
+    fontWeight: '700',
+    fontSize: 10,
   },
   searchBar: {
     flexDirection: 'row',

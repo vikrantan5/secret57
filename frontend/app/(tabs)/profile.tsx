@@ -35,15 +35,31 @@ export default function ProfileScreen() {
     );
   };
 
-  const menuItems = [
-    { id: '1', title: 'Edit Profile', icon: 'person-circle' as const, route: '/profile/edit' },
-    { id: '2', title: 'My Orders', icon: 'bag-handle' as const, route: '/orders' },
-    { id: '3', title: 'Addresses', icon: 'location' as const, route: '/profile/addresses' },
-    { id: '4', title: 'Payment Methods', icon: 'card' as const, route: '/profile/payment-methods' },
-    { id: '5', title: 'Notifications', icon: 'notifications' as const, route: '/profile/notifications' },
+   // Menu items based on role
+  const getMenuItems = () => {
+    const baseItems = [
+      { id: '1', title: 'My Orders', icon: 'bag-handle' as const, route: '/orders' },
+      { id: '2', title: 'Wishlist', icon: 'heart' as const, route: '/wishlist' },
+      { id: '3', title: 'Notifications', icon: 'notifications' as const, route: '/notifications' },
+    ];
+
+    if (user?.role === 'seller') {
+      baseItems.push({ id: '4', title: 'Seller Dashboard', icon: 'storefront' as const, route: '/seller/dashboard' });
+    }
+
+    if (user?.role === 'admin') {
+      baseItems.push({ id: '5', title: 'Admin Panel', icon: 'shield-checkmark' as const, route: '/admin/dashboard' });
+    }
+
+    baseItems.push(
     { id: '6', title: 'Help & Support', icon: 'help-circle' as const, route: '/profile/help' },
     { id: '7', title: 'Settings', icon: 'settings' as const, route: '/profile/settings' },
-  ];
+   );
+
+    return baseItems;
+  };
+
+  const menuItems = getMenuItems();
 
   const getRoleColor = () => {
     switch (user?.role) {
