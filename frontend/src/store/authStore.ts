@@ -33,7 +33,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       set({ loading: true });
 
-       console.log('=== LOGIN ATTEMPT ===');
+      console.log('=== LOGIN ATTEMPT ===');
       console.log('Email:', email);
       console.log('Role:', role);
       
@@ -50,27 +50,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       if (!authData.user) {
-          console.error('No user returned from auth');
+        console.error('No user returned from auth');
         set({ loading: false });
         return { success: false, error: 'Login failed' };
       }
 
-        console.log('Auth successful, user ID:', authData.user.id);
+      console.log('Auth successful, user ID:', authData.user.id);
 
       // Fetch user data from users table
-       console.log('Fetching user data from public.users...');
+      console.log('Fetching user data from public.users...');
       let { data: userData, error: userError } = await supabase
         .from('users')
         .select('*')
         .eq('id', authData.user.id)
         .single();
         
-         console.log('User query result:', { userData, userError });
-      if (userError || !userData) {
-        console.error('User fetch error:', userError);
-        console.error('Attempting to create user record...');
+      console.log('User query result:', { userData, userError });
+      
+      // If user doesn't exist in public.users, create it
+      if (userError && userError.code === 'PGRST116') {
+        console.log('User record not found, creating new record...');
         
-        // Try to create user record if it doesn't exist
         const { data: newUser, error: insertError } = await supabaseAdmin
           .from('users')
           .insert([{
@@ -86,14 +86,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           .select()
           .single();
 
-        if (insertError || !newUser) {
+        if (insertError) {
           console.error('Failed to create user record:', insertError);
-        set({ loading: false });
-         return { success: false, error: 'User not found. Please register first or contact support.' };
+          await supabase.auth.signOut();
+          set({ loading: false });
+          return { success: false, error: 'Failed to create user profile. Please try again.' };
         }
 
         console.log('User record created successfully');
         userData = newUser;
+      } else if (userError) {
+        // Other errors (like RLS policy errors)
+        console.error('User fetch error:', userError);
+        await supabase.auth.signOut();
+        set({ loading: false });
+        return { success: false, error: 'Failed to fetch user data. Please check your database policies.' };
       }
 
       // Check if role matches
@@ -102,7 +109,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ loading: false });
         return { success: false, error: `This account is not registered as a ${role}` };
       }
-
 
 
       set({ 
