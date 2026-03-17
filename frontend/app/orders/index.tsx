@@ -12,74 +12,61 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/authStore';
-import { useBookingStore, Booking } from '../../src/store/bookingStore';
+import { useOrderStore, Order } from '../../src/store/orderStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 
-type FilterType = 'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
+type FilterType = 'all' | 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
 
-export default function BookingsScreen() {
+export default function OrdersScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { bookings, loading, fetchBookings } = useBookingStore();
+  const { orders, loading, fetchOrders } = useOrderStore();
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
-      fetchBookings(user.id);
+      fetchOrders(user.id);
     }
   }, [user]);
 
   const onRefresh = async () => {
     setRefreshing(true);
     if (user?.id) {
-      await fetchBookings(user.id);
+      await fetchOrders(user.id);
     }
     setRefreshing(false);
   };
 
   const filters = [
-    { key: 'all' as FilterType, label: 'All', icon: 'list' },
-    { key: 'pending' as FilterType, label: 'Pending', icon: 'time' },
-    { key: 'confirmed' as FilterType, label: 'Confirmed', icon: 'checkmark-circle' },
-    { key: 'completed' as FilterType, label: 'Completed', icon: 'checkmark-done' },
-    { key: 'cancelled' as FilterType, label: 'Cancelled', icon: 'close-circle' },
+    { key: 'all' as FilterType, label: 'All' },
+    { key: 'pending' as FilterType, label: 'Pending' },
+    { key: 'processing' as FilterType, label: 'Processing' },
+    { key: 'shipped' as FilterType, label: 'Shipped' },
+    { key: 'delivered' as FilterType, label: 'Delivered' },
+    { key: 'cancelled' as FilterType, label: 'Cancelled' },
   ];
 
-  const filteredBookings = bookings.filter(booking => {
+  const filteredOrders = orders.filter(order => {
     if (activeFilter === 'all') return true;
-    return booking.status === activeFilter;
+    return order.status === activeFilter;
   });
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending':
         return colors.warning;
-      case 'confirmed':
+      case 'processing':
         return colors.primary;
-      case 'completed':
+      case 'shipped':
+        return colors.primary;
+      case 'delivered':
         return colors.success;
       case 'cancelled':
-      case 'rejected':
+      case 'refunded':
         return colors.error;
       default:
         return colors.textSecondary;
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return 'time';
-      case 'confirmed':
-        return 'checkmark-circle';
-      case 'completed':
-        return 'checkmark-done';
-      case 'cancelled':
-      case 'rejected':
-        return 'close-circle';
-      default:
-        return 'help-circle';
     }
   };
 
@@ -92,31 +79,18 @@ export default function BookingsScreen() {
     });
   };
 
-  const formatTime = (timeString: string) => {
-    const [hours, minutes] = timeString.split(':');
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const formattedHour = hour % 12 || 12;
-    return `${formattedHour}:${minutes} ${ampm}`;
-  };
-
-  const renderBookingCard = ({ item }: { item: Booking }) => (
+  const renderOrderCard = ({ item }: { item: Order }) => (
     <TouchableOpacity
-      style={[styles.bookingCard, shadows.sm]}
-      onPress={() => router.push(`/booking/${item.id}`)}
-      data-testid={`booking-card-${item.id}`}
+      style={[styles.orderCard, shadows.sm]}
+      onPress={() => router.push(`/order/${item.id}`)}
+      data-testid={`order-card-${item.id}`}
     >
       <View style={styles.cardHeader}>
-        <View style={styles.serviceInfo}>
-          <Text style={styles.serviceName} numberOfLines={1}>
-            {item.service?.name || 'Service'}
-          </Text>
-          <Text style={styles.sellerName} numberOfLines={1}>
-            {item.seller?.company_name || 'Seller'}
-          </Text>
+        <View>
+          <Text style={styles.orderNumber}>{item.order_number}</Text>
+          <Text style={styles.orderDate}>{formatDate(item.created_at)}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-          <Ionicons name={getStatusIcon(item.status) as any} size={16} color={getStatusColor(item.status)} />
           <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
             {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
           </Text>
@@ -127,17 +101,19 @@ export default function BookingsScreen() {
 
       <View style={styles.cardBody}>
         <View style={styles.infoRow}>
-          <Ionicons name="calendar" size={18} color={colors.primary} />
-          <Text style={styles.infoText}>{formatDate(item.booking_date)}</Text>
+          <Ionicons name="cube" size={18} color={colors.textSecondary} />
+          <Text style={styles.infoText}>
+            {item.order_items?.length || 0} item{(item.order_items?.length || 0) !== 1 ? 's' : ''}
+          </Text>
         </View>
         <View style={styles.infoRow}>
-          <Ionicons name="time" size={18} color={colors.primary} />
-          <Text style={styles.infoText}>{formatTime(item.booking_time)}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="location" size={18} color={colors.primary} />
-          <Text style={styles.infoText} numberOfLines={1}>
-            {item.location_type === 'visit_customer' ? 'Artist visits you' : 'You visit artist'}
+          <Ionicons 
+            name={item.payment_status === 'paid' ? 'checkmark-circle' : 'time'} 
+            size={18} 
+            color={item.payment_status === 'paid' ? colors.success : colors.warning} 
+          />
+          <Text style={styles.infoText}>
+            {item.payment_status.charAt(0).toUpperCase() + item.payment_status.slice(1)}
           </Text>
         </View>
       </View>
@@ -145,18 +121,18 @@ export default function BookingsScreen() {
       <View style={styles.divider} />
 
       <View style={styles.cardFooter}>
-        <Text style={styles.amountLabel}>Total Amount</Text>
-        <Text style={styles.amountValue}>₹{item.total_amount.toFixed(2)}</Text>
+        <Text style={styles.totalLabel}>Total Amount</Text>
+        <Text style={styles.totalValue}>₹{item.total_amount.toFixed(2)}</Text>
       </View>
     </TouchableOpacity>
   );
 
-  if (loading && bookings.length === 0) {
+  if (loading && orders.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading bookings...</Text>
+          <Text style={styles.loadingText}>Loading orders...</Text>
         </View>
       </SafeAreaView>
     );
@@ -166,64 +142,70 @@ export default function BookingsScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>My Bookings</Text>
-        <Text style={styles.subtitle}>
-          {filteredBookings.length} {filteredBookings.length === 1 ? 'booking' : 'bookings'}
-        </Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <View style={styles.headerContent}>
+          <Text style={styles.title}>My Orders</Text>
+          <Text style={styles.subtitle}>
+            {filteredOrders.length} {filteredOrders.length === 1 ? 'order' : 'orders'}
+          </Text>
+        </View>
       </View>
 
       {/* Filters */}
       <View style={styles.filtersContainer}>
-        {filters.map((filter) => (
-          <TouchableOpacity
-            key={filter.key}
-            style={[
-              styles.filterButton,
-              activeFilter === filter.key && styles.activeFilterButton,
-            ]}
-            onPress={() => setActiveFilter(filter.key)}
-            data-testid={`filter-${filter.key}`}
-          >
-            <Ionicons
-              name={filter.icon as any}
-              size={16}
-              color={activeFilter === filter.key ? colors.surface : colors.textSecondary}
-            />
-            <Text
+        <FlatList
+          horizontal
+          data={filters}
+          keyExtractor={(item) => item.key}
+          renderItem={({ item: filter }) => (
+            <TouchableOpacity
               style={[
-                styles.filterText,
-                activeFilter === filter.key && styles.activeFilterText,
+                styles.filterButton,
+                activeFilter === filter.key && styles.activeFilterButton,
               ]}
+              onPress={() => setActiveFilter(filter.key)}
+              data-testid={`filter-${filter.key}`}
             >
-              {filter.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <Text
+                style={[
+                  styles.filterText,
+                  activeFilter === filter.key && styles.activeFilterText,
+                ]}
+              >
+                {filter.label}
+              </Text>
+            </TouchableOpacity>
+          )}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filtersList}
+        />
       </View>
 
-      {/* Bookings List */}
-      {filteredBookings.length === 0 ? (
+      {/* Orders List */}
+      {filteredOrders.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="calendar-outline" size={80} color={colors.textSecondary} />
-          <Text style={styles.emptyTitle}>No bookings found</Text>
+          <Ionicons name="bag-handle-outline" size={80} color={colors.textSecondary} />
+          <Text style={styles.emptyTitle}>No orders found</Text>
           <Text style={styles.emptySubtitle}>
             {activeFilter === 'all'
-              ? 'Book a service to see it here'
-              : `No ${activeFilter} bookings`}
+              ? 'Place an order to see it here'
+              : `No ${activeFilter} orders`}
           </Text>
           <TouchableOpacity
             style={styles.browseButton}
             onPress={() => router.push('/(tabs)/categories')}
-            data-testid="browse-services-button"
+            data-testid="browse-products-button"
           >
-            <Text style={styles.browseButtonText}>Browse Services</Text>
+            <Text style={styles.browseButtonText}>Browse Products</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <FlatList
-          data={filteredBookings}
+          data={filteredOrders}
           keyExtractor={(item) => item.id}
-          renderItem={renderBookingCard}
+          renderItem={renderOrderCard}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -245,8 +227,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: spacing.lg,
     paddingBottom: spacing.md,
+  },
+  backButton: {
+    marginRight: spacing.md,
+  },
+  headerContent: {
+    flex: 1,
   },
   title: {
     ...typography.h2,
@@ -258,19 +248,18 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   filtersContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
+  },
+  filtersList: {
+    paddingHorizontal: spacing.lg,
     gap: spacing.sm,
   },
   filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
     backgroundColor: colors.surface,
+    marginRight: spacing.sm,
   },
   activeFilterButton: {
     backgroundColor: colors.primary,
@@ -287,7 +276,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingTop: 0,
   },
-  bookingCard: {
+  orderCard: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
@@ -299,24 +288,17 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: spacing.md,
   },
-  serviceInfo: {
-    flex: 1,
-    marginRight: spacing.md,
-  },
-  serviceName: {
+  orderNumber: {
     ...typography.body,
     color: colors.text,
     fontWeight: '600',
     marginBottom: spacing.xs,
   },
-  sellerName: {
+  orderDate: {
     ...typography.bodySmall,
     color: colors.textSecondary,
   },
   statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.md,
@@ -341,7 +323,6 @@ const styles = StyleSheet.create({
   infoText: {
     ...typography.body,
     color: colors.text,
-    flex: 1,
   },
   cardFooter: {
     flexDirection: 'row',
@@ -349,11 +330,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: spacing.sm,
   },
-  amountLabel: {
+  totalLabel: {
     ...typography.body,
     color: colors.textSecondary,
   },
-  amountValue: {
+  totalValue: {
     ...typography.h4,
     color: colors.primary,
     fontWeight: '700',

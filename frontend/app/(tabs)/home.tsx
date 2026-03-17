@@ -3,14 +3,22 @@ import {
   View,
   Text,
   StyleSheet,
+  FlatList,
+  TextInput,
+  ActivityIndicator,
   SafeAreaView,
-  ScrollView,
   TouchableOpacity,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useProductStore } from '../../src/store/productStore';
+import { useServiceStore } from '../../src/store/serviceStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { useCategoryStore } from '../../src/store/categoryStore';
+import { ProductCard } from '../../src/components/cards/ProductCard';
+import { ServiceCard } from '../../src/components/cards/ServiceCard';
+import { useCartStore } from '../../src/store/cartStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 
 const getIconName = (icon: string): any => {
@@ -30,10 +38,33 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { categories, fetchCategories } = useCategoryStore();
+  const { products, fetchProducts } = useProductStore();
+  const { services, fetchServices } = useServiceStore();
+  const { addItem } = useCartStore();
 
   useEffect(() => {
     fetchCategories();
+    // Fetch recent products and services
+    fetchProducts();
+    fetchServices();
   }, []);
+
+  const handleAddToCart = (product: any) => {
+    addItem({
+      id: product.id,
+      productId: product.id,
+      name: product.name,
+      price: product.price,
+      quantity: 1,
+      image: product.images?.[0],
+    });
+  };
+
+  // Get featured products (most recent 5)
+  const featuredProducts = products.filter(p => p.is_active).slice(0, 5);
+  
+  // Get featured services (most recent 5)
+  const featuredServices = services.filter(s => s.is_active).slice(0, 5);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -54,6 +85,7 @@ export default function HomeScreen() {
         <TouchableOpacity 
           style={[styles.searchBar, shadows.sm]}
           onPress={() => router.push('/(tabs)/categories')}
+          data-testid="search-bar"
         >
           <Ionicons name="search" size={20} color={colors.textSecondary} />
           <Text style={styles.searchPlaceholder}>Search services or products...</Text>
@@ -70,7 +102,7 @@ export default function HomeScreen() {
           <Ionicons name="storefront" size={60} color={colors.primary} />
         </View>
 
-               {/* Categories Section */}
+        {/* Categories Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Categories</Text>
@@ -85,6 +117,7 @@ export default function HomeScreen() {
                 key={category.id}
                 style={[styles.categoryCard, shadows.sm]}
                 onPress={() => router.push(`/category/${category.slug}?id=${category.id}`)}
+                data-testid={`category-card-${category.slug}`}
               >
                 <View style={styles.categoryIcon}>
                   <Ionicons name={getIconName(category.icon)} size={28} color={colors.primary} />
@@ -97,40 +130,60 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Featured Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Featured Services</Text>
-            <TouchableOpacity>
-              <Text style={styles.seeAll}>See All</Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.featuredScroll}
-          >
-            {[1, 2, 3].map((item) => (
-              <TouchableOpacity
-                key={item}
-                style={[styles.featuredCard, shadows.md]}
-              >
-                <View style={styles.featuredImagePlaceholder}>
-                  <Ionicons name="image" size={40} color={colors.textLight} />
-                </View>
-                <View style={styles.featuredInfo}>
-                  <Text style={styles.featuredTitle}>Service Name</Text>
-                  <Text style={styles.featuredPrice}>₹999</Text>
-                  <View style={styles.rating}>
-                    <Ionicons name="star" size={14} color={colors.warning} />
-                    <Text style={styles.ratingText}>4.8 (120)</Text>
-                  </View>
-                </View>
+        {/* Featured Products Section */}
+        {featuredProducts.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Featured Products</Text>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/categories')}>
+                <Text style={styles.seeAll}>See All</Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.featuredScroll}
+            >
+              {featuredProducts.map((product) => (
+                <View key={product.id} style={styles.featuredCardWrapper}>
+                  <ProductCard
+                    product={product}
+                    onPress={() => router.push(`/product/${product.id}`)}
+                    onAddToCart={() => handleAddToCart(product)}
+                  />
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Featured Services Section */}
+        {featuredServices.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Featured Services</Text>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/categories')}>
+                <Text style={styles.seeAll}>See All</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.featuredScroll}
+            >
+              {featuredServices.map((service) => (
+                <View key={service.id} style={styles.featuredServiceCard}>
+                  <ServiceCard
+                    service={service}
+                    onPress={() => router.push(`/service/${service.id}`)}
+                  />
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -255,40 +308,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     gap: spacing.md,
   },
-  featuredCard: {
-    backgroundColor: colors.surface,
-    width: 200,
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
+  featuredCardWrapper: {
+    width: 160,
   },
-  featuredImagePlaceholder: {
-    width: '100%',
-    height: 150,
-    backgroundColor: colors.surfaceLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  featuredInfo: {
-    padding: spacing.md,
-  },
-  featuredTitle: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
-    marginBottom: spacing.xs,
-  },
-  featuredPrice: {
-    ...typography.h4,
-    color: colors.primary,
-    marginBottom: spacing.xs,
-  },
-  rating: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  ratingText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginLeft: spacing.xs,
+  featuredServiceCard: {
+    width: 280,
   },
 });

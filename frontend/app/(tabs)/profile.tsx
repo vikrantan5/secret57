@@ -36,13 +36,13 @@ export default function ProfileScreen() {
   };
 
   const menuItems = [
-    { id: '1', title: 'Edit Profile', icon: 'person-circle' as const, route: '' },
-    { id: '2', title: 'My Orders', icon: 'bag-handle' as const, route: '' },
-    { id: '3', title: 'Addresses', icon: 'location' as const, route: '' },
-    { id: '4', title: 'Payment Methods', icon: 'card' as const, route: '' },
-    { id: '5', title: 'Notifications', icon: 'notifications' as const, route: '' },
-    { id: '6', title: 'Help & Support', icon: 'help-circle' as const, route: '' },
-    { id: '7', title: 'Settings', icon: 'settings' as const, route: '' },
+    { id: '1', title: 'Edit Profile', icon: 'person-circle' as const, route: '/profile/edit' },
+    { id: '2', title: 'My Orders', icon: 'bag-handle' as const, route: '/orders' },
+    { id: '3', title: 'Addresses', icon: 'location' as const, route: '/profile/addresses' },
+    { id: '4', title: 'Payment Methods', icon: 'card' as const, route: '/profile/payment-methods' },
+    { id: '5', title: 'Notifications', icon: 'notifications' as const, route: '/profile/notifications' },
+    { id: '6', title: 'Help & Support', icon: 'help-circle' as const, route: '/profile/help' },
+    { id: '7', title: 'Settings', icon: 'settings' as const, route: '/profile/settings' },
   ];
 
   const getRoleColor = () => {
@@ -83,6 +83,14 @@ export default function ProfileScreen() {
             <TouchableOpacity
               key={item.id}
               style={[styles.menuItem, shadows.sm]}
+              onPress={() => {
+                if (item.route) {
+                  router.push(item.route as any);
+                } else {
+                  Alert.alert('Coming Soon', `${item.title} feature will be available soon`);
+                }
+              }}
+              data-testid={`menu-item-${item.id}`}
             >
               <View style={styles.menuLeft}>
                 <Ionicons name={item.icon} size={24} color={colors.primary} />
@@ -97,13 +105,14 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={[styles.logoutButton, shadows.sm]}
           onPress={handleLogout}
+          data-testid="logout-button"
         >
           <Ionicons name="log-out" size={24} color={colors.error} />
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
 
         {/* App Version */}
-        <Text style={styles.version}>Version 1.0.0 - Phase 1</Text>
+        <Text style={styles.version}>Version 1.0.0 - ServiceHub</Text>
       </ScrollView>
     </SafeAreaView>
   );

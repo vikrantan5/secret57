@@ -9,11 +9,14 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Dimensions,
+  TextInput,
   Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useServiceStore } from '../../src/store/serviceStore';
+import { useBookingStore } from '../../src/store/bookingStore';
+import { useAuthStore } from '../../src/store/authStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 
 const { width } = Dimensions.get('window');
@@ -23,7 +26,21 @@ export default function ServiceDetailScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const serviceId = params.id as string;
   
+  const { user } = useAuthStore();
   const { selectedService, loading, fetchServiceById } = useServiceStore();
+  const { createBooking } = useBookingStore();
+  
+  const [showBookingForm, setShowBookingForm] = useState(false);
+  const [bookingData, setBookingData] = useState({
+    date: '',
+    time: '',
+    locationType: 'visit_customer' as 'visit_customer' | 'customer_visits',
+    address: '',
+    city: '',
+    state: '',
+    pincode: '',
+    notes: '',
+  });
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   useEffect(() => {
@@ -31,6 +48,60 @@ export default function ServiceDetailScreen() {
       fetchServiceById(serviceId);
     }
   }, [serviceId]);
+
+  const handleBookService = async () => {
+    if (!user?.id) {
+      Alert.alert('Login Required', 'Please login to book a service');
+      router.push('/auth/login');
+      return;
+    }
+
+    if (!bookingData.date || !bookingData.time) {
+      Alert.alert('Error', 'Please select date and time');
+      return;
+    }
+
+    if (bookingData.locationType === 'visit_customer') {
+      if (!bookingData.address || !bookingData.city || !bookingData.state || !bookingData.pincode) {
+        Alert.alert('Error', 'Please provide complete address');
+        return;
+      }
+    }
+
+    const result = await createBooking({
+      customer_id: user.id,
+      seller_id: selectedService?.seller_id,
+      service_id: serviceId,
+      booking_date: bookingData.date,
+      booking_time: bookingData.time,
+      location_type: bookingData.locationType,
+      address: bookingData.locationType === 'visit_customer' ? bookingData.address : null,
+      city: bookingData.locationType === 'visit_customer' ? bookingData.city : null,
+      state: bookingData.locationType === 'visit_customer' ? bookingData.state : null,
+      pincode: bookingData.locationType === 'visit_customer' ? bookingData.pincode : null,
+      notes: bookingData.notes || null,
+      total_amount: selectedService?.price || 0,
+    });
+
+    if (result.success) {
+      Alert.alert(
+        'Booking Successful!',
+        'Your booking request has been submitted',
+        [
+          {
+            text: 'View Booking',
+            onPress: () => router.push('/(tabs)/bookings'),
+          },
+          {
+            text: 'OK',
+          },
+        ]
+      );
+      setShowBookingForm(false);
+    } else {
+      Alert.alert('Error', result.error || 'Failed to create booking');
+    }
+  };
 
   if (loading || !selectedService) {
     return (
@@ -43,45 +114,6 @@ export default function ServiceDetailScreen() {
   }
 
   const service = selectedService;
-
-  const formatDuration = (minutes: number | null) => {
-    if (!minutes) return 'Duration varies';
-    if (minutes < 60) return `${minutes} minutes`;
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return mins > 0 ? `${hours} hour ${mins} minutes` : `${hours} hour${hours > 1 ? 's' : ''}`;
-  };
-
-  const getLocationTypeInfo = (locationType: string | null) => {
-    const info: { [key: string]: { label: string; icon: any; desc: string } } = {
-      visit_customer: {
-        label: 'Provider visits you',
-        icon: 'home',
-        desc: 'The service provider will come to your location',
-      },
-      customer_visits: {
-        label: 'Visit provider',
-        icon: 'business',
-        desc: 'You will visit the service provider\'s location',
-      },
-      both: {
-        label: 'Both options available',
-        icon: 'swap-horizontal',
-        desc: 'Choose between home service or visiting the provider',
-      },
-    };
-    return info[locationType || ''] || info.both;
-  };
-
-  const locationInfo = getLocationTypeInfo(service.location_type);
-
-  const handleBookService = () => {
-    Alert.alert(
-      'Book Service',
-      'Booking functionality will be implemented in Phase 6',
-      [{ text: 'OK' }]
-    );
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -97,8 +129,8 @@ export default function ServiceDetailScreen() {
         </View>
 
         {/* Image Gallery */}
-        <View style={styles.imageGallery}>
-          {service.images && service.images.length > 0 ? (
+        {service.images && service.images.length > 0 && (
+          <View style={styles.imageGallery}>
             <ScrollView
               horizontal
               pagingEnabled
@@ -117,59 +149,47 @@ export default function ServiceDetailScreen() {
                 />
               ))}
             </ScrollView>
-          ) : (
-            <View style={[styles.serviceImage, styles.placeholderImage]}>
-              <Ionicons name="image-outline" size={64} color={colors.textSecondary} />
-            </View>
-          )}
 
-          {/* Image Indicators */}
-          {service.images && service.images.length > 1 && (
-            <View style={styles.indicators}>
-              {service.images.map((_, index) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.indicator,
-                    index === activeImageIndex && styles.activeIndicator,
-                  ]}
-                />
-              ))}
-            </View>
-          )}
-        </View>
+            {service.images.length > 1 && (
+              <View style={styles.indicators}>
+                {service.images.map((_, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.indicator,
+                      index === activeImageIndex && styles.activeIndicator,
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Service Info */}
         <View style={styles.content}>
           <Text style={styles.serviceName}>{service.name}</Text>
 
           {/* Price */}
-          <View style={styles.priceContainer}>
-            <Text style={styles.priceLabel}>Starting from</Text>
+          <View style={styles.priceRow}>
             <Text style={styles.price}>₹{service.price.toFixed(2)}</Text>
+            {service.duration && (
+              <Text style={styles.duration}>• {service.duration} mins</Text>
+            )}
           </View>
 
-          {/* Service Details Cards */}
-          <View style={styles.detailsGrid}>
-            {/* Duration Card */}
-            {service.duration && (
-              <View style={styles.detailCard}>
-                <View style={[styles.detailIcon, { backgroundColor: colors.primary + '15' }]}>
-                  <Ionicons name="time" size={24} color={colors.primary} />
-                </View>
-                <Text style={styles.detailLabel}>Duration</Text>
-                <Text style={styles.detailValue}>{formatDuration(service.duration)}</Text>
+          {/* Location Type */}
+          <View style={styles.locationTypeContainer}>
+            {(service.location_type === 'visit_customer' || service.location_type === 'both') && (
+              <View style={styles.locationBadge}>
+                <Ionicons name="home" size={16} color={colors.primary} />
+                <Text style={styles.locationBadgeText}>Visits your location</Text>
               </View>
             )}
-
-            {/* Location Card */}
-            {service.location_type && (
-              <View style={styles.detailCard}>
-                <View style={[styles.detailIcon, { backgroundColor: colors.info + '15' }]}>
-                  <Ionicons name={locationInfo.icon} size={24} color={colors.info} />
-                </View>
-                <Text style={styles.detailLabel}>Location</Text>
-                <Text style={styles.detailValue}>{locationInfo.label}</Text>
+            {(service.location_type === 'customer_visits' || service.location_type === 'both') && (
+              <View style={styles.locationBadge}>
+                <Ionicons name="location" size={16} color={colors.primary} />
+                <Text style={styles.locationBadgeText}>At provider location</Text>
               </View>
             )}
           </View>
@@ -178,16 +198,10 @@ export default function ServiceDetailScreen() {
           {service.seller && (
             <View style={styles.sellerCard}>
               <View style={styles.sellerInfo}>
-                <Ionicons name="person-circle" size={40} color={colors.primary} />
+                <Ionicons name="storefront" size={20} color={colors.primary} />
                 <View style={styles.sellerDetails}>
-                  <Text style={styles.sellerLabel}>Service Provider</Text>
+                  <Text style={styles.sellerLabel}>Service by</Text>
                   <Text style={styles.sellerName}>{service.seller.company_name}</Text>
-                  {service.seller.city && (
-                    <Text style={styles.sellerLocation}>
-                      <Ionicons name="location" size={14} color={colors.textSecondary} />
-                      {' '}{service.seller.city}, {service.seller.state}
-                    </Text>
-                  )}
                 </View>
               </View>
               <TouchableOpacity>
@@ -198,40 +212,184 @@ export default function ServiceDetailScreen() {
 
           {/* Description */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>About this Service</Text>
+            <Text style={styles.sectionTitle}>Description</Text>
             <Text style={styles.description}>{service.description}</Text>
           </View>
 
-          {/* Location Details */}
-          {service.location_type && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Service Location</Text>
-              <View style={styles.locationInfoCard}>
-                <Ionicons name={locationInfo.icon} size={24} color={colors.primary} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.locationTitle}>{locationInfo.label}</Text>
-                  <Text style={styles.locationDesc}>{locationInfo.desc}</Text>
-                </View>
+          {/* Booking Form */}
+          {showBookingForm && (
+            <View style={[styles.bookingForm, shadows.md]}>
+              <Text style={styles.formTitle}>Book This Service</Text>
+
+              {/* Date Input */}
+              <Text style={styles.inputLabel}>Date *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={colors.textSecondary}
+                value={bookingData.date}
+                onChangeText={(text) => setBookingData({ ...bookingData, date: text })}
+              />
+
+              {/* Time Input */}
+              <Text style={styles.inputLabel}>Time *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="HH:MM (24-hour format)"
+                placeholderTextColor={colors.textSecondary}
+                value={bookingData.time}
+                onChangeText={(text) => setBookingData({ ...bookingData, time: text })}
+              />
+
+              {/* Location Type */}
+              {service.location_type === 'both' && (
+                <>
+                  <Text style={styles.inputLabel}>Where? *</Text>
+                  <View style={styles.locationOptions}>
+                    <TouchableOpacity
+                      style={[
+                        styles.locationOption,
+                        bookingData.locationType === 'visit_customer' && styles.locationOptionActive,
+                      ]}
+                      onPress={() => setBookingData({ ...bookingData, locationType: 'visit_customer' })}
+                    >
+                      <Ionicons
+                        name="home"
+                        size={20}
+                        color={bookingData.locationType === 'visit_customer' ? colors.surface : colors.text}
+                      />
+                      <Text
+                        style={[
+                          styles.locationOptionText,
+                          bookingData.locationType === 'visit_customer' && styles.locationOptionTextActive,
+                        ]}
+                      >
+                        Visit Me
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.locationOption,
+                        bookingData.locationType === 'customer_visits' && styles.locationOptionActive,
+                      ]}
+                      onPress={() => setBookingData({ ...bookingData, locationType: 'customer_visits' })}
+                    >
+                      <Ionicons
+                        name="location"
+                        size={20}
+                        color={bookingData.locationType === 'customer_visits' ? colors.surface : colors.text}
+                      />
+                      <Text
+                        style={[
+                          styles.locationOptionText,
+                          bookingData.locationType === 'customer_visits' && styles.locationOptionTextActive,
+                        ]}
+                      >
+                        I'll Visit
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+
+              {/* Address Fields (if visit_customer) */}
+              {bookingData.locationType === 'visit_customer' && (
+                <>
+                  <Text style={styles.inputLabel}>Address *</Text>
+                  <TextInput
+                    style={[styles.input, styles.textArea]}
+                    placeholder="Complete address"
+                    placeholderTextColor={colors.textSecondary}
+                    value={bookingData.address}
+                    onChangeText={(text) => setBookingData({ ...bookingData, address: text })}
+                    multiline
+                    numberOfLines={3}
+                  />
+
+                  <View style={styles.row}>
+                    <View style={styles.halfInput}>
+                      <Text style={styles.inputLabel}>City *</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="City"
+                        placeholderTextColor={colors.textSecondary}
+                        value={bookingData.city}
+                        onChangeText={(text) => setBookingData({ ...bookingData, city: text })}
+                      />
+                    </View>
+                    <View style={styles.halfInput}>
+                      <Text style={styles.inputLabel}>State *</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="State"
+                        placeholderTextColor={colors.textSecondary}
+                        value={bookingData.state}
+                        onChangeText={(text) => setBookingData({ ...bookingData, state: text })}
+                      />
+                    </View>
+                  </View>
+
+                  <Text style={styles.inputLabel}>Pincode *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Pincode"
+                    placeholderTextColor={colors.textSecondary}
+                    value={bookingData.pincode}
+                    onChangeText={(text) => setBookingData({ ...bookingData, pincode: text })}
+                    keyboardType="number-pad"
+                  />
+                </>
+              )}
+
+              {/* Notes */}
+              <Text style={styles.inputLabel}>Notes (Optional)</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Any special instructions..."
+                placeholderTextColor={colors.textSecondary}
+                value={bookingData.notes}
+                onChangeText={(text) => setBookingData({ ...bookingData, notes: text })}
+                multiline
+                numberOfLines={3}
+              />
+
+              {/* Form Actions */}
+              <View style={styles.formActions}>
+                <TouchableOpacity
+                  style={[styles.formButton, styles.cancelButton]}
+                  onPress={() => setShowBookingForm(false)}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.formButton, styles.confirmButton]}
+                  onPress={handleBookService}
+                  data-testid="confirm-booking-button"
+                >
+                  <Text style={styles.confirmButtonText}>Confirm Booking</Text>
+                </TouchableOpacity>
               </View>
             </View>
           )}
         </View>
       </ScrollView>
 
-      {/* Bottom Bar */}
-      <View style={styles.bottomBar}>
-        <View>
-          <Text style={styles.bottomPriceLabel}>Starting from</Text>
-          <Text style={styles.bottomPrice}>₹{service.price.toFixed(2)}</Text>
+      {/* Book Button */}
+      {!showBookingForm && (
+        <View style={styles.bottomBar}>
+          <View style={styles.priceContainer}>
+            <Text style={styles.bottomPrice}>₹{service.price.toFixed(2)}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.bookButton}
+            onPress={() => setShowBookingForm(true)}
+            data-testid="book-service-button"
+          >
+            <Ionicons name="calendar" size={20} color={colors.surface} />
+            <Text style={styles.bookButtonText}>Book Service</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={styles.bookButton}
-          onPress={handleBookService}
-        >
-          <Ionicons name="calendar" size={20} color={colors.surface} />
-          <Text style={styles.bookButtonText}>Book Now</Text>
-        </TouchableOpacity>
-      </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -270,12 +428,7 @@ const styles = StyleSheet.create({
   },
   serviceImage: {
     width: width,
-    height: width * 0.75,
-  },
-  placeholderImage: {
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
+    height: width,
   },
   indicators: {
     position: 'absolute',
@@ -304,49 +457,40 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.md,
   },
-  priceContainer: {
-    marginBottom: spacing.lg,
-  },
-  priceLabel: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
   },
   price: {
-    ...typography.h1,
+    ...typography.h2,
     color: colors.primary,
     fontWeight: '700',
   },
-  detailsGrid: {
+  duration: {
+    ...typography.body,
+    color: colors.textSecondary,
+  },
+  locationTypeContainer: {
     flexDirection: 'row',
-    gap: spacing.md,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     marginBottom: spacing.lg,
   },
-  detailCard: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
+  locationBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  detailIcon: {
-    width: 56,
-    height: 56,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.primary + '15',
     borderRadius: borderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
   },
-  detailLabel: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  detailValue: {
-    ...typography.body,
-    color: colors.text,
+  locationBadgeText: {
+    ...typography.bodySmall,
+    color: colors.primary,
     fontWeight: '600',
-    textAlign: 'center',
   },
   sellerCard: {
     flexDirection: 'row',
@@ -361,10 +505,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    flex: 1,
   },
   sellerDetails: {
-    flex: 1,
     gap: spacing.xs,
   },
   sellerLabel: {
@@ -375,10 +517,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text,
     fontWeight: '600',
-  },
-  sellerLocation: {
-    ...typography.caption,
-    color: colors.textSecondary,
   },
   section: {
     marginBottom: spacing.lg,
@@ -393,38 +531,113 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 24,
   },
-  locationInfoCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.primary + '08',
-    padding: spacing.md,
+  bookingForm: {
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
     borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.primary + '20',
+    marginTop: spacing.lg,
   },
-  locationTitle: {
+  formTitle: {
+    ...typography.h3,
+    color: colors.text,
+    marginBottom: spacing.lg,
+  },
+  inputLabel: {
     ...typography.body,
     color: colors.text,
     fontWeight: '600',
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
-  locationDesc: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
+  input: {
+    ...typography.body,
+    color: colors.text,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  row: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  halfInput: {
+    flex: 1,
+  },
+  locationOptions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  locationOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  locationOptionActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  locationOptionText: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  locationOptionTextActive: {
+    color: colors.surface,
+  },
+  formActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  formButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  cancelButtonText: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  confirmButton: {
+    backgroundColor: colors.primary,
+  },
+  confirmButtonText: {
+    ...typography.body,
+    color: colors.surface,
+    fontWeight: '600',
   },
   bottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     padding: spacing.lg,
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    gap: spacing.md,
   },
-  bottomPriceLabel: {
-    ...typography.caption,
-    color: colors.textSecondary,
+  priceContainer: {
+    flex: 1,
   },
   bottomPrice: {
     ...typography.h3,
@@ -435,11 +648,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.sm,
     backgroundColor: colors.primary,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
     borderRadius: borderRadius.lg,
-    gap: spacing.sm,
   },
   bookButtonText: {
     ...typography.body,

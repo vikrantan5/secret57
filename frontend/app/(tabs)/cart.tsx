@@ -23,11 +23,7 @@ export default function CartScreen() {
       Alert.alert('Empty Cart', 'Please add items to your cart before checkout');
       return;
     }
-    Alert.alert(
-      'Checkout',
-      'Checkout functionality will be implemented in Phase 7',
-      [{ text: 'OK' }]
-    );
+    router.push('/checkout' as any);
   };
 
   const handleRemoveItem = (id: string, name: string) => {
@@ -114,6 +110,7 @@ export default function CartScreen() {
           <TouchableOpacity
             style={styles.shopButton}
             onPress={() => router.push('/(tabs)/categories')}
+            data-testid="start-shopping-button"
           >
             <Text style={styles.shopButtonText}>Start Shopping</Text>
           </TouchableOpacity>
@@ -166,6 +163,7 @@ export default function CartScreen() {
         <TouchableOpacity
           style={styles.checkoutButton}
           onPress={handleCheckout}
+          data-testid="proceed-checkout-button"
         >
           <Text style={styles.checkoutButtonText}>Proceed to Checkout</Text>
           <Ionicons name="arrow-forward" size={20} color={colors.surface} />
@@ -332,4 +330,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-"
