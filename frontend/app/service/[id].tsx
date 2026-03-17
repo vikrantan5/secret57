@@ -11,9 +11,11 @@ import {
   Dimensions,
   TextInput,
   Alert,
+  Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useServiceStore } from '../../src/store/serviceStore';
 import { useBookingStore } from '../../src/store/bookingStore';
 import { useAuthStore } from '../../src/store/authStore';
@@ -43,11 +45,39 @@ export default function ServiceDetailScreen() {
   });
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
+   
+  // Date/Time picker states
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedTime, setSelectedTime] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
   useEffect(() => {
     if (serviceId) {
       fetchServiceById(serviceId);
     }
   }, [serviceId]);
+
+
+
+   const handleDateChange = (event: any, date?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (date) {
+      setSelectedDate(date);
+      const formattedDate = date.toISOString().split('T')[0]; // YYYY-MM-DD
+      setBookingData({ ...bookingData, date: formattedDate });
+    }
+  };
+
+  const handleTimeChange = (event: any, time?: Date) => {
+    setShowTimePicker(Platform.OS === 'ios');
+    if (time) {
+      setSelectedTime(time);
+      const hours = String(time.getHours()).padStart(2, '0');
+      const minutes = String(time.getMinutes()).padStart(2, '0');
+      setBookingData({ ...bookingData, time: `${hours}:${minutes}` });
+    }
+  };
 
   const handleBookService = async () => {
     if (!user?.id) {
@@ -221,25 +251,46 @@ export default function ServiceDetailScreen() {
             <View style={[styles.bookingForm, shadows.md]}>
               <Text style={styles.formTitle}>Book This Service</Text>
 
-              {/* Date Input */}
+                           {/* Date Input */}
               <Text style={styles.inputLabel}>Date *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={colors.textSecondary}
-                value={bookingData.date}
-                onChangeText={(text) => setBookingData({ ...bookingData, date: text })}
-              />
+              <TouchableOpacity
+                style={styles.datePickerButton}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+                <Text style={styles.datePickerText}>
+                  {bookingData.date || 'Select date'}
+                </Text>
+              </TouchableOpacity>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={selectedDate}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleDateChange}
+                  minimumDate={new Date()}
+                />
+              )}
 
               {/* Time Input */}
               <Text style={styles.inputLabel}>Time *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="HH:MM (24-hour format)"
-                placeholderTextColor={colors.textSecondary}
-                value={bookingData.time}
-                onChangeText={(text) => setBookingData({ ...bookingData, time: text })}
-              />
+              <TouchableOpacity
+                style={styles.datePickerButton}
+                onPress={() => setShowTimePicker(true)}
+              >
+                <Ionicons name="time-outline" size={20} color={colors.primary} />
+                <Text style={styles.datePickerText}>
+                  {bookingData.time || 'Select time'}
+                </Text>
+              </TouchableOpacity>
+              {showTimePicker && (
+                <DateTimePicker
+                  value={selectedTime}
+                  mode="time"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleTimeChange}
+                />
+              )}
 
               {/* Location Type */}
               {service.location_type === 'both' && (
@@ -658,5 +709,21 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.surface,
     fontWeight: '600',
+  },
+  datePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  datePickerText: {
+    ...typography.body,
+    color: colors.text,
+    flex: 1,
   },
 });
