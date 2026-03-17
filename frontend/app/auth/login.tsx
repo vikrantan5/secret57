@@ -38,7 +38,8 @@ export default function LoginScreen() {
     setLoading(false);
 
     if (result.success) {
-      router.replace('/(tabs)/home');
+      // Routing is now handled by login function in authStore
+      // No need to manually redirect here
     } else {
       Alert.alert('Login Failed', result.error || 'An error occurred');
     }

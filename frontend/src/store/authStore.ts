@@ -1,5 +1,6 @@
 import React from 'react';
 import { create } from 'zustand';
+import { router } from 'expo-router';
 import { supabase, supabaseAdmin, User } from '../services/supabase';
 
 interface AuthState {
@@ -67,12 +68,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return { success: false, error: `This account is not registered as a ${role}` };
       }
 
-      // Check seller approval status
-      if (role === 'seller' && userData.seller_status !== 'approved') {
-        await supabase.auth.signOut();
-        set({ loading: false });
-        return { success: false, error: 'Your seller account is pending approval' };
-      }
+
 
       set({ 
         user: userData, 
@@ -80,6 +76,30 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isAuthenticated: true,
         loading: false 
       });
+
+       // Handle routing based on user role
+      if (role === 'seller') {
+        // Check if seller has a company profile
+        const { data: sellerData } = await supabase
+          .from('sellers')
+          .select('*')
+          .eq('user_id', userData.id)
+          .single();
+
+        if (!sellerData) {
+          // No seller profile - redirect to company setup
+          router.replace('/seller/company-setup');
+        } else if (sellerData.status === 'pending' || sellerData.status === 'rejected') {
+          // Seller pending approval - redirect to pending page
+          router.replace('/seller/pending-approval');
+        } else if (sellerData.status === 'approved') {
+          // Approved seller - redirect to dashboard
+          router.replace('/seller/dashboard');
+        }
+      } else {
+        // Customer - redirect to home
+        router.replace('/(tabs)/home');
+      }
 
       return { success: true };
     } catch (error: any) {
