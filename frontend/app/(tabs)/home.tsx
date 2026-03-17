@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,22 +7,33 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/authStore';
+import { useCategoryStore } from '../../src/store/categoryStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 
-export default function HomeScreen() {
-  const { user } = useAuthStore();
+const getIconName = (icon: string): any => {
+  const iconMap: { [key: string]: any } = {
+    'hand-left': 'hand-left',
+    'color-palette': 'color-palette',
+    'shirt': 'shirt',
+    'pizza': 'pizza',
+    'gift': 'gift',
+    'calendar': 'calendar',
+    'book': 'book',
+  };
+  return iconMap[icon] || 'apps';
+};
 
-  const categories = [
-    { id: '1', name: 'Mehndi Artist', icon: 'hand-left' as const },
-    { id: '2', name: 'Makeup Artist', icon: 'color-palette' as const },
-    { id: '3', name: 'Fashion Designer', icon: 'shirt' as const },
-    { id: '4', name: 'Home Bakers', icon: 'pizza' as const },
-    { id: '5', name: 'Handmade Gifts', icon: 'gift' as const },
-    { id: '6', name: 'Event Manager', icon: 'calendar' as const },
-    { id: '7', name: 'Tutors', icon: 'book' as const },
-  ];
+export default function HomeScreen() {
+  const router = useRouter();
+  const { user } = useAuthStore();
+  const { categories, fetchCategories } = useCategoryStore();
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -40,7 +51,10 @@ export default function HomeScreen() {
         </View>
 
         {/* Search Bar */}
-        <TouchableOpacity style={[styles.searchBar, shadows.sm]}>
+        <TouchableOpacity 
+          style={[styles.searchBar, shadows.sm]}
+          onPress={() => router.push('/(tabs)/categories')}
+        >
           <Ionicons name="search" size={20} color={colors.textSecondary} />
           <Text style={styles.searchPlaceholder}>Search services or products...</Text>
         </TouchableOpacity>
@@ -56,25 +70,28 @@ export default function HomeScreen() {
           <Ionicons name="storefront" size={60} color={colors.primary} />
         </View>
 
-        {/* Categories Section */}
+               {/* Categories Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Categories</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/categories')}>
               <Text style={styles.seeAll}>See All</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.categoriesGrid}>
-            {categories.map((category) => (
+            {categories.slice(0, 6).map((category) => (
               <TouchableOpacity
                 key={category.id}
                 style={[styles.categoryCard, shadows.sm]}
+                onPress={() => router.push(`/category/${category.slug}?id=${category.id}`)}
               >
                 <View style={styles.categoryIcon}>
-                  <Ionicons name={category.icon} size={28} color={colors.primary} />
+                  <Ionicons name={getIconName(category.icon)} size={28} color={colors.primary} />
                 </View>
-                <Text style={styles.categoryName}>{category.name}</Text>
+                <Text style={styles.categoryName} numberOfLines={2}>
+                  {category.name}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
