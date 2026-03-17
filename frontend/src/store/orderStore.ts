@@ -43,6 +43,8 @@ interface OrderState {
   createOrder: (order: Partial<Order>, items: any[]) => Promise<{ success: boolean; error?: string; order?: Order }>;
   updateOrderStatus: (id: string, status: string) => Promise<{ success: boolean; error?: string }>;
   updatePaymentStatus: (orderId: string, paymentData: any) => Promise<{ success: boolean; error?: string }>;
+   cancelOrder: (orderId: string, reason: string) => Promise<{ success: boolean; error?: string }>;
+  requestRefund: (orderId: string, reason: string) => Promise<{ success: boolean; error?: string }>;
   setSelectedOrder: (order: Order | null) => void;
 }
 
@@ -255,6 +257,125 @@ export const useOrderStore = create<OrderState>((set, get) => ({
       return { success: true };
     } catch (error: any) {
       console.error('Error in updatePaymentStatus:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+
+    cancelOrder: async (orderId, reason) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          status: 'cancelled',
+          cancellation_reason: reason,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId);
+
+      if (error) {
+        console.error('Error cancelling order:', error);
+        return { success: false, error: error.message };
+      }
+
+      // Update local state
+      set(state => ({
+        orders: state.orders.map(o => 
+          o.id === orderId ? { ...o, status: 'cancelled', cancellation_reason: reason } : o
+        )
+      }));
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error in cancelOrder:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  requestRefund: async (orderId, reason) => {
+    try {
+      // Get order details
+      const { data: order } = await supabase
+        .from('orders')
+        .select('*, order_items(*)')
+        .eq('id', orderId)
+        .single();
+
+      if (!order) {
+        return { success: false, error: 'Order not found' };
+      }
+
+      // Update order status
+      const { error: orderError } = await supabase
+        .from('orders')
+        .update({
+          status: 'refunded',
+          payment_status: 'refunded',
+          cancellation_reason: reason,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId);
+
+      if (orderError) {
+        console.error('Error updating order:', orderError);
+        return { success: false, error: orderError.message };
+      }
+
+      // Create payment refund record
+      await supabase
+        .from('payments')
+        .insert([{
+          order_id: orderId,
+          user_id: order.customer_id,
+          amount: order.total_amount,
+          status: 'refunded',
+          refund_reason: reason,
+          refund_amount: order.total_amount,
+        }]);
+
+      // Send notification to customer
+      await supabase
+        .from('notifications')
+        .insert([{
+          user_id: order.customer_id,
+          type: 'payment',
+          title: 'Refund Processed',
+          message: `Your refund of ₹${order.total_amount.toFixed(2)} has been initiated for order ${order.order_number}`,
+          data: { orderId: order.id },
+        }]);
+
+      // Notify sellers
+      const sellerIds = [...new Set(order.order_items.map((item: any) => item.seller_id))];
+      for (const sellerId of sellerIds) {
+        const { data: seller } = await supabase
+          .from('sellers')
+          .select('user_id')
+          .eq('id', sellerId)
+          .single();
+
+        if (seller) {
+          await supabase
+            .from('notifications')
+            .insert([{
+              user_id: seller.user_id,
+              type: 'order',
+              title: 'Order Refunded',
+              message: `Order ${order.order_number} has been refunded`,
+              data: { orderId: order.id },
+            }]);
+        }
+      }
+
+      // Update local state
+      set(state => ({
+        orders: state.orders.map(o => 
+          o.id === orderId ? { ...o, status: 'refunded', payment_status: 'refunded' } : o
+        )
+      }));
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error in requestRefund:', error);
       return { success: false, error: error.message };
     }
   },

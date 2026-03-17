@@ -137,7 +137,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Featured Products Section */}
-        {featuredProducts.length > 0 && (
+       {featuredProducts.length > 0 ? (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Featured Products</Text>
@@ -162,10 +162,10 @@ export default function HomeScreen() {
               ))}
             </ScrollView>
           </View>
-        )}
+        ) : null}
 
         {/* Featured Services Section */}
-        {featuredServices.length > 0 && (
+       {featuredServices.length > 0 ? (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Featured Services</Text>
@@ -189,7 +189,7 @@ export default function HomeScreen() {
               ))}
             </ScrollView>
           </View>
-        )}
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
