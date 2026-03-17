@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "ServiceHub",
+    "slug": "servicehub",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "servicehub",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "description": "Multi-vendor marketplace and service booking platform",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.servicehub.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#5B7CFF"
+      },
+      "package": "com.servicehub.app",
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#5B7CFF"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
