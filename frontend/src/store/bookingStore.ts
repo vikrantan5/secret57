@@ -189,6 +189,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     }
   },
 
+  
   cancelBooking: async (id, reason) => {
     return get().updateBookingStatus(id, 'cancelled', reason);
   },
