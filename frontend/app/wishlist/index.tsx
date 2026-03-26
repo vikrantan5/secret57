@@ -19,7 +19,15 @@ import { colors, spacing, typography, borderRadius, shadows } from '../../src/co
 export default function WishlistScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { items, loading, fetchWishlist, removeFromWishlist } = useWishlistStore();
+
+  // ✅ FIX: items = [] default fallback to avoid undefined.length error
+  const {
+    items = [],
+    loading,
+    fetchWishlist,
+    removeFromWishlist,
+  } = useWishlistStore();
+
   const { addItem } = useCartStore();
 
   useEffect(() => {
@@ -52,9 +60,12 @@ export default function WishlistScreen() {
     const product = item.product;
     if (!product) return null;
 
-    const hasDiscount = product.compare_at_price && product.compare_at_price > product.price;
+    const hasDiscount =
+      product.compare_at_price && product.compare_at_price > product.price;
     const discountPercent = hasDiscount
-      ? Math.round(((product.compare_at_price - product.price) / product.compare_at_price) * 100)
+      ? Math.round(
+          ((product.compare_at_price - product.price) / product.compare_at_price) * 100
+        )
       : 0;
 
     return (
@@ -66,12 +77,12 @@ export default function WishlistScreen() {
           source={{ uri: product.images?.[0] || 'https://via.placeholder.com/100' }}
           style={styles.image}
         />
-        
+
         <View style={styles.content}>
           <Text style={styles.name} numberOfLines={2}>
             {product.name}
           </Text>
-          
+
           <View style={styles.priceRow}>
             <Text style={styles.price}>₹{product.price.toFixed(2)}</Text>
             {hasDiscount && (
@@ -119,10 +130,14 @@ export default function WishlistScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
+
+        {/* ✔ FIX: items always defined now */}
         <Text style={styles.headerTitle}>Wishlist ({items.length})</Text>
+
         <View style={{ width: 40 }} />
       </View>
 
+      {/* Empty state */}
       {items.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="heart-outline" size={80} color={colors.textSecondary} />
@@ -149,10 +164,7 @@ export default function WishlistScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -167,19 +179,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  backButton: {
-    width: 40,
-  },
+  backButton: { width: 40 },
   headerTitle: {
     ...typography.h3,
     color: colors.text,
     flex: 1,
     textAlign: 'center',
   },
-  listContainer: {
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
+  listContainer: { padding: spacing.lg, gap: spacing.md },
   itemCard: {
     flexDirection: 'row',
     backgroundColor: colors.surface,
@@ -193,21 +200,14 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     marginRight: spacing.md,
   },
-  content: {
-    flex: 1,
-    justifyContent: 'space-between',
-  },
+  content: { flex: 1, justifyContent: 'space-between' },
   name: {
     ...typography.body,
     color: colors.text,
     fontWeight: '600',
     marginBottom: spacing.xs,
   },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
+  priceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   price: {
     ...typography.h4,
     color: colors.primary,
@@ -224,25 +224,14 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontWeight: '600',
   },
-  outOfStock: {
-    ...typography.bodySmall,
-    color: colors.error,
-  },
-  addToCartButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
+  outOfStock: { ...typography.bodySmall, color: colors.error },
+  addToCartButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   addToCartText: {
     ...typography.bodySmall,
     color: colors.primary,
     fontWeight: '600',
   },
-  removeButton: {
-    position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
-  },
+  removeButton: { position: 'absolute', top: spacing.sm, right: spacing.sm },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',

@@ -1,59 +1,96 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
-  TextInput,
-  ActivityIndicator,
-  SafeAreaView,
-  TouchableOpacity,
   ScrollView,
+  TouchableOpacity,
+  Animated,
+  Dimensions,
+  RefreshControl,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
+import { FlashList } from '@shopify/flash-list';
+
 import { useProductStore } from '../../src/store/productStore';
 import { useServiceStore } from '../../src/store/serviceStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { useCategoryStore } from '../../src/store/categoryStore';
-import { ProductCard } from '../../src/components/cards/ProductCard';
-import { ServiceCard } from '../../src/components/cards/ServiceCard';
 import { useCartStore } from '../../src/store/cartStore';
 import { useNotificationStore } from '../../src/store/notificationStore';
+
+import { BannerSlider } from '../../src/components/ui/BannerSlider';
+import { CategoryBox } from '../../src/components/ui/CategoryBox';
+import { EnhancedProductCard } from '../../src/components/cards/EnhancedProductCard';
+import { ServiceCard } from '../../src/components/cards/ServiceCard';
+import {
+  ProductCardSkeleton,
+  ServiceCardSkeleton,
+  BannerSkeleton,
+  CategorySkeleton,
+} from '../../src/components/ui/SkeletonLoaders';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 
-const getIconName = (icon: string): any => {
-  const iconMap: { [key: string]: any } = {
-    'hand-left': 'hand-left',
-    'color-palette': 'color-palette',
-    'shirt': 'shirt',
-    'pizza': 'pizza',
-    'gift': 'gift',
-    'calendar': 'calendar',
-    'book': 'book',
-  };
-  return iconMap[icon] || 'apps';
-};
+const { width } = Dimensions.get('window');
+const CARD_WIDTH = (width - spacing.lg * 3) / 2;
 
 export default function HomeScreen() {
   const router = useRouter();
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const [refreshing, setRefreshing] = useState(false);
+
   const { user } = useAuthStore();
-  const { categories, fetchCategories } = useCategoryStore();
-  const { products, fetchProducts } = useProductStore();
-  const { services, fetchServices } = useServiceStore();
+  const { categories, fetchCategories, loading: categoriesLoading } = useCategoryStore();
+  const { products, fetchProducts, loading: productsLoading } = useProductStore();
+  const { services, fetchServices, loading: servicesLoading } = useServiceStore();
   const { addItem } = useCartStore();
   const { unreadCount, fetchNotifications } = useNotificationStore();
+
+  // Sample banners - you can fetch these from your backend
+  const banners = [
+    {
+      id: '1',
+      image: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800&q=80',
+      link: '/categories',
+    },
+    {
+      id: '2',
+      image: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&q=80',
+      link: '/categories',
+    },
+    {
+      id: '3',
+      image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&q=80',
+      link: '/categories',
+    },
+  ];
+
   useEffect(() => {
+    loadData();
+  }, [user]);
+
+  const loadData = async () => {
     fetchCategories();
-    // Fetch recent products and services
     fetchProducts();
     fetchServices();
-    // Fetch notifications
     if (user?.id) {
       fetchNotifications(user.id);
     }
-  }, [user]);
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await loadData();
+    setRefreshing(false);
+  };
+
   const handleAddToCart = (product: any) => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     addItem({
       id: product.id,
       productId: product.id,
@@ -64,133 +101,218 @@ export default function HomeScreen() {
     });
   };
 
-  // Get featured products (most recent 5)
-  const featuredProducts = products.filter(p => p.is_active).slice(0, 5);
-  
-  // Get featured services (most recent 5)
-  const featuredServices = services.filter(s => s.is_active).slice(0, 5);
+  // Animated header
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+
+  const headerTranslateY = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [-50, 0],
+    extrapolate: 'clamp',
+  });
+
+  // Get featured products & services
+  const featuredProducts = products.filter((p) => p.is_active).slice(0, 10);
+  const featuredServices = services.filter((s) => s.is_active).slice(0, 5);
+
+  // Get current hour for greeting
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-{/* Header */}
-<View style={styles.header}>
-  <View>
-    <Text style={styles.greeting}>Hello,</Text>
-    <Text style={styles.userName}>{user?.name || 'Guest'}</Text>
-  </View>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Animated Header */}
+      <Animated.View
+        style={[
+          styles.animatedHeader,
+          {
+            opacity: headerOpacity,
+            transform: [{ translateY: headerTranslateY }],
+          },
+        ]}
+      >
+        <LinearGradient
+          colors={[colors.primary, colors.secondary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.animatedHeaderGradient}
+        >
+          <Text style={styles.animatedHeaderTitle}>ServiceHub</Text>
+          <TouchableOpacity
+            style={styles.animatedNotificationButton}
+            onPress={() => router.push('/notifications')}
+          >
+            <Ionicons name="notifications-outline" size={24} color={colors.surface} />
+            {unreadCount > 0 && <View style={styles.animatedBadge} />}
+          </TouchableOpacity>
+        </LinearGradient>
+      </Animated.View>
 
-  <TouchableOpacity 
-    style={styles.notificationButton}
-    onPress={() => router.push('/notifications')}
-    data-testid="notification-bell"
-  >
-    <Ionicons name="notifications" size={24} color={colors.text} />
-    {unreadCount > 0 && (
-      <View style={styles.badge}>
-        <Text style={styles.badgeText}>
-          {unreadCount > 9 ? '9+' : unreadCount}
-        </Text>
-      </View>
-    )}
-  </TouchableOpacity>
+      <Animated.ScrollView
+        showsVerticalScrollIndicator={false}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+          useNativeDriver: true,
+        })}
+        scrollEventThrottle={16}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* Main Header with Gradient */}
+        <LinearGradient
+          colors={[colors.primary, colors.secondary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.header}>
+            <View style={styles.headerTop}>
+              <View style={styles.headerLeft}>
+                <Text style={styles.greeting}>{getGreeting()},</Text>
+                <Text style={styles.userName}>{user?.name || 'Guest'} 👋</Text>
+              </View>
 
-</View>  {/* ✅ THIS WAS MISSING */}
+              <TouchableOpacity
+                style={styles.notificationButton}
+                onPress={() => router.push('/notifications')}
+              >
+                <Ionicons name="notifications-outline" size={26} color={colors.surface} />
+                {unreadCount > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
 
-        {/* Welcome Card */}
-        <View style={[styles.welcomeCard, shadows.md]}>
-          <View style={styles.welcomeContent}>
-            <Text style={styles.welcomeTitle}>Welcome to ServiceHub</Text>
-            <Text style={styles.welcomeText}>
-              Discover amazing services and products from verified vendors
-            </Text>
+            {/* Search Bar */}
+            <TouchableOpacity
+              style={styles.searchBar}
+              onPress={() => router.push('/(tabs)/categories')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="search" size={20} color={colors.textSecondary} />
+              <Text style={styles.searchPlaceholder}>Search services & products...</Text>
+              <Ionicons name="options-outline" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
           </View>
-          <Ionicons name="storefront" size={60} color={colors.primary} />
-        </View>
+        </LinearGradient>
+
+        {/* Banner Slider */}
+        {banners.length > 0 && <BannerSlider banners={banners} />}
 
         {/* Categories Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Categories</Text>
             <TouchableOpacity onPress={() => router.push('/(tabs)/categories')}>
-              <Text style={styles.seeAll}>See All</Text>
+              <Text style={styles.seeAll}>See All →</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.categoriesGrid}>
-            {categories.slice(0, 6).map((category) => (
-              <TouchableOpacity
-                key={category.id}
-                style={[styles.categoryCard, shadows.sm]}
-                onPress={() => router.push(`/category/${category.slug}?id=${category.id}`)}
-                data-testid={`category-card-${category.slug}`}
-              >
-                <View style={styles.categoryIcon}>
-                  <Ionicons name={getIconName(category.icon)} size={28} color={colors.primary} />
-                </View>
-                <Text style={styles.categoryName} numberOfLines={2}>
-                  {category.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Featured Products Section */}
-       {featuredProducts.length > 0 ? (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Featured Products</Text>
-              <TouchableOpacity onPress={() => router.push('/(tabs)/categories')}>
-                <Text style={styles.seeAll}>See All</Text>
-              </TouchableOpacity>
-            </View>
-
+          {categoriesLoading ? (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.featuredScroll}
+              contentContainerStyle={styles.categoriesScroll}
             >
-              {featuredProducts.map((product) => (
-                <View key={product.id} style={styles.featuredCardWrapper}>
-                  <ProductCard
+              {[1, 2, 3, 4, 5].map((i) => (
+                <CategorySkeleton key={i} />
+              ))}
+            </ScrollView>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoriesScroll}
+            >
+              {categories.slice(0, 8).map((category, index) => (
+                <CategoryBox
+                  key={category.id}
+                  {...category}
+                  index={index}
+                  onPress={() => router.push(`/category/${category.slug}?id=${category.id}`)}
+                />
+              ))}
+            </ScrollView>
+          )}
+        </View>
+
+        {/* Featured Products Section */}
+        {featuredProducts.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>Featured Products</Text>
+                <Text style={styles.sectionSubtitle}>Handpicked for you</Text>
+              </View>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/categories')}>
+                <Text style={styles.seeAll}>See All →</Text>
+              </TouchableOpacity>
+            </View>
+
+            {productsLoading ? (
+              <View style={styles.productsGrid}>
+                {[1, 2, 3, 4].map((i) => (
+                  <ProductCardSkeleton key={i} />
+                ))}
+              </View>
+            ) : (
+              <View style={styles.productsGrid}>
+                {featuredProducts.slice(0, 6).map((product) => (
+                  <EnhancedProductCard
+                    key={product.id}
                     product={product}
                     onPress={() => router.push(`/product/${product.id}`)}
                     onAddToCart={() => handleAddToCart(product)}
                   />
-                </View>
-              ))}
-            </ScrollView>
+                ))}
+              </View>
+            )}
           </View>
-        ) : null}
+        )}
 
         {/* Featured Services Section */}
-       {featuredServices.length > 0 ? (
+        {featuredServices.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Featured Services</Text>
+              <View>
+                <Text style={styles.sectionTitle}>Popular Services</Text>
+                <Text style={styles.sectionSubtitle}>Book professional services</Text>
+              </View>
               <TouchableOpacity onPress={() => router.push('/(tabs)/categories')}>
-                <Text style={styles.seeAll}>See All</Text>
+                <Text style={styles.seeAll}>See All →</Text>
               </TouchableOpacity>
             </View>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.featuredScroll}
-            >
-              {featuredServices.map((service) => (
-                <View key={service.id} style={styles.featuredServiceCard}>
+            {servicesLoading ? (
+              <View style={styles.servicesList}>
+                {[1, 2].map((i) => (
+                  <ServiceCardSkeleton key={i} />
+                ))}
+              </View>
+            ) : (
+              <View style={styles.servicesList}>
+                {featuredServices.map((service) => (
                   <ServiceCard
+                    key={service.id}
                     service={service}
                     onPress={() => router.push(`/service/${service.id}`)}
                   />
-                </View>
-              ))}
-            </ScrollView>
+                ))}
+              </View>
+            )}
           </View>
-        ) : null}
-      </ScrollView>
+        )}
+
+        {/* Bottom Spacing */}
+        <View style={{ height: spacing.xxl }} />
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 }
@@ -200,79 +322,118 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
+  animatedHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+  },
+  animatedHeaderGradient: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    ...shadows.md,
+  },
+  animatedHeaderTitle: {
+    ...typography.h4,
+    color: colors.surface,
+    fontWeight: '700',
+  },
+  animatedNotificationButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  animatedBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.error,
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  headerGradient: {
+    paddingBottom: spacing.lg,
+  },
+  header: {
+    paddingTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.lg,
+  },
+  headerLeft: {
+    flex: 1,
   },
   greeting: {
     ...typography.body,
-    color: colors.textSecondary,
+    color: colors.surface,
+    opacity: 0.9,
+    marginBottom: spacing.xs,
   },
   userName: {
-    ...typography.h3,
-    color: colors.text,
+    ...typography.h2,
+    color: colors.surface,
+    fontWeight: '700',
   },
   notificationButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
     position: 'relative',
   },
   badge: {
     position: 'absolute',
- top: -4,
-    right: -4,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
+    top: 6,
+    right: 6,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: colors.error,
-     alignItems: 'center',
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: spacing.xs,
+    borderWidth: 2,
+    borderColor: colors.surface,
   },
   badgeText: {
     ...typography.caption,
+    fontSize: 10,
     color: colors.surface,
     fontWeight: '700',
-    fontSize: 10,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.xl,
+    gap: spacing.sm,
+    ...shadows.md,
   },
   searchPlaceholder: {
     ...typography.body,
-    color: colors.textLight,
-    marginLeft: spacing.sm,
-  },
-  welcomeCard: {
-    backgroundColor: colors.primaryLight + '20',
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  welcomeContent: {
-    flex: 1,
-    marginRight: spacing.md,
-  },
-  welcomeTitle: {
-    ...typography.h4,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  welcomeText: {
-    ...typography.bodySmall,
     color: colors.textSecondary,
+    flex: 1,
   },
   section: {
-    marginBottom: spacing.lg,
+    marginTop: spacing.lg,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -282,51 +443,30 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   sectionTitle: {
-    ...typography.h4,
+    ...typography.h3,
     color: colors.text,
+    fontWeight: '700',
+  },
+  sectionSubtitle: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
   seeAll: {
-    ...typography.bodySmall,
+    ...typography.body,
     color: colors.primary,
     fontWeight: '600',
   },
-  categoriesGrid: {
+  categoriesScroll: {
+    paddingHorizontal: spacing.lg,
+  },
+  productsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    gap: spacing.md,
   },
-  categoryCard: {
-    backgroundColor: colors.surface,
-    width: '30%',
-    aspectRatio: 1,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  categoryIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.primary + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  categoryName: {
-    ...typography.caption,
-    color: colors.text,
-    textAlign: 'center',
-  },
-  featuredScroll: {
+  servicesList: {
     paddingHorizontal: spacing.lg,
-    gap: spacing.md,
-  },
-  featuredCardWrapper: {
-    width: 160,
-  },
-  featuredServiceCard: {
-    width: 280,
   },
 });
