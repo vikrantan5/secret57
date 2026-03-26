@@ -5,12 +5,14 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Image,
   Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../src/store/authStore';
 import { useSellerStore } from '../../src/store/sellerStore';
 import { useServiceStore } from '../../src/store/serviceStore';
@@ -18,6 +20,7 @@ import { useCategoryStore } from '../../src/store/categoryStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
+import { uploadMultipleImages } from '../../src/utils/imageUpload';
 
 export default function AddServiceScreen() {
   const router = useRouter();
@@ -31,12 +34,38 @@ export default function AddServiceScreen() {
   const [basePrice, setBasePrice] = useState('');
   const [duration, setDuration] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<any>({});
 
   useEffect(() => {
     fetchCategories();
   }, []);
+
+  
+  const pickImages = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'We need camera roll permissions to upload images.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets) {
+      const newImages = result.assets.map(asset => asset.uri);
+      setImages([...images, ...newImages]);
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setImages(images.filter((_, i) => i !== index));
+  };
 
   const validate = () => {
     const newErrors: any = {};
@@ -64,13 +93,25 @@ export default function AddServiceScreen() {
     try {
       setLoading(true);
 
+         // Upload images first
+      let imageUrls: string[] = [];
+      if (images.length > 0) {
+        imageUrls = await uploadMultipleImages(
+          images,
+          'service-images',
+          seller.id
+        );
+        console.log(`Uploaded ${imageUrls.length} service images`);
+      }
+
       const serviceData = {
         seller_id: seller.id,
         category_id: categoryId,
         name,
         description,
-price: parseFloat(basePrice),
+        price: parseFloat(basePrice),
         duration: duration ? parseInt(duration) : null,
+        images: imageUrls,
         is_active: true,
       };
 
@@ -106,6 +147,29 @@ price: parseFloat(basePrice),
           <View style={{ width: 24 }} />
         </View>
 
+          {/* Service Images */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Service Images</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.imagesContainer}>
+              {images.map((image, index) => (
+                <View key={index} style={styles.imageItem}>
+                  <Image source={{ uri: image }} style={styles.serviceImage} />
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => removeImage(index)}
+                  >
+                    <Ionicons name="close-circle" size={24} color={colors.error} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              <TouchableOpacity style={styles.addImageButton} onPress={pickImages}>
+                <Ionicons name="add-circle" size={32} color={colors.primary} />
+                <Text style={styles.addImageText}>Add Images</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
         {/* Service Details */}
         <View style={styles.section}>
           <Input
@@ -209,6 +273,47 @@ const styles = StyleSheet.create({
   section: {
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.lg,
+  },
+  sectionTitle: {
+    ...typography.h4,
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  imagesContainer: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  imageItem: {
+    position: 'relative',
+  },
+  serviceImage: {
+    width: 100,
+    height: 100,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.border,
+  },
+  removeButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.full,
+  },
+  addImageButton: {
+    width: 100,
+    height: 100,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  addImageText: {
+    ...typography.caption,
+    color: colors.primary,
+    marginTop: spacing.xs,
   },
   textArea: {
     height: 100,

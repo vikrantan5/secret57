@@ -22,7 +22,7 @@ import { colors, spacing, typography, borderRadius, shadows } from '../../src/co
 import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
 import { supabase } from '../../src/services/supabase';
-
+import { uploadMultipleImages } from '../../src/utils/imageUpload';
 export default function AddProductScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
@@ -69,37 +69,25 @@ export default function AddProductScreen() {
   };
 
   const uploadProductImages = async (sellerId: string) => {
-    const uploadedUrls: string[] = [];
+    try {
+      // Use centralized upload utility
+      const uploadedUrls = await uploadMultipleImages(
+        images,
+        'product-images',
+        sellerId // Organize by seller ID
+      );
 
-    for (const imageUri of images) {
-      try {
-        const response = await fetch(imageUri);
-        const blob = await response.blob();
-        
-        const fileExt = imageUri.split('.').pop();
-        const fileName = `${sellerId}-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const filePath = `product-images/${fileName}`;
-
-        const { data, error } = await supabase.storage
-          .from('product-images')
-          .upload(filePath, blob);
-
-        if (error) {
-          console.error('Upload error:', error);
-          continue;
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('product-images')
-          .getPublicUrl(filePath);
-
-        uploadedUrls.push(publicUrl);
-      } catch (error) {
-        console.error('Error uploading image:', error);
+      if (uploadedUrls.length === 0) {
+        console.warn('No images were uploaded successfully');
+      } else {
+        console.log(`Successfully uploaded ${uploadedUrls.length} images`);
       }
-    }
 
-    return uploadedUrls;
+      return uploadedUrls;
+    } catch (error) {
+      console.error('Error uploading product images:', error);
+      return [];
+    }
   };
 
   const validate = () => {

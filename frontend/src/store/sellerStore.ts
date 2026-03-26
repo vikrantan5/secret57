@@ -2,6 +2,7 @@ import React from 'react';
 import { create } from 'zustand';
 import { supabase } from '../services/supabase';
 import * as ImagePicker from 'expo-image-picker';
+import { uploadImageToSupabase } from '../utils/imageUpload';
 
 export interface Seller {
   id: string;
@@ -46,7 +47,7 @@ export const useSellerStore = create<SellerState>((set, get) => ({
   loading: false,
 
   setSeller: (seller) => set({ seller }),
-  
+
   setLoading: (loading) => set({ loading }),
 
   fetchSellerProfile: async (userId: string) => {
@@ -106,31 +107,21 @@ export const useSellerStore = create<SellerState>((set, get) => ({
 
   uploadCompanyLogo: async (sellerId: string, imageUri: string) => {
     try {
-      // Convert image URI to blob
-      const response = await fetch(imageUri);
-      const blob = await response.blob();
-      
-      // Create unique filename
-      const fileExt = imageUri.split('.').pop();
-      const fileName = `${sellerId}-logo-${Date.now()}.${fileExt}`;
-      const filePath = `company-logos/${fileName}`;
+      const result = await uploadImageToSupabase(
+        imageUri,
+        'company-logos',
+        sellerId
+      );
 
-      // Upload to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('company-logos')
-        .upload(filePath, blob);
-
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        return { success: false, error: uploadError.message };
+      if (!result.success || !result.url) {
+        return {
+          success: false,
+          error: result.error || 'Failed to upload logo'
+        };
       }
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('company-logos')
-        .getPublicUrl(filePath);
+      const publicUrl = result.url;
 
-      // Update seller record
       const { error: updateError } = await supabase
         .from('sellers')
         .update({ company_logo: publicUrl })
@@ -140,7 +131,6 @@ export const useSellerStore = create<SellerState>((set, get) => ({
         return { success: false, error: updateError.message };
       }
 
-      // Update local state
       const currentSeller = get().seller;
       if (currentSeller) {
         set({ seller: { ...currentSeller, company_logo: publicUrl } });
@@ -155,31 +145,28 @@ export const useSellerStore = create<SellerState>((set, get) => ({
 
   uploadVerificationDocument: async (sellerId: string, imageUri: string) => {
     try {
-      const response = await fetch(imageUri);
-      const blob = await response.blob();
-      
-      const fileExt = imageUri.split('.').pop();
-      const fileName = `${sellerId}-doc-${Date.now()}.${fileExt}`;
-      const filePath = `seller-documents/${fileName}`;
+      const result = await uploadImageToSupabase(
+        imageUri,
+        'seller-documents',
+        sellerId
+      );
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('seller-documents')
-        .upload(filePath, blob);
-
-      if (uploadError) {
-        return { success: false, error: uploadError.message };
+      if (!result.success || !result.url) {
+        return {
+          success: false,
+          error: result.error || 'Failed to upload document'
+        };
       }
 
-      // Get URL (private bucket, so we need to generate signed URL)
-      const { data: { publicUrl } } = supabase.storage
-        .from('seller-documents')
-        .getPublicUrl(filePath);
+      const publicUrl = result.url;
 
-      // Add to documents array
       const currentSeller = get().seller;
       if (currentSeller) {
-        const updatedDocs = [...(currentSeller.verification_documents || []), publicUrl];
-        
+        const updatedDocs = [
+          ...(currentSeller.verification_documents || []),
+          publicUrl,
+        ];
+
         const { error: updateError } = await supabase
           .from('sellers')
           .update({ verification_documents: updatedDocs })
@@ -197,4 +184,4 @@ export const useSellerStore = create<SellerState>((set, get) => ({
       return { success: false, error: error.message || 'Failed to upload document' };
     }
   },
-}));
+})); // <-- FIXED: Closing Zustand store

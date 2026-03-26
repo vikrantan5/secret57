@@ -98,11 +98,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     ...shadows.sm,
     overflow: 'hidden',
+    elevation: 3, // Android shadow
   },
   imageContainer: {
     width: '100%',
-    height: 160,
+    aspectRatio: 1, // Square aspect ratio for consistency
     position: 'relative',
+    backgroundColor: colors.border,
   },
   image: {
     width: '100%',
@@ -138,13 +140,16 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.sm,
+    minHeight: 100, // Ensure consistent card height
   },
   name: {
     ...typography.body,
+    fontSize: 14,
+    lineHeight: 18,
     color: colors.text,
     fontWeight: '600',
     marginBottom: spacing.xs,
-    minHeight: 40, // Ensure consistent height
+    height: 36, // Fixed height for 2 lines (2 * 18)
   },
   priceRow: {
     flexDirection: 'row',
