@@ -249,6 +249,20 @@ export default function SellerDashboard() {
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
+             <TouchableOpacity
+            style={[styles.actionCard, shadows.sm]}
+            onPress={() => router.push('/seller/payout-settings')}
+            data-testid="payout-settings-button"
+          >
+            <View style={[styles.actionIcon, { backgroundColor: '#10B981' + '15' }]}>
+              <Ionicons name="wallet" size={28} color="#10B981" />
+            </View>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionTitle}>Payout Settings</Text>
+              <Text style={styles.actionSubtitle}>Manage bank accounts & payouts</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
