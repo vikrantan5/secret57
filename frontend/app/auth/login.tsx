@@ -20,7 +20,7 @@ import { colors, spacing, typography, borderRadius } from '../../src/constants/t
 export default function LoginScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ role?: string }>();
-  const role = (params.role as 'customer' | 'seller') || 'customer';
+  const role = (params.role as 'customer' | 'seller' | 'admin') || 'customer';
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,7 +45,7 @@ export default function LoginScreen() {
     }
   };
 
-  const roleColor = role === 'customer' ? colors.customer : colors.seller;
+ const roleColor = role === 'customer' ? colors.customer : role === 'seller' ? colors.seller : colors.admin;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -65,17 +65,17 @@ export default function LoginScreen() {
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
 
-          <View style={styles.header}>
+                   <View style={styles.header}>
             <View style={[styles.iconContainer, { backgroundColor: roleColor + '15' }]}>
               <Ionicons
-                name={role === 'customer' ? 'cart' : 'storefront'}
+                name={role === 'customer' ? 'cart' : role === 'seller' ? 'storefront' : 'shield-checkmark'}
                 size={40}
                 color={roleColor}
               />
             </View>
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>
-              Login as {role === 'customer' ? 'Customer' : 'Seller'}
+              Login as {role === 'customer' ? 'Customer' : role === 'seller' ? 'Seller' : 'Admin'}
             </Text>
           </View>
 
@@ -111,16 +111,18 @@ export default function LoginScreen() {
               style={{ backgroundColor: roleColor }}
             />
 
-            <View style={styles.registerContainer}>
-              <Text style={styles.registerText}>Don't have an account? </Text>
-              <TouchableOpacity
-                onPress={() => router.push(`/auth/register?role=${role}`)}
-              >
-                <Text style={[styles.registerLink, { color: roleColor }]}>
-                  Register
-                </Text>
-              </TouchableOpacity>
-            </View>
+            {role !== 'admin' && (
+              <View style={styles.registerContainer}>
+                <Text style={styles.registerText}>Don't have an account? </Text>
+                <TouchableOpacity
+                  onPress={() => router.push(`/auth/register?role=${role}`)}
+                >
+                  <Text style={[styles.registerLink, { color: roleColor }]}>
+                    Register
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

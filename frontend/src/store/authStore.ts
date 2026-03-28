@@ -11,7 +11,7 @@ interface AuthState {
   setUser: (user: User | null) => void;
   setSession: (session: any) => void;
   setLoading: (loading: boolean) => void;
-  login: (email: string, password: string, role: 'customer' | 'seller') => Promise<{ success: boolean; error?: string }>;
+ login: (email: string, password: string, role: 'customer' | 'seller' | 'admin') => Promise<{ success: boolean; error?: string }>;
   register: (name: string, email: string, password: string, phone: string, role: 'customer' | 'seller') => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   checkSession: () => Promise<void>;
@@ -119,7 +119,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
 
        // Handle routing based on user role
-      if (role === 'seller') {
+     if (role === 'admin') {
+        // Admin - redirect to admin dashboard
+        router.replace('/admin/dashboard');
+      } else if (role === 'seller') {
         // Check if seller has a company profile
         const { data: sellerData } = await supabase
           .from('sellers')

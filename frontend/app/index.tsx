@@ -20,7 +20,10 @@ export default function SplashScreen() {
 
         // Navigate based on user status
       setTimeout(() => {
-         if (user.role === 'seller') {
+          if (user.role === 'admin') {
+           // Admin goes to admin dashboard
+           router.replace('/admin/dashboard');
+         } else if (user.role === 'seller') {
             if (!seller) {
               // Seller hasn't completed company setup
               router.replace('/seller/company-setup');

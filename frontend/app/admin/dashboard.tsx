@@ -23,6 +23,7 @@ export default function AdminDashboardScreen() {
     pendingSellers: 0,
     totalProducts: 0,
     totalOrders: 0,
+        totalBookings: 0,
     totalRevenue: 0,
   });
 
@@ -64,13 +65,27 @@ export default function AdminDashboardScreen() {
         .from('orders')
         .select('*', { count: 'exact', head: true });
 
-      // Get total revenue
+      // Get total bookings
+      const { count: bookingsCount } = await supabase
+        .from('bookings')
+        .select('*', { count: 'exact', head: true });
+
+      // Get total revenue from orders
       const { data: ordersData } = await supabase
         .from('orders')
         .select('total_amount')
         .eq('payment_status', 'paid');
 
-      const totalRevenue = ordersData?.reduce((sum, order) => sum + order.total_amount, 0) || 0;
+          // Get total revenue from bookings
+      const { data: bookingsData } = await supabase
+        .from('bookings')
+        .select('amount')
+        .eq('payment_status', 'paid');
+
+      const ordersRevenue = ordersData?.reduce((sum, order) => sum + order.total_amount, 0) || 0;
+      const bookingsRevenue = bookingsData?.reduce((sum, booking) => sum + booking.amount, 0) || 0;
+      const totalRevenue = ordersRevenue + bookingsRevenue;
+
 
       setStats({
         totalUsers: usersCount || 0,
@@ -78,6 +93,7 @@ export default function AdminDashboardScreen() {
         pendingSellers: pendingCount || 0,
         totalProducts: productsCount || 0,
         totalOrders: ordersCount || 0,
+         totalBookings: bookingsCount || 0,
         totalRevenue,
       });
     } catch (error) {
@@ -125,6 +141,14 @@ export default function AdminDashboardScreen() {
       count: stats.totalOrders,
       color: colors.info,
       route: '/admin/orders',
+    },
+      {
+      id: '6',
+      title: 'All Bookings',
+      icon: 'calendar' as const,
+      count: stats.totalBookings,
+      color: '#F59E0B',
+      route: '/admin/bookings',
     },
   ];
 

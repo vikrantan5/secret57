@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { RoleCard } from '../../src/components/cards/RoleCard';
-import { colors, spacing, typography } from '../../src/constants/theme';
+import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 
 export default function RoleSelectionScreen() {
   const router = useRouter();
@@ -41,6 +42,14 @@ export default function RoleSelectionScreen() {
         <Text style={styles.footer}>
           By continuing, you agree to our Terms & Privacy Policy
         </Text>
+         {/* Admin Login Button */}
+        <TouchableOpacity
+          style={styles.adminButton}
+          onPress={() => router.push('/auth/login?role=admin')}
+        >
+          <Ionicons name="shield-checkmark" size={16} color={colors.admin} />
+          <Text style={styles.adminButtonText}>Admin Login</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -80,5 +89,26 @@ const styles = StyleSheet.create({
     color: colors.textLight,
     textAlign: 'center',
     marginTop: spacing.xl,
+      marginBottom: spacing.md,
+  },
+  adminButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.admin + '10',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.full,
+    alignSelf: 'center',
+    marginBottom: spacing.lg,
+    ...shadows.sm,
+    borderWidth: 1,
+    borderColor: colors.admin + '30',
+  },
+  adminButtonText: {
+    ...typography.bodySmall,
+    color: colors.admin,
+    fontWeight: '600',
+    marginLeft: spacing.xs,
   },
 });
