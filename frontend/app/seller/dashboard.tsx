@@ -8,10 +8,12 @@ import {
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/authStore';
+import { useSellerStore } from '../../src/store/sellerStore';
 import { supabase } from '../../src/services/supabase';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 
@@ -19,89 +21,156 @@ const { width } = Dimensions.get('window');
 
 export default function SellerDashboard() {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
+  const { seller, fetchSellerProfile } = useSellerStore();
   const [stats, setStats] = useState({
     totalRevenue: 0,
     totalOrders: 0,
     totalBookings: 0,
     activeProducts: 0,
+    activeServices: 0,
     pendingOrders: 0,
     completedOrders: 0,
+    pendingBookings: 0,
+    completedBookings: 0,
   });
   const [loading, setLoading] = useState(true);
   const [sellerId, setSellerId] = useState<string | null>(null);
+  const [categoryType, setCategoryType] = useState<'ecommerce' | 'booking' | 'hybrid'>('hybrid');
 
   useEffect(() => {
-    fetchSellerStats();
+    loadSellerData();
   }, []);
+
+  const loadSellerData = async () => {
+    if (!user?.id) return;
+    
+    await fetchSellerProfile(user.id);
+    fetchSellerStats();
+  };
+
+  useEffect(() => {
+    if (seller) {
+      setCategoryType(seller.category?.type || 'hybrid');
+    }
+  }, [seller]);
 
   const fetchSellerStats = async () => {
     try {
       setLoading(true);
 
-      // Get seller ID
-      const { data: seller } = await supabase
+      // Get seller ID and category
+      const { data: sellerData } = await supabase
         .from('sellers')
-        .select('id')
+        .select(`
+          id,
+          category:categories(type)
+        `)
         .eq('user_id', user?.id)
         .single();
 
-      if (!seller) {
+      if (!sellerData) {
         setLoading(false);
         return;
       }
 
-      setSellerId(seller.id);
+      setSellerId(sellerData.id);
+      const type = (sellerData.category as any)?.type || 'hybrid';
+      setCategoryType(type);
 
-      // Get order statistics
-      const { data: orderItems } = await supabase
-        .from('order_items')
-        .select('*, order:orders(*)')
-        .eq('seller_id', seller.id);
+      // Fetch stats based on category type
+      if (type === 'ecommerce' || type === 'hybrid') {
+        // Get order statistics
+        const { data: orderItems } = await supabase
+          .from('order_items')
+          .select('*, order:orders(*)')
+          .eq('seller_id', sellerData.id);
 
-      const paidOrders = orderItems?.filter(
-        (item: any) => item.order?.payment_status === 'paid'
-      ) || [];
+        const paidOrders = orderItems?.filter(
+          (item: any) => item.order?.payment_status === 'paid'
+        ) || [];
 
-      const totalRevenue = paidOrders.reduce(
-        (sum: number, item: any) => sum + parseFloat(item.total || 0),
-        0
-      );
+        const totalRevenue = paidOrders.reduce(
+          (sum: number, item: any) => sum + parseFloat(item.total || 0),
+          0
+        );
 
-      // Get unique order count
-      const uniqueOrders = new Set(paidOrders.map((item: any) => item.order_id));
-      
-      // Get pending orders
-      const pendingOrders = orderItems?.filter(
-        (item: any) => item.order?.status === 'pending' || item.order?.status === 'processing'
-      ).length || 0;
+        const uniqueOrders = new Set(paidOrders.map((item: any) => item.order_id));
+        
+        const pendingOrders = orderItems?.filter(
+          (item: any) => item.order?.status === 'pending' || item.order?.status === 'processing'
+        ).length || 0;
 
-      // Get completed orders
-      const completedOrders = orderItems?.filter(
-        (item: any) => item.order?.status === 'delivered'
-      ).length || 0;
+        const completedOrders = orderItems?.filter(
+          (item: any) => item.order?.status === 'delivered'
+        ).length || 0;
 
-      // Get bookings count
-      const { count: bookingsCount } = await supabase
-        .from('bookings')
-        .select('*', { count: 'exact', head: true })
-        .eq('seller_id', seller.id);
+        // Get active products count
+        const { count: productsCount } = await supabase
+          .from('products')
+          .select('*', { count: 'exact', head: true })
+          .eq('seller_id', sellerData.id)
+          .eq('is_active', true);
 
-      // Get active products count
-      const { count: productsCount } = await supabase
-        .from('products')
-        .select('*', { count: 'exact', head: true })
-        .eq('seller_id', seller.id)
-        .eq('is_active', true);
+        setStats(prev => ({
+          ...prev,
+          totalRevenue,
+          totalOrders: uniqueOrders.size,
+          activeProducts: productsCount || 0,
+          pendingOrders,
+          completedOrders,
+        }));
+      }
 
-      setStats({
-        totalRevenue,
-        totalOrders: uniqueOrders.size,
-        totalBookings: bookingsCount || 0,
-        activeProducts: productsCount || 0,
-        pendingOrders,
-        completedOrders,
-      });
+      if (type === 'booking' || type === 'hybrid') {
+        // Get bookings count
+        const { count: bookingsCount } = await supabase
+          .from('bookings')
+          .select('*', { count: 'exact', head: true })
+          .eq('seller_id', sellerData.id);
+
+        // Get active services count
+        const { count: servicesCount } = await supabase
+          .from('services')
+          .select('*', { count: 'exact', head: true })
+          .eq('seller_id', sellerData.id)
+          .eq('is_active', true);
+
+        // Get pending bookings
+        const { count: pendingBookingsCount } = await supabase
+          .from('bookings')
+          .select('*', { count: 'exact', head: true })
+          .eq('seller_id', sellerData.id)
+          .eq('status', 'pending');
+
+        // Get completed bookings
+        const { count: completedBookingsCount } = await supabase
+          .from('bookings')
+          .select('*', { count: 'exact', head: true })
+          .eq('seller_id', sellerData.id)
+          .eq('status', 'completed');
+
+        // Get booking revenue
+        const { data: completedBookings } = await supabase
+          .from('bookings')
+          .select('total_amount')
+          .eq('seller_id', sellerData.id)
+          .eq('status', 'completed');
+
+        const bookingRevenue = completedBookings?.reduce(
+          (sum, booking) => sum + parseFloat(booking.total_amount || 0),
+          0
+        ) || 0;
+
+        setStats(prev => ({
+          ...prev,
+          totalRevenue: prev.totalRevenue + bookingRevenue,
+          totalBookings: bookingsCount || 0,
+          activeServices: servicesCount || 0,
+          pendingBookings: pendingBookingsCount || 0,
+          completedBookings: completedBookingsCount || 0,
+        }));
+      }
 
       setLoading(false);
     } catch (error) {
@@ -120,6 +189,24 @@ export default function SellerDashboard() {
     </View>
   );
 
+  const getCategoryBadgeColor = (type: string) => {
+    switch (type) {
+      case 'booking': return '#F59E0B';
+      case 'ecommerce': return '#10B981';
+      case 'hybrid': return '#8B5CF6';
+      default: return colors.primary;
+    }
+  };
+
+  const getCategoryLabel = (type: string) => {
+    switch (type) {
+      case 'booking': return '📅 Booking Services';
+      case 'ecommerce': return '🛍️ E-commerce';
+      case 'hybrid': return '🔄 Hybrid';
+      default: return type;
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -134,13 +221,35 @@ export default function SellerDashboard() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Seller Dashboard</Text>
-        <TouchableOpacity onPress={() => router.push('/notifications')}>
-          <Ionicons name="notifications-outline" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <View>
+          <Text style={styles.headerTitle}>Seller Dashboard</Text>
+          {seller?.category && (
+            <View style={[styles.categoryBadge, { backgroundColor: getCategoryBadgeColor(categoryType) + '20' }]}>
+              <Text style={[styles.categoryBadgeText, { color: getCategoryBadgeColor(categoryType) }]}>
+                {getCategoryLabel(categoryType)}
+              </Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.headerIcons}>
+          <TouchableOpacity 
+            onPress={() => router.push('/notifications/index' as any)}
+            style={styles.headerIcon}
+          >
+            <Ionicons name="notifications-outline" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => {
+              Alert.alert('Logout', 'Are you sure you want to logout?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Logout', style: 'destructive', onPress: logout },
+              ]);
+            }}
+            style={styles.headerIcon}
+          >
+            <Ionicons name="log-out-outline" size={24} color={colors.error} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -152,117 +261,202 @@ export default function SellerDashboard() {
           <Text style={styles.revenueLabel}>Total Revenue</Text>
           <Text style={styles.revenueValue}>₹{stats.totalRevenue.toFixed(2)}</Text>
           <View style={styles.revenueStats}>
-            <View style={styles.revenueStatItem}>
-              <Text style={styles.revenueStatValue}>{stats.totalOrders}</Text>
-              <Text style={styles.revenueStatLabel}>Orders</Text>
-            </View>
-            <View style={styles.dividerVertical} />
-            <View style={styles.revenueStatItem}>
-              <Text style={styles.revenueStatValue}>{stats.totalBookings}</Text>
-              <Text style={styles.revenueStatLabel}>Bookings</Text>
-            </View>
+            {(categoryType === 'ecommerce' || categoryType === 'hybrid') && (
+              <>
+                <View style={styles.revenueStatItem}>
+                  <Text style={styles.revenueStatValue}>{stats.totalOrders}</Text>
+                  <Text style={styles.revenueStatLabel}>Orders</Text>
+                </View>
+                {categoryType === 'hybrid' && <View style={styles.dividerVertical} />}
+              </>
+            )}
+            {(categoryType === 'booking' || categoryType === 'hybrid') && (
+              <View style={styles.revenueStatItem}>
+                <Text style={styles.revenueStatValue}>{stats.totalBookings}</Text>
+                <Text style={styles.revenueStatLabel}>Bookings</Text>
+              </View>
+            )}
           </View>
         </View>
 
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
-          <StatCard
-            icon="bag-handle"
-            label="Active Products"
-            value={stats.activeProducts}
-            color={colors.primary}
-          />
-          <StatCard
-            icon="time"
-            label="Pending"
-            value={stats.pendingOrders}
-            color="#F59E0B"
-          />
-          <StatCard
-            icon="checkmark-circle"
-            label="Completed"
-            value={stats.completedOrders}
-            color="#10B981"
-          />
+          {(categoryType === 'ecommerce' || categoryType === 'hybrid') && (
+            <>
+              <StatCard
+                icon="bag-handle"
+                label="Active Products"
+                value={stats.activeProducts}
+                color={colors.primary}
+              />
+              <StatCard
+                icon="time"
+                label="Pending Orders"
+                value={stats.pendingOrders}
+                color="#F59E0B"
+              />
+              <StatCard
+                icon="checkmark-circle"
+                label="Completed Orders"
+                value={stats.completedOrders}
+                color="#10B981"
+              />
+            </>
+          )}
+          {(categoryType === 'booking' || categoryType === 'hybrid') && (
+            <>
+              <StatCard
+                icon="calendar"
+                label="Active Services"
+                value={stats.activeServices}
+                color="#8B5CF6"
+              />
+              <StatCard
+                icon="time"
+                label="Pending Bookings"
+                value={stats.pendingBookings}
+                color="#F59E0B"
+              />
+              <StatCard
+                icon="checkmark-circle"
+                label="Completed Bookings"
+                value={stats.completedBookings}
+                color="#10B981"
+              />
+            </>
+          )}
         </View>
 
-        {/* Quick Actions */}
+        {/* Quick Actions - Dynamic Based on Category */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           
+          {/* E-commerce Actions */}
+          {(categoryType === 'ecommerce' || categoryType === 'hybrid') && (
+            <>
+              <TouchableOpacity
+                style={[styles.actionCard, shadows.sm]}
+                onPress={() => router.push('/seller/add-product' as any)}
+                data-testid="add-product-button"
+              >
+                <View style={[styles.actionIcon, { backgroundColor: colors.primary + '15' }]}>
+                  <Ionicons name="add-circle" size={28} color={colors.primary} />
+                </View>
+                <View style={styles.actionContent}>
+                  <Text style={styles.actionTitle}>Add New Product</Text>
+                  <Text style={styles.actionSubtitle}>List a new product for sale</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionCard, shadows.sm]}
+                onPress={() => router.push('/seller/products' as any)}
+                data-testid="manage-products-button"
+              >
+                <View style={[styles.actionIcon, { backgroundColor: '#8B5CF6' + '15' }]}>
+                  <Ionicons name="cube" size={28} color="#8B5CF6" />
+                </View>
+                <View style={styles.actionContent}>
+                  <Text style={styles.actionTitle}>Manage Products</Text>
+                  <Text style={styles.actionSubtitle}>Edit or update your products</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionCard, shadows.sm]}
+                onPress={() => router.push('/seller/orders' as any)}
+                data-testid="view-orders-button"
+              >
+                <View style={[styles.actionIcon, { backgroundColor: '#10B981' + '15' }]}>
+                  <Ionicons name="receipt" size={28} color="#10B981" />
+                </View>
+                <View style={styles.actionContent}>
+                  <Text style={styles.actionTitle}>View Orders</Text>
+                  <Text style={styles.actionSubtitle}>Manage your orders</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </>
+          )}
+
+          {/* Booking Actions */}
+          {(categoryType === 'booking' || categoryType === 'hybrid') && (
+            <>
+              <TouchableOpacity
+                style={[styles.actionCard, shadows.sm]}
+                onPress={() => router.push('/seller/add-service' as any)}
+                data-testid="add-service-button"
+              >
+                <View style={[styles.actionIcon, { backgroundColor: '#8B5CF6' + '15' }]}>
+                  <Ionicons name="add-circle" size={28} color="#8B5CF6" />
+                </View>
+                <View style={styles.actionContent}>
+                  <Text style={styles.actionTitle}>Add Service Package</Text>
+                  <Text style={styles.actionSubtitle}>Create a new service offering</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionCard, shadows.sm]}
+                onPress={() => router.push('/seller/bookings' as any)}
+                data-testid="view-bookings-button"
+              >
+                <View style={[styles.actionIcon, { backgroundColor: '#F59E0B' + '15' }]}>
+                  <Ionicons name="calendar" size={28} color="#F59E0B" />
+                </View>
+                <View style={styles.actionContent}>
+                  <Text style={styles.actionTitle}>Manage Bookings</Text>
+                  <Text style={styles.actionSubtitle}>View and manage service bookings</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </>
+          )}
+
+          {/* Common Actions */}
           <TouchableOpacity
             style={[styles.actionCard, shadows.sm]}
-            onPress={() => router.push('/seller/products/add')}
-            data-testid="add-product-button"
+            onPress={() => router.push('/seller/revenue' as any)}
           >
-            <View style={[styles.actionIcon, { backgroundColor: colors.primary + '15' }]}>
-              <Ionicons name="add-circle" size={28} color={colors.primary} />
+            <View style={[styles.actionIcon, { backgroundColor: colors.success + '15' }]}>
+              <Ionicons name="analytics" size={28} color={colors.success} />
             </View>
             <View style={styles.actionContent}>
-              <Text style={styles.actionTitle}>Add New Product</Text>
-              <Text style={styles.actionSubtitle}>List a new product for sale</Text>
+              <Text style={styles.actionTitle}>Revenue Analytics</Text>
+              <Text style={styles.actionSubtitle}>View detailed earnings report</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.actionCard, shadows.sm]}
-            onPress={() => router.push('/seller/orders')}
-            data-testid="view-orders-button"
+            onPress={() => router.push('/seller/payout-settings' as any)}
           >
-            <View style={[styles.actionIcon, { backgroundColor: '#10B981' + '15' }]}>
-              <Ionicons name="receipt" size={28} color="#10B981" />
-            </View>
-            <View style={styles.actionContent}>
-              <Text style={styles.actionTitle}>View Orders</Text>
-              <Text style={styles.actionSubtitle}>Manage your orders</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionCard, shadows.sm]}
-            onPress={() => router.push('/seller/products')}
-            data-testid="manage-products-button"
-          >
-            <View style={[styles.actionIcon, { backgroundColor: '#8B5CF6' + '15' }]}>
-              <Ionicons name="cube" size={28} color="#8B5CF6" />
-            </View>
-            <View style={styles.actionContent}>
-              <Text style={styles.actionTitle}>Manage Products</Text>
-              <Text style={styles.actionSubtitle}>Edit or update your products</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionCard, shadows.sm]}
-            onPress={() => router.push('/seller/bookings')}
-            data-testid="view-bookings-button"
-          >
-            <View style={[styles.actionIcon, { backgroundColor: '#F59E0B' + '15' }]}>
-              <Ionicons name="calendar" size={28} color="#F59E0B" />
-            </View>
-            <View style={styles.actionContent}>
-              <Text style={styles.actionTitle}>View Bookings</Text>
-              <Text style={styles.actionSubtitle}>Manage service bookings</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-          </TouchableOpacity>
-             <TouchableOpacity
-            style={[styles.actionCard, shadows.sm]}
-            onPress={() => router.push('/seller/payout-settings')}
-            data-testid="payout-settings-button"
-          >
-            <View style={[styles.actionIcon, { backgroundColor: '#10B981' + '15' }]}>
-              <Ionicons name="wallet" size={28} color="#10B981" />
+            <View style={[styles.actionIcon, { backgroundColor: colors.info + '15' }]}>
+              <Ionicons name="wallet" size={28} color={colors.info} />
             </View>
             <View style={styles.actionContent}>
               <Text style={styles.actionTitle}>Payout Settings</Text>
-              <Text style={styles.actionSubtitle}>Manage bank accounts & payouts</Text>
+              <Text style={styles.actionSubtitle}>Manage bank account details</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
+        </View>
+
+        {/* Info Section */}
+        <View style={styles.infoSection}>
+          <View style={[styles.infoCard, shadows.sm]}>
+            <Ionicons name="information-circle" size={24} color={colors.primary} />
+            <Text style={styles.infoText}>
+              You're operating as a <Text style={styles.infoBold}>{seller?.category?.name || 'seller'}</Text>.
+              {categoryType === 'booking' && ' You can create service packages and manage bookings.'}
+              {categoryType === 'ecommerce' && ' You can sell products and manage orders.'}
+              {categoryType === 'hybrid' && ' You can both sell products and offer booking services.'}
+            </Text>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -286,81 +480,106 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
     padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingTop: spacing.xl,
   },
   headerTitle: {
-    ...typography.h3,
+    ...typography.h2,
     color: colors.text,
-    fontWeight: '700',
+  },
+  headerIcons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  headerIcon: {
+    padding: spacing.xs,
+  },
+  categoryBadge: {
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.full,
+    alignSelf: 'flex-start',
+  },
+  categoryBadgeText: {
+    ...typography.caption,
+    fontWeight: '600',
+    fontSize: 11,
   },
   revenueCard: {
-    backgroundColor: colors.primary,
+    backgroundColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     margin: spacing.lg,
     padding: spacing.xl,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.lg,
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: colors.primary,
   },
   revenueHeader: {
-    marginBottom: spacing.md,
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    opacity: 0.3,
   },
   revenueLabel: {
     ...typography.body,
-    color: colors.surface,
+    color: colors.white,
     opacity: 0.9,
   },
   revenueValue: {
     ...typography.h1,
-    color: colors.surface,
-    fontWeight: '700',
-    marginTop: spacing.xs,
     fontSize: 36,
+    color: colors.white,
+    fontWeight: '700',
+    marginVertical: spacing.sm,
   },
   revenueStats: {
     flexDirection: 'row',
-    marginTop: spacing.lg,
-    paddingTop: spacing.lg,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.surface + '30',
+    borderTopColor: colors.white + '30',
   },
   revenueStatItem: {
     flex: 1,
     alignItems: 'center',
   },
-  dividerVertical: {
-    width: 1,
-    backgroundColor: colors.surface + '30',
-  },
   revenueStatValue: {
-    ...typography.h2,
-    color: colors.surface,
-    fontWeight: '700',
+    ...typography.h3,
+    color: colors.white,
+    fontWeight: '600',
   },
   revenueStatLabel: {
     ...typography.caption,
-    color: colors.surface,
+    color: colors.white,
     opacity: 0.8,
-    marginTop: spacing.xs,
+    marginTop: spacing.xs / 2,
+  },
+  dividerVertical: {
+    width: 1,
+    backgroundColor: colors.white + '30',
+    marginHorizontal: spacing.md,
   },
   statsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: spacing.lg,
     gap: spacing.md,
     marginBottom: spacing.lg,
   },
   statCard: {
-    flex: 1,
     backgroundColor: colors.surface,
+    width: (width - spacing.lg * 2 - spacing.md * 2) / 3,
     padding: spacing.md,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.md,
     alignItems: 'center',
   },
   statIcon: {
     width: 48,
     height: 48,
-    borderRadius: borderRadius.full,
+    borderRadius: borderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
@@ -368,35 +587,35 @@ const styles = StyleSheet.create({
   statValue: {
     ...typography.h3,
     color: colors.text,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   statLabel: {
     ...typography.caption,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginTop: spacing.xs,
+    marginTop: spacing.xs / 2,
   },
   section: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
   },
   sectionTitle: {
     ...typography.h4,
     color: colors.text,
     marginBottom: spacing.md,
-    fontWeight: '700',
   },
   actionCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
     padding: spacing.md,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.md,
     marginBottom: spacing.md,
   },
   actionIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: borderRadius.lg,
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
@@ -408,10 +627,31 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text,
     fontWeight: '600',
+    marginBottom: spacing.xs / 2,
   },
   actionSubtitle: {
-    ...typography.bodySmall,
+    ...typography.caption,
     color: colors.textSecondary,
-    marginTop: spacing.xs / 2,
+  },
+  infoSection: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xxl,
+  },
+  infoCard: {
+    flexDirection: 'row',
+    backgroundColor: colors.primary + '10',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    gap: spacing.sm,
+  },
+  infoText: {
+    ...typography.bodySmall,
+    color: colors.text,
+    flex: 1,
+    lineHeight: 20,
+  },
+  infoBold: {
+    fontWeight: '600',
+    color: colors.primary,
   },
 });

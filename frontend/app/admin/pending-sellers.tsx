@@ -30,7 +30,11 @@ export default function PendingSellersScreen() {
       setLoading(true);
       const { data, error } = await supabase
         .from('sellers')
-        .select('*, user:users(*)')
+         .select(`
+          *,
+          user:users(*),
+          category:categories(id, name, slug, type, icon)
+        `)
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
@@ -136,6 +140,25 @@ export default function PendingSellersScreen() {
                   <Image source={{ uri: seller.company_logo }} style={styles.logo} />
                 )}
                 <Text style={styles.companyName}>{seller.company_name}</Text>
+                  {seller.category && (
+                  <View style={[styles.categoryBadge, { 
+                    backgroundColor: seller.category.type === 'booking' ? '#F59E0B20' : 
+                                     seller.category.type === 'ecommerce' ? '#10B98120' : '#8B5CF620' 
+                  }]}>
+                    <Ionicons 
+                      name={seller.category.icon as any} 
+                      size={14} 
+                      color={seller.category.type === 'booking' ? '#F59E0B' : 
+                             seller.category.type === 'ecommerce' ? '#10B981' : '#8B5CF6'} 
+                    />
+                    <Text style={[styles.categoryText, { 
+                      color: seller.category.type === 'booking' ? '#F59E0B' : 
+                             seller.category.type === 'ecommerce' ? '#10B981' : '#8B5CF6' 
+                    }]}>
+                      {seller.category.name} • {seller.category.type}
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.infoRow}>
                   <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
                   <Text style={styles.infoText}>{seller.user?.name || 'N/A'}</Text>
@@ -235,6 +258,21 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
     marginBottom: spacing.sm,
+  },
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.full,
+    gap: spacing.xs / 2,
+    marginBottom: spacing.sm,
+  },
+  categoryText: {
+    ...typography.caption,
+    fontWeight: '600',
+    fontSize: 11,
   },
   infoRow: {
     flexDirection: 'row',

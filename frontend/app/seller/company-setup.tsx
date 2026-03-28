@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,14 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../src/store/authStore';
 import { useSellerStore } from '../../src/store/sellerStore';
+import { useCategoryStore, Category } from '../../src/store/categoryStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import {Button} from '../../src/components/ui/Button';
 import {Input} from '../../src/components/ui/Input';
@@ -23,6 +25,7 @@ export default function CompanySetupScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { createSellerProfile, uploadCompanyLogo, uploadVerificationDocument, loading } = useSellerStore();
+  const { categories, fetchCategories, loading: categoriesLoading } = useCategoryStore();
 
   const [companyName, setCompanyName] = useState('');
   const [businessRegNo, setBusinessRegNo] = useState('');
@@ -31,9 +34,14 @@ export default function CompanySetupScreen() {
   const [state, setState] = useState('');
   const [pincode, setPincode] = useState('');
   const [description, setDescription] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [logoUri, setLogoUri] = useState<string | null>(null);
   const [documents, setDocuments] = useState<string[]>([]);
   const [errors, setErrors] = useState<any>({});
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
 
   // Request permission and pick image
   const pickImage = async (type: 'logo' | 'document') => {
@@ -63,6 +71,7 @@ export default function CompanySetupScreen() {
   const validate = () => {
     const newErrors: any = {};
 
+    if (!selectedCategory) newErrors.category = 'Please select a business category';
     if (!companyName.trim()) newErrors.companyName = 'Company name is required';
     if (!address.trim()) newErrors.address = 'Address is required';
     if (!city.trim()) newErrors.city = 'City is required';
@@ -70,11 +79,24 @@ export default function CompanySetupScreen() {
     if (!pincode.trim()) {
       newErrors.pincode = 'Pincode is required';
     } else if (!/^\d{6}$/.test(pincode)) {
-  newErrors.pincode = 'Invalid pincode format';
-}
+      newErrors.pincode = 'Invalid pincode format';
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const getCategoryTypeLabel = (type: string) => {
+    switch (type) {
+      case 'booking':
+        return '📅 Booking Services';
+      case 'ecommerce':
+        return '🛍️ E-commerce';
+      case 'hybrid':
+        return '🔄 Booking + E-commerce';
+      default:
+        return type;
+    }
   };
 
   const handleSubmit = async () => {
@@ -89,7 +111,7 @@ export default function CompanySetupScreen() {
     }
 
     try {
-      // Create seller profile
+      // Create seller profile with category
       const result = await createSellerProfile({
         user_id: user.id,
         company_name: companyName,
@@ -99,6 +121,7 @@ export default function CompanySetupScreen() {
         state,
         pincode,
         description: description || undefined,
+        category_id: selectedCategory!.id,
       });
 
       if (!result.success) {
@@ -150,6 +173,63 @@ export default function CompanySetupScreen() {
         <Text style={styles.subtitle}>
           Complete your company profile to start selling on ServiceHub
         </Text>
+
+            {/* Category Selection */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Select Your Business Category *</Text>
+          <Text style={styles.helperText}>
+            Choose the category that best describes your business. This will determine your dashboard features.
+          </Text>
+          
+          {categoriesLoading ? (
+            <ActivityIndicator size="large" color={colors.primary} style={{ marginVertical: spacing.lg }} />
+          ) : (
+            <View style={styles.categoriesGrid}>
+              {categories.map((category) => (
+                <TouchableOpacity
+                  key={category.id}
+                  style={[
+                    styles.categoryCard,
+                    selectedCategory?.id === category.id && styles.categoryCardSelected,
+                    shadows.sm,
+                  ]}
+                  onPress={() => setSelectedCategory(category)}
+                >
+                  <View style={[
+                    styles.categoryIconBox,
+                    selectedCategory?.id === category.id && styles.categoryIconBoxSelected,
+                  ]}>
+                    <Ionicons 
+                      name={category.icon as any} 
+                      size={28} 
+                      color={selectedCategory?.id === category.id ? colors.white : colors.primary} 
+                    />
+                  </View>
+                  <Text style={[
+                    styles.categoryName,
+                    selectedCategory?.id === category.id && styles.categoryNameSelected,
+                  ]}>
+                    {category.name}
+                  </Text>
+                  <Text style={styles.categoryType}>
+                    {getCategoryTypeLabel(category.type)}
+                  </Text>
+                  <Text style={styles.categoryDescription} numberOfLines={2}>
+                    {category.description}
+                  </Text>
+                  {selectedCategory?.id === category.id && (
+                    <View style={styles.selectedBadge}>
+                      <Ionicons name="checkmark-circle" size={24} color={colors.success} />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          {errors.category && (
+            <Text style={styles.errorText}>{errors.category}</Text>
+          )}
+        </View>
 
         {/* Company Logo */}
         <View style={styles.section}>
@@ -408,5 +488,62 @@ const styles = StyleSheet.create({
   footer: {
     padding: spacing.lg,
     paddingBottom: spacing.xxl,
+  },
+  categoriesGrid: {
+    gap: spacing.md,
+  },
+  categoryCard: {
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 2,
+    borderColor: colors.border,
+    position: 'relative',
+  },
+  categoryCardSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '08',
+  },
+  categoryIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  categoryIconBoxSelected: {
+    backgroundColor: colors.primary,
+  },
+  categoryName: {
+    ...typography.h4,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  categoryNameSelected: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  categoryType: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+    fontSize: 11,
+  },
+  categoryDescription: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+  selectedBadge: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+  },
+  errorText: {
+    ...typography.caption,
+    color: colors.error,
+    marginTop: spacing.sm,
   },
 });

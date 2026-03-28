@@ -18,8 +18,16 @@ export interface Seller {
   description: string | null;
   status: 'pending' | 'approved' | 'rejected';
   rejection_reason: string | null;
+  category_id: string | null;
   created_at: string;
   updated_at: string;
+  category?: {
+    id: string;
+    name: string;
+    slug: string;
+    type: 'ecommerce' | 'booking' | 'hybrid';
+    icon: string;
+  };
 }
 
 interface SellerState {
@@ -37,6 +45,7 @@ interface SellerState {
     state: string;
     pincode: string;
     description?: string;
+     category_id?: string;
   }) => Promise<{ success: boolean; error?: string }>;
   uploadCompanyLogo: (sellerId: string, imageUri: string) => Promise<{ success: boolean; url?: string; error?: string }>;
   uploadVerificationDocument: (sellerId: string, imageUri: string) => Promise<{ success: boolean; url?: string; error?: string }>;
@@ -56,7 +65,10 @@ export const useSellerStore = create<SellerState>((set, get) => ({
       
       const { data, error } = await supabase
         .from('sellers')
-        .select('*')
+        .select(`
+          *,
+          category:categories(id, name, slug, type, icon)
+        `)
         .eq('user_id', userId)
         .single();
 
