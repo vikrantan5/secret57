@@ -40,8 +40,11 @@ export default function AllOrdersScreen() {
         .select(`
           *,
           user:users(id, name, email),
-          seller:sellers(id, company_name),
-          product:products(id, title, images)
+             order_items(
+            *,
+            product:products(id, title, images),
+            seller:sellers(id, company_name)
+          )
         `)
         .order('created_at', { ascending: false });
 
@@ -59,16 +62,19 @@ export default function AllOrdersScreen() {
     let filtered = orders;
 
     if (selectedFilter !== 'all') {
-      filtered = filtered.filter(order => order.delivery_status === selectedFilter);
+      filtered = filtered.filter(order => order.status === selectedFilter);
     }
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(order =>
-        order.id?.toLowerCase().includes(query) ||
-        order.user?.name?.toLowerCase().includes(query) ||
-        order.seller?.company_name?.toLowerCase().includes(query)
-      );
+      filtered = filtered.filter(order => {
+        const sellerMatch = order.order_items?.some(item => 
+          item.seller?.company_name?.toLowerCase().includes(query)
+        );
+        return order.id?.toLowerCase().includes(query) ||
+          order.user?.name?.toLowerCase().includes(query) ||
+          sellerMatch;
+      });
     }
 
     setFilteredOrders(filtered);
@@ -96,8 +102,8 @@ export default function AllOrdersScreen() {
     const totalRevenue = orders
       .filter(o => o.payment_status === 'paid')
       .reduce((sum, o) => sum + o.total_amount, 0);
-    const pending = orders.filter(o => o.delivery_status === 'pending').length;
-    const delivered = orders.filter(o => o.delivery_status === 'delivered').length;
+      const pending = orders.filter(o => o.status === 'pending').length;
+    const delivered = orders.filter(o => o.status === 'delivered').length;
 
     return { totalOrders, totalRevenue, pending, delivered };
   };
@@ -190,34 +196,41 @@ export default function AllOrdersScreen() {
                       })}
                     </Text>
                   </View>
-                  <View style={[
+                                    <View style={[
                     styles.statusBadge,
-                    { backgroundColor: getStatusColor(order.delivery_status) + '20' }
+                    { backgroundColor: getStatusColor(order.status) + '20' }
                   ]}>
                     <Text style={[
                       styles.statusText,
-                      { color: getStatusColor(order.delivery_status) }
+                      { color: getStatusColor(order.status) }
                     ]}>
-                      {order.delivery_status?.toUpperCase()}
+                      {order.status?.toUpperCase()}
                     </Text>
                   </View>
                 </View>
 
-                <View style={styles.orderBody}>
+                            <View style={styles.orderBody}>
                   <View style={styles.infoRow}>
                     <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
                     <Text style={styles.infoText}>{order.user?.name || 'Unknown Customer'}</Text>
                   </View>
-                  <View style={styles.infoRow}>
-                    <Ionicons name="business-outline" size={16} color={colors.textSecondary} />
-                    <Text style={styles.infoText}>{order.seller?.company_name || 'Unknown Seller'}</Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Ionicons name="cube-outline" size={16} color={colors.textSecondary} />
-                    <Text style={styles.infoText}>
-                      {order.product?.title || 'Product'} x {order.quantity}
-                    </Text>
-                  </View>
+                  {order.order_items && order.order_items.length > 0 && (
+                    <>
+                      <View style={styles.infoRow}>
+                        <Ionicons name="business-outline" size={16} color={colors.textSecondary} />
+                        <Text style={styles.infoText}>
+                          {order.order_items[0].seller?.company_name || 'Unknown Seller'}
+                          {order.order_items.length > 1 ? ` (+${order.order_items.length - 1} more)` : ''}
+                        </Text>
+                      </View>
+                      <View style={styles.infoRow}>
+                        <Ionicons name="cube-outline" size={16} color={colors.textSecondary} />
+                        <Text style={styles.infoText}>
+                          {order.order_items.length} item{order.order_items.length > 1 ? 's' : ''}
+                        </Text>
+                      </View>
+                    </>
+                  )}
                 </View>
 
                 <View style={styles.orderFooter}>

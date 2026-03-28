@@ -40,7 +40,8 @@ export default function AllBookingsScreen() {
         .select(`
           *,
           user:users(id, name, email, phone),
-          seller:sellers(id, company_name, category:categories(name, icon))
+  seller:sellers(id, company_name),
+          service:services(id, title, category:categories(name, icon))
         `)
         .order('created_at', { ascending: false });
 
@@ -67,7 +68,7 @@ export default function AllBookingsScreen() {
         booking.id?.toLowerCase().includes(query) ||
         booking.user?.name?.toLowerCase().includes(query) ||
         booking.seller?.company_name?.toLowerCase().includes(query) ||
-        booking.service_type?.toLowerCase().includes(query)
+        booking.service?.title?.toLowerCase().includes(query)
       );
     }
 
@@ -93,8 +94,8 @@ export default function AllBookingsScreen() {
   const calculateStats = () => {
     const totalBookings = bookings.length;
     const totalRevenue = bookings
-      .filter(b => b.payment_status === 'paid')
-      .reduce((sum, b) => sum + b.amount, 0);
+  .filter(b => b.status === 'completed')
+      .reduce((sum, b) => sum + (b.total_amount || 0), 0);
     const pending = bookings.filter(b => b.status === 'pending').length;
     const completed = bookings.filter(b => b.status === 'completed').length;
 
@@ -181,7 +182,7 @@ export default function AllBookingsScreen() {
                 <View style={styles.bookingHeader}>
                   <View>
                     <Text style={styles.bookingId}>#{booking.id.slice(0, 8).toUpperCase()}</Text>
-                    <Text style={styles.serviceType}>{booking.service_type}</Text>
+    <Text style={styles.serviceType}>{booking.service?.title || 'Service Booking'}</Text>
                   </View>
                   <View style={[
                     styles.statusBadge,
@@ -196,7 +197,7 @@ export default function AllBookingsScreen() {
                   </View>
                 </View>
 
-                <View style={styles.bookingBody}>
+                           <View style={styles.bookingBody}>
                   <View style={styles.infoRow}>
                     <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
                     <Text style={styles.infoText}>{booking.user?.name || 'Unknown Customer'}</Text>
@@ -205,16 +206,22 @@ export default function AllBookingsScreen() {
                     <Ionicons name="business-outline" size={16} color={colors.textSecondary} />
                     <Text style={styles.infoText}>{booking.seller?.company_name || 'Unknown Seller'}</Text>
                   </View>
-                  {booking.seller?.category && (
+                  {booking.service?.title && (
                     <View style={styles.infoRow}>
-                      <Ionicons name={booking.seller.category.icon as any} size={16} color={colors.textSecondary} />
-                      <Text style={styles.infoText}>{booking.seller.category.name}</Text>
+                      <Ionicons name="briefcase-outline" size={16} color={colors.textSecondary} />
+                      <Text style={styles.infoText}>{booking.service.title}</Text>
+                    </View>
+                  )}
+                  {booking.service?.category && (
+                    <View style={styles.infoRow}>
+                      <Ionicons name={booking.service.category.icon as any} size={16} color={colors.textSecondary} />
+                      <Text style={styles.infoText}>{booking.service.category.name}</Text>
                     </View>
                   )}
                   <View style={styles.infoRow}>
                     <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
                     <Text style={styles.infoText}>
-                      {new Date(booking.date).toLocaleDateString('en-IN', {
+                      {new Date(booking.booking_date).toLocaleDateString('en-IN', {
                         year: 'numeric',
                         month: 'short',
                         day: 'numeric'
@@ -223,12 +230,12 @@ export default function AllBookingsScreen() {
                   </View>
                   <View style={styles.infoRow}>
                     <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
-                    <Text style={styles.infoText}>{booking.time_slot}</Text>
+                    <Text style={styles.infoText}>{booking.booking_time || 'N/A'}</Text>
                   </View>
-                  {booking.location && (
+                  {booking.address && (
                     <View style={styles.infoRow}>
                       <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
-                      <Text style={styles.infoText} numberOfLines={1}>{booking.location}</Text>
+                      <Text style={styles.infoText} numberOfLines={1}>{booking.address}</Text>
                     </View>
                   )}
                 </View>

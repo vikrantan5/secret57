@@ -1,4 +1,4 @@
-"import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -129,7 +129,7 @@ export default function CategoriesScreen() {
   const handleDelete = (category: any) => {
     Alert.alert(
       'Delete Category',
-      `Are you sure you want to delete \"${category.name}\"?`,
+      `Are you sure you want to delete "${category.name}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -167,11 +167,11 @@ export default function CategoriesScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name=\"arrow-back\" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Categories</Text>
         <TouchableOpacity onPress={handleOpenAdd}>
-          <Ionicons name=\"add-circle\" size={28} color={colors.primary} />
+          <Ionicons name="add-circle" size={28} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
@@ -200,7 +200,7 @@ export default function CategoriesScreen() {
       >
         {categories.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name=\"apps-outline\" size={80} color={colors.textSecondary} />
+            <Ionicons name="apps-outline" size={80} color={colors.textSecondary} />
             <Text style={styles.emptyTitle}>No categories found</Text>
             <Text style={styles.emptySubtitle}>Tap + to add a new category</Text>
           </View>
@@ -242,14 +242,14 @@ export default function CategoriesScreen() {
                     style={[styles.actionButton, styles.editButton]}
                     onPress={() => handleOpenEdit(category)}
                   >
-                    <Ionicons name=\"pencil\" size={18} color={colors.white} />
+                    <Ionicons name="pencil" size={18} color={colors.white} />
                     <Text style={styles.actionButtonText}>Edit</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.actionButton, styles.deleteButton]}
                     onPress={() => handleDelete(category)}
                   >
-                    <Ionicons name=\"trash\" size={18} color={colors.white} />
+                    <Ionicons name="trash" size={18} color={colors.white} />
                     <Text style={styles.actionButtonText}>Delete</Text>
                   </TouchableOpacity>
                 </View>
@@ -263,7 +263,7 @@ export default function CategoriesScreen() {
       <Modal
         visible={showAddModal}
         transparent
-        animationType=\"slide\"
+        animationType="slide"
         onRequestClose={() => setShowAddModal(false)}
       >
         <View style={styles.modalOverlay}>
@@ -273,31 +273,31 @@ export default function CategoriesScreen() {
                 {editingCategory ? 'Edit Category' : 'Add Category'}
               </Text>
               <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Ionicons name=\"close\" size={24} color={colors.text} />
+                <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
               <Input
-                label=\"Category Name\"
+                label="Category Name"
                 value={name}
                 onChangeText={setName}
-                placeholder=\"e.g., Mehndi Artist\"
+                placeholder="e.g., Mehndi Artist"
               />
 
               <Input
-                label=\"Slug (URL-friendly)\"
+                label="Slug (URL-friendly)"
                 value={slug}
                 onChangeText={setSlug}
-                placeholder=\"e.g., mehndi-artist\"
-                autoCapitalize=\"none\"
+                placeholder="e.g., mehndi-artist"
+                autoCapitalize="none"
               />
 
               <Input
-                label=\"Icon Name (Ionicons)\"
+                label="Icon Name (Ionicons)"
                 value={icon}
                 onChangeText={setIcon}
-                placeholder=\"e.g., color-palette, cut, briefcase\"
+                placeholder="e.g., color-palette, cut, briefcase"
               />
 
               <Text style={styles.inputLabel}>Category Type</Text>
@@ -323,16 +323,16 @@ export default function CategoriesScreen() {
 
               <View style={styles.modalActions}>
                 <Button
-                  title=\"Cancel\"
+                  title="Cancel"
                   onPress={() => setShowAddModal(false)}
-                  variant=\"outline\"
+                  variant="outline"
                   style={{ flex: 1, marginRight: spacing.sm }}
                 />
                 <Button
                   title={editingCategory ? 'Update' : 'Create'}
                   onPress={handleSave}
                   loading={loading}
-                  variant=\"primary\"
+                  variant="primary"
                   style={{ flex: 1 }}
                 />
               </View>
@@ -530,4 +530,3 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
 });
-"
