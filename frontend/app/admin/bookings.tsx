@@ -41,7 +41,7 @@ export default function AllBookingsScreen() {
           *,
           user:users(id, name, email, phone),
   seller:sellers(id, company_name),
-          service:services(id, title, category:categories(name, icon))
+  service:services(id, name, category:categories(name, icon))
         `)
         .order('created_at', { ascending: false });
 
@@ -68,7 +68,7 @@ export default function AllBookingsScreen() {
         booking.id?.toLowerCase().includes(query) ||
         booking.user?.name?.toLowerCase().includes(query) ||
         booking.seller?.company_name?.toLowerCase().includes(query) ||
-        booking.service?.title?.toLowerCase().includes(query)
+         booking.service?.name?.toLowerCase().includes(query)
       );
     }
 
@@ -178,94 +178,111 @@ export default function AllBookingsScreen() {
         ) : (
           <View style={styles.bookingList}>
             {filteredBookings.map((booking) => (
-              <View key={booking.id} style={[styles.bookingCard, shadows.sm]}>
-                <View style={styles.bookingHeader}>
-                  <View>
-                    <Text style={styles.bookingId}>#{booking.id.slice(0, 8).toUpperCase()}</Text>
-    <Text style={styles.serviceType}>{booking.service?.title || 'Service Booking'}</Text>
-                  </View>
-                  <View style={[
-                    styles.statusBadge,
-                    { backgroundColor: getStatusColor(booking.status) + '20' }
-                  ]}>
-                    <Text style={[
-                      styles.statusText,
-                      { color: getStatusColor(booking.status) }
-                    ]}>
-                      {booking.status?.toUpperCase()}
-                    </Text>
-                  </View>
-                </View>
+  <View key={booking.id} style={[styles.bookingCard, shadows.sm]}>
+    <View style={styles.bookingHeader}>
+      <View>
+        <Text style={styles.bookingId}>#{String(booking.id).slice(0, 8).toUpperCase()}</Text>
+        <Text style={styles.serviceType}>
+          {booking.service?.title || booking.service?.name || 'Service Booking'}
+        </Text>
+      </View>
+      <View style={[
+        styles.statusBadge,
+        { backgroundColor: getStatusColor(booking.status) + '20' }
+      ]}>
+        <Text style={[
+          styles.statusText,
+          { color: getStatusColor(booking.status) }
+        ]}>
+          {booking.status ? String(booking.status).toUpperCase() : 'PENDING'}
+        </Text>
+      </View>
+    </View>
 
-                           <View style={styles.bookingBody}>
-                  <View style={styles.infoRow}>
-                    <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
-                    <Text style={styles.infoText}>{booking.user?.name || 'Unknown Customer'}</Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Ionicons name="business-outline" size={16} color={colors.textSecondary} />
-                    <Text style={styles.infoText}>{booking.seller?.company_name || 'Unknown Seller'}</Text>
-                  </View>
-                  {booking.service?.title && (
-                    <View style={styles.infoRow}>
-                      <Ionicons name="briefcase-outline" size={16} color={colors.textSecondary} />
-                      <Text style={styles.infoText}>{booking.service.title}</Text>
-                    </View>
-                  )}
-                  {booking.service?.category && (
-                    <View style={styles.infoRow}>
-                      <Ionicons name={booking.service.category.icon as any} size={16} color={colors.textSecondary} />
-                      <Text style={styles.infoText}>{booking.service.category.name}</Text>
-                    </View>
-                  )}
-                  <View style={styles.infoRow}>
-                    <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
-                    <Text style={styles.infoText}>
-                      {new Date(booking.booking_date).toLocaleDateString('en-IN', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric'
-                      })}
-                    </Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
-                    <Text style={styles.infoText}>{booking.booking_time || 'N/A'}</Text>
-                  </View>
-                  {booking.address && (
-                    <View style={styles.infoRow}>
-                      <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
-                      <Text style={styles.infoText} numberOfLines={1}>{booking.address}</Text>
-                    </View>
-                  )}
-                </View>
+    <View style={styles.bookingBody}>
+      <View style={styles.infoRow}>
+        <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
+        <Text style={styles.infoText}>{booking.user?.name || 'Unknown Customer'}</Text>
+      </View>
+      <View style={styles.infoRow}>
+        <Ionicons name="business-outline" size={16} color={colors.textSecondary} />
+        <Text style={styles.infoText}>{booking.seller?.company_name || 'Unknown Seller'}</Text>
+      </View>
+      
+      {/* Service Name - Fixed to avoid duplicate */}
+      {(booking.service?.title || booking.service?.name) && (
+        <View style={styles.infoRow}>
+          <Ionicons name="briefcase-outline" size={16} color={colors.textSecondary} />
+          <Text style={styles.infoText}>{booking.service?.title || booking.service?.name}</Text>
+        </View>
+      )}
+      
+      {/* Category with icon - Fixed icon handling */}
+      {booking.service?.category && (
+        <View style={styles.infoRow}>
+          <Ionicons 
+            name={booking.service.category.icon || 'apps-outline'} 
+            size={16} 
+            color={colors.textSecondary} 
+          />
+          <Text style={styles.infoText}>{booking.service.category.name}</Text>
+        </View>
+      )}
+      
+      <View style={styles.infoRow}>
+        <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
+        <Text style={styles.infoText}>
+          {new Date(booking.booking_date).toLocaleDateString('en-IN', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+          })}
+        </Text>
+      </View>
+      
+      {booking.booking_time && (
+        <View style={styles.infoRow}>
+          <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
+          <Text style={styles.infoText}>{String(booking.booking_time)}</Text>
+        </View>
+      )}
+      
+      {booking.address && (
+        <View style={styles.infoRow}>
+          <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
+          <Text style={styles.infoText} numberOfLines={1}>{String(booking.address)}</Text>
+        </View>
+      )}
+    </View>
 
-                <View style={styles.bookingFooter}>
-                  <View>
-                    <Text style={styles.amountLabel}>Booking Amount</Text>
-                    <Text style={styles.amountValue}>₹{booking.amount.toLocaleString()}</Text>
-                  </View>
-                  <View style={[
-                    styles.paymentBadge,
-                    { backgroundColor: booking.payment_status === 'paid' ? colors.success + '20' : colors.warning + '20' }
-                  ]}>
-                    <Text style={[
-                      styles.paymentText,
-                      { color: booking.payment_status === 'paid' ? colors.success : colors.warning }
-                    ]}>
-                      {booking.payment_status === 'paid' ? 'PAID' : 'PENDING'}
-                    </Text>
-                  </View>
-                </View>
+    <View style={styles.bookingFooter}>
+      <View>
+        <Text style={styles.amountLabel}>Booking Amount</Text>
+        <Text style={styles.amountValue}>
+          ₹{booking.total_amount ? Number(booking.total_amount).toLocaleString() : '0'}
+        </Text>
+      </View>
+      <View style={[
+        styles.paymentBadge,
+        { backgroundColor: getStatusColor(booking.payment_status || 'pending') + '20' }
+      ]}>
+        <Text style={[
+          styles.paymentText,
+          { color: getStatusColor(booking.payment_status || 'pending') }
+        ]}>
+          {(booking.payment_status || 'PENDING').toUpperCase()}
+        </Text>
+      </View>
+    </View>
 
-                {booking.notes && (
-                  <View style={styles.notesContainer}>
-                    <Text style={styles.notesLabel}>Notes:</Text>
-                    <Text style={styles.notesText}>{booking.notes}</Text>
-                  </View>
-                )}
-              </View>
-            ))}
+    {booking.notes && (
+      <View style={styles.notesContainer}>
+        <Text style={styles.notesLabel}>Notes:</Text>
+        <Text style={styles.notesText}>{booking.notes}</Text>
+      </View>
+    )}
+  </View>
+))}
           </View>
         )}
       </ScrollView>

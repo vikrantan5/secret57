@@ -42,7 +42,7 @@ export default function AllOrdersScreen() {
           user:users(id, name, email),
              order_items(
             *,
-            product:products(id, title, images),
+           product:products(id, name, images),
             seller:sellers(id, company_name)
           )
         `)
