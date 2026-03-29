@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../src/store/authStore';
 import { useSellerStore } from '../../src/store/sellerStore';
 import { useProductStore } from '../../src/store/productStore';
-import { useCategoryStore } from '../../src/store/categoryStore';
+
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
@@ -28,21 +28,19 @@ export default function AddProductScreen() {
   const { user } = useAuthStore();
   const { seller } = useSellerStore();
   const { createProduct } = useProductStore();
-  const { categories, fetchCategories } = useCategoryStore();
+
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [comparePrice, setComparePrice] = useState('');
   const [stock, setStock] = useState('');
-  const [categoryId, setCategoryId] = useState('');
+
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<any>({});
 
-  useEffect(() => {
-    fetchCategories();
-  }, []);
+  // No longer need to fetch categories or manage categoryId state
 
   const pickImages = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -97,7 +95,9 @@ export default function AddProductScreen() {
     if (!description.trim()) newErrors.description = 'Description is required';
     if (!price || parseFloat(price) <= 0) newErrors.price = 'Valid price is required';
     if (!stock || parseInt(stock) < 0) newErrors.stock = 'Valid stock is required';
-    if (!categoryId) newErrors.category = 'Category is required';
+  
+    // Category is auto-assigned from seller, no validation needed
+
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -113,7 +113,11 @@ export default function AddProductScreen() {
       Alert.alert('Error', 'Seller profile not found. Please complete your profile first.');
       return;
     }
-
+    
+        if (!seller?.category_id) {
+      Alert.alert('Error', 'Your seller category is not set. Please contact support.');
+      return;
+    }
     try {
       setLoading(true);
 
@@ -125,7 +129,7 @@ export default function AddProductScreen() {
 
       const productData = {
         seller_id: seller.id,
-        category_id: categoryId,
+        category_id: seller.category_id, // Auto-assign from seller's category
         name,
         slug,
         description,
@@ -240,32 +244,7 @@ export default function AddProductScreen() {
             error={errors.stock}
           />
 
-          {/* Category Selection */}
-          <Text style={styles.label}>Category *</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.categoryContainer}>
-              {categories.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[
-                    styles.categoryChip,
-                    categoryId === cat.id && styles.categoryChipSelected,
-                  ]}
-                  onPress={() => setCategoryId(cat.id)}
-                >
-                  <Text
-                    style={[
-                      styles.categoryText,
-                      categoryId === cat.id && styles.categoryTextSelected,
-                    ]}
-                  >
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
-          {errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
+       
         </View>
 
         {/* Submit Button */}
@@ -357,30 +336,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: spacing.sm,
   },
-  categoryContainer: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  categoryChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  categoryChipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  categoryText: {
-    ...typography.body,
-    color: colors.text,
-  },
-  categoryTextSelected: {
-    color: colors.white,
-  },
+
   errorText: {
     ...typography.caption,
     color: colors.error,

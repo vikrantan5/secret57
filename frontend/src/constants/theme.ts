@@ -36,6 +36,10 @@ export const colors = {
   overlay: 'rgba(0, 0, 0, 0.5)',
   overlayLight: 'rgba(0, 0, 0, 0.3)',
   
+
+  // Additional colors
+  white: '#FFFFFF',
+  black: '#000000',
   // Role specific colors
   customer: '#5B7CFF',
   seller: '#8B5CF6',

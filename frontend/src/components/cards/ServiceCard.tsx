@@ -51,6 +51,12 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({ service, onPress }) =>
           style={styles.image}
           resizeMode="cover"
         />
+         {/* Video Badge */}
+        {service.video_url && (
+          <View style={styles.videoBadge}>
+            <Ionicons name="play-circle" size={24} color={colors.white} />
+          </View>
+        )}
       </View>
 
       {/* Service Info */}
@@ -125,10 +131,19 @@ const styles = StyleSheet.create({
   imageContainer: {
     width: '100%',
     height: 180,
+    position: 'relative',
   },
   image: {
     width: '100%',
     height: '100%',
+  },
+  videoBadge: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: borderRadius.full,
+    padding: spacing.xs,
   },
   content: {
     padding: spacing.md,

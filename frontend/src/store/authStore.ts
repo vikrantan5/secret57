@@ -221,13 +221,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   logout: async () => {
     try {
+      console.log('Logging out...');
       await supabase.auth.signOut();
       set({ user: null, session: null, isAuthenticated: false });
+      
+      // Redirect to home/login page after logout
+      router.replace('/');
+      console.log('Logout successful');
     } catch (error) {
       console.error('Logout error:', error);
     }
   },
-
   checkSession: async () => {
     try {
       set({ loading: true });

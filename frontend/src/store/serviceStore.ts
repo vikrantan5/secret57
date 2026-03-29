@@ -10,6 +10,7 @@ export interface Service {
  price: number;
   duration: number | null; // in minutes
   images: string[] | null;
+  video_url: string | null; // YouTube video URL
   location_type: 'visit_customer' | 'customer_visits' | 'both' | null;
   is_active: boolean;
   created_at: string;

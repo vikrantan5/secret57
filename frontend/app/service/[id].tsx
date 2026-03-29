@@ -20,6 +20,7 @@ import { useServiceStore } from '../../src/store/serviceStore';
 import { useBookingStore } from '../../src/store/bookingStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
+import { YouTubePlayerComponent } from '../../src/components/ui/YouTubePlayer';
 
 const { width } = Dimensions.get('window');
 
@@ -44,7 +45,7 @@ export default function ServiceDetailScreen() {
     notes: '',
   });
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-
+ const [activeTab, setActiveTab] = useState<'details' | 'video'>('details');
    
   // Date/Time picker states
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -240,11 +241,61 @@ export default function ServiceDetailScreen() {
             </View>
           )}
 
-          {/* Description */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Description</Text>
-            <Text style={styles.description}>{service.description}</Text>
-          </View>
+          {/* Tabs - Show only if video exists */}
+          {service.video_url && (
+            <View style={styles.tabsContainer}>
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'details' && styles.tabActive]}
+                onPress={() => setActiveTab('details')}
+              >
+                <Text style={[styles.tabText, activeTab === 'details' && styles.tabTextActive]}>
+                  Details
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'video' && styles.tabActive]}
+                onPress={() => setActiveTab('video')}
+              >
+                <Ionicons 
+                  name="play-circle" 
+                  size={18} 
+                  color={activeTab === 'video' ? colors.primary : colors.textSecondary} 
+                />
+                <Text style={[styles.tabText, activeTab === 'video' && styles.tabTextActive]}>
+                  Video
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Tab Content */}
+          {activeTab === 'details' ? (
+            <>
+              {/* Description */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Description</Text>
+                <Text style={styles.description}>{service.description}</Text>
+              </View>
+            </>
+          ) : (
+            <>
+              {/* Video Player */}
+              {service.video_url && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Service Video</Text>
+                  <YouTubePlayerComponent videoUrl={service.video_url} height={220} />
+                </View>
+              )}
+            </>
+          )}
+
+          {/* Description (if no video, show without tabs) */}
+          {!service.video_url && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Description</Text>
+              <Text style={styles.description}>{service.description}</Text>
+            </View>
+          )}
 
           {/* Booking Form */}
           {showBookingForm && (
@@ -725,5 +776,33 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text,
     flex: 1,
+  },
+    tabsContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xs,
+    marginBottom: spacing.lg,
+    gap: spacing.xs,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  tabActive: {
+    backgroundColor: colors.background,
+  },
+  tabText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: colors.primary,
   },
 });

@@ -16,31 +16,30 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../src/store/authStore';
 import { useSellerStore } from '../../src/store/sellerStore';
 import { useServiceStore } from '../../src/store/serviceStore';
-import { useCategoryStore } from '../../src/store/categoryStore';
+
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
 import { uploadMultipleImages } from '../../src/utils/imageUpload';
+import { isValidYouTubeUrl } from '../../src/utils/youtubeHelper';
 
 export default function AddServiceScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { seller } = useSellerStore();
   const { createService } = useServiceStore();
-  const { categories, fetchCategories } = useCategoryStore();
+
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [basePrice, setBasePrice] = useState('');
   const [duration, setDuration] = useState('');
-  const [categoryId, setCategoryId] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<any>({});
 
-  useEffect(() => {
-    fetchCategories();
-  }, []);
+  // No longer need to fetch categories or manage categoryId state
 
   
   const pickImages = async () => {
@@ -73,8 +72,13 @@ export default function AddServiceScreen() {
     if (!name.trim()) newErrors.name = 'Service name is required';
     if (!description.trim()) newErrors.description = 'Description is required';
     if (!basePrice || parseFloat(basePrice) <= 0) newErrors.basePrice = 'Valid price is required';
-    if (!categoryId) newErrors.category = 'Category is required';
 
+
+      // Validate YouTube URL if provided
+    if (videoUrl.trim() && !isValidYouTubeUrl(videoUrl.trim())) {
+      newErrors.videoUrl = 'Please enter a valid YouTube URL';
+    }
+  // Category is auto-assigned from seller, no validation needed
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -87,6 +91,10 @@ export default function AddServiceScreen() {
 
     if (!seller?.id) {
       Alert.alert('Error', 'Seller profile not found. Please complete your profile first.');
+      return;
+    }
+      if (!seller?.category_id) {
+      Alert.alert('Error', 'Your seller category is not set. Please contact support.');
       return;
     }
 
@@ -106,11 +114,12 @@ export default function AddServiceScreen() {
 
       const serviceData = {
         seller_id: seller.id,
-        category_id: categoryId,
+           category_id: seller.category_id, // Auto-assign from seller's category
         name,
         description,
         price: parseFloat(basePrice),
         duration: duration ? parseInt(duration) : null,
+             video_url: videoUrl.trim() || null,
         images: imageUrls,
         is_active: true,
       };
@@ -208,32 +217,23 @@ export default function AddServiceScreen() {
             keyboardType="number-pad"
           />
 
-          {/* Category Selection */}
-          <Text style={styles.label}>Category *</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.categoryContainer}>
-              {categories.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[
-                    styles.categoryChip,
-                    categoryId === cat.id && styles.categoryChipSelected,
-                  ]}
-                  onPress={() => setCategoryId(cat.id)}
-                >
-                  <Text
-                    style={[
-                      styles.categoryText,
-                      categoryId === cat.id && styles.categoryTextSelected,
-                    ]}
-                  >
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+             <Input
+            label="YouTube Video URL (Optional)"
+            value={videoUrl}
+            onChangeText={setVideoUrl}
+            placeholder="https://www.youtube.com/watch?v=..."
+            error={errors.videoUrl}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {videoUrl.trim() && isValidYouTubeUrl(videoUrl.trim()) && (
+            <View style={styles.successMessage}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+              <Text style={styles.successText}>Valid YouTube URL</Text>
             </View>
-          </ScrollView>
-          {errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
+          )}
+
+
         </View>
 
         {/* Submit Button */}
@@ -325,30 +325,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: spacing.sm,
   },
-  categoryContainer: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  categoryChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  categoryChipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  categoryText: {
-    ...typography.body,
-    color: colors.text,
-  },
-  categoryTextSelected: {
-    color: colors.white,
-  },
+
   errorText: {
     ...typography.caption,
     color: colors.error,
@@ -357,5 +334,16 @@ const styles = StyleSheet.create({
   footer: {
     padding: spacing.lg,
     paddingBottom: spacing.xxl,
+  },
+   successMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: -spacing.sm,
+    marginBottom: spacing.md,
+  },
+  successText: {
+    ...typography.caption,
+    color: colors.success,
   },
 });
