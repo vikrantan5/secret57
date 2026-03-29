@@ -164,34 +164,36 @@ export default function CategoryDetailScreen() {
           </Text>
         </View>
       ) : activeTab === 'products' ? (
-        <FlatList
-          data={products}
-          keyExtractor={(item) => item.id}
-          numColumns={2}
-          columnWrapperStyle={styles.row}
-          renderItem={({ item }) => (
-            <ProductCard
-              product={item}
-              onPress={() => handleProductPress(item.id)}
-              onAddToCart={() => handleAddToCart(item)}
-            />
-          )}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
+       <FlatList
+  key={'products-2-columns'}   // 👈 Important
+  data={products}
+  keyExtractor={(item) => item.id}
+  numColumns={2}
+  columnWrapperStyle={styles.row}
+  renderItem={({ item }) => (
+    <ProductCard
+      product={item}
+      onPress={() => handleProductPress(item.id)}
+      onAddToCart={() => handleAddToCart(item)}
+    />
+  )}
+  contentContainerStyle={styles.listContent}
+  showsVerticalScrollIndicator={false}
+/>
       ) : (
         <FlatList
-          data={services}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <ServiceCard
-              service={item}
-              onPress={() => handleServicePress(item.id)}
-            />
-          )}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
+  key={'services-list'}   // 👈 Important
+  data={services}
+  keyExtractor={(item) => item.id}
+  renderItem={({ item }) => (
+    <ServiceCard
+      service={item}
+      onPress={() => handleServicePress(item.id)}
+    />
+  )}
+  contentContainerStyle={styles.listContent}
+  showsVerticalScrollIndicator={false}
+/>
       )}
     </SafeAreaView>
   );
