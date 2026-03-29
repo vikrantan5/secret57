@@ -22,7 +22,8 @@ import { useAuthStore } from '../../src/store/authStore';
 import { usePaymentStore } from '../../src/store/paymentStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { YouTubePlayerComponent } from '../../src/components/ui/YouTubePlayer';
-import RazorpayService from '../../src/services/razorpay';
+import { RazorpayPayment } from '../../src/components/RazorpayPayment';
+import { generateOrderId } from '../../src/services/razorpay';
 
 const { width } = Dimensions.get('window');
 
@@ -38,6 +39,9 @@ export default function ServiceDetailScreen() {
   
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
+    const [showRazorpay, setShowRazorpay] = useState(false);
+  const [currentBookingId, setCurrentBookingId] = useState<string>('');
+  const [razorpayOrderId, setRazorpayOrderId] = useState<string>('');
   const [bookingData, setBookingData] = useState({
     date: '',
     time: '',
@@ -84,7 +88,7 @@ export default function ServiceDetailScreen() {
     }
   };
 
-  const handleBookService = async () => {
+   const handleBookService = async () => {
     if (!user?.id) {
       Alert.alert('Login Required', 'Please login to book a service');
       router.push('/auth/login');
@@ -127,83 +131,90 @@ export default function ServiceDetailScreen() {
       }
 
       const bookingId = result.booking.id;
+      setCurrentBookingId(bookingId);
 
-      // Step 2: Process payment
-      const amount = selectedService?.price || 0;
-      
-      RazorpayService.openCheckout(
-        {
-          amount: Math.round(amount * 100), // Convert to paise
-          currency: 'INR',
-          name: 'ServiceHub',
-          description: selectedService?.name || 'Service Booking',
-          order_id: bookingId,
-          prefill: {
-            name: user.name,
-            email: user.email,
-            contact: user.phone,
-          },
-          theme: {
-            color: colors.primary,
-          },
-        },
-        async (response) => {
-          // Payment successful
-          try {
-            // Create payment record
-            const paymentResult = await createPayment({
-              booking_id: bookingId,
-              amount: amount,
-              payment_method: 'razorpay',
-            });
+      // Step 2: Generate Razorpay order ID
+      const razorpayId = generateOrderId('book');
+      setRazorpayOrderId(razorpayId);
 
-                    if (paymentResult.success && paymentResult.payment) {
-              // Update payment status
-              await updatePaymentStatus(
-                paymentResult.payment.id,
-                'success',
-                response
-              );
+      // Step 3: Open Razorpay payment gateway
+      setProcessingPayment(false);
+      setShowRazorpay(true);
 
-              // Auto-confirm booking after successful payment
-              const { updateBookingStatus } = require('../../src/store/bookingStore').useBookingStore.getState();
-              await updateBookingStatus(bookingId, 'confirmed');
-
-              setProcessingPayment(false);
-              setShowBookingForm(false);
-
-              Alert.alert(
-                'Booking Confirmed!',
-                'Your booking has been confirmed and payment received. The seller will contact you soon.',
-                [
-                  {
-                    text: 'View Booking',
-                    onPress: () => router.push('/(tabs)/bookings'),
-                  },
-                  {
-                    text: 'OK',
-                  },
-                ]
-              );
-            }
-          } catch (error: any) {
-            console.error('Payment record error:', error);
-            setProcessingPayment(false);
-            Alert.alert('Error', 'Payment successful but failed to update booking. Please contact support.');
-          }
-        },
-        (error) => {
-          // Payment failed
-          console.error('Payment failed:', error);
-          setProcessingPayment(false);
-          Alert.alert('Payment Failed', error.error || 'Payment was not successful. Please try again.');
-        }
-      );
     } catch (error: any) {
       console.error('Booking error:', error);
       setProcessingPayment(false);
       Alert.alert('Error', error.message || 'Failed to create booking');
     }
+  };
+
+  const handlePaymentSuccess = async (response: any) => {
+    console.log('Service payment successful:', response);
+    setShowRazorpay(false);
+    setProcessingPayment(true);
+
+    try {
+      const amount = selectedService?.price || 0;
+
+      // Create payment record
+      const paymentResult = await createPayment({
+        booking_id: currentBookingId,
+        amount: amount,
+        payment_method: 'razorpay',
+      });
+
+      if (paymentResult.success && paymentResult.payment) {
+        // Update payment status
+        await updatePaymentStatus(
+          paymentResult.payment.id,
+          'success',
+          response
+        );
+
+        // Auto-confirm booking after successful payment
+        const { updateBookingStatus } = require('../../src/store/bookingStore').useBookingStore.getState();
+        await updateBookingStatus(currentBookingId, 'confirmed');
+
+        setProcessingPayment(false);
+        setShowBookingForm(false);
+
+        Alert.alert(
+          'Booking Confirmed!',
+          'Your booking has been confirmed and payment received. The seller will contact you soon.',
+          [
+            {
+              text: 'View Bookings',
+              onPress: () => router.push('/(tabs)/bookings'),
+            },
+            {
+              text: 'OK',
+              onPress: () => router.back(),
+            },
+          ]
+        );
+      } else {
+        throw new Error('Failed to record payment');
+      }
+    } catch (error: any) {
+      console.error('Payment record error:', error);
+      setProcessingPayment(false);
+      Alert.alert('Error', 'Payment successful but failed to update booking. Please contact support.');
+    }
+  };
+
+  const handlePaymentFailure = (error: any) => {
+    console.error('Service payment failed:', error);
+    setShowRazorpay(false);
+    setProcessingPayment(false);
+    Alert.alert(
+      'Payment Failed', 
+      error.error || error.description || 'Payment was not successful. Please try again.'
+    );
+  };
+
+  const handlePaymentClose = () => {
+    setShowRazorpay(false);
+    setProcessingPayment(false);
   };
 
   if (loading || !selectedService) {
@@ -563,6 +574,24 @@ export default function ServiceDetailScreen() {
             <Text style={styles.bookButtonText}>Book Service</Text>
           </TouchableOpacity>
         </View>
+      )}
+
+        {/* Razorpay Payment Modal */}
+      {showRazorpay && (
+        <RazorpayPayment
+          visible={showRazorpay}
+          orderId={razorpayOrderId}
+          amount={selectedService?.price || 0}
+          onSuccess={handlePaymentSuccess}
+          onFailure={handlePaymentFailure}
+          onClose={handlePaymentClose}
+          customerDetails={{
+            name: user?.name || '',
+            email: user?.email || '',
+            contact: user?.phone || '',
+          }}
+          description={`${selectedService?.name || 'Service'} Booking`}
+        />
       )}
     </SafeAreaView>
   );

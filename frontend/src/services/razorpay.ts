@@ -27,8 +27,8 @@ export interface RazorpayResponse {
 }
 
 /**
- * Razorpay Mock Integration for Testing
- * In production, you would integrate with actual Razorpay SDK
+ * Razorpay Integration Service
+ * This is a marker class - actual payment is handled by RazorpayPayment component
  */
 export class RazorpayService {
   private static instance: RazorpayService;
@@ -43,112 +43,64 @@ export class RazorpayService {
   }
 
   /**
-   * Open Razorpay Checkout - MOCKED for development
+   * This method is kept for backward compatibility
+   * Actual implementation uses RazorpayPayment WebView component
    */
   async openCheckout(
     options: RazorpayOptions,
     onSuccess: (response: RazorpayResponse) => void,
     onFailure: (error: any) => void
   ): Promise<void> {
-    try {
-      if (!RAZORPAY_KEY_ID) {
-        throw new Error('Razorpay Key ID not configured');
-      }
-
-      // Use mock payment for testing
-      return this.mockPayment(options.amount, onSuccess, onFailure);
-    } catch (error) {
-      console.error('Razorpay checkout error:', error);
-      onFailure(error);
-    }
+    console.warn('RazorpayService.openCheckout is deprecated. Use RazorpayPayment component instead.');
+    
+    // For now, show an informational alert
+    Alert.alert(
+      'Payment Gateway',
+      'Please use the updated payment flow with RazorpayPayment component',
+      [{ text: 'OK', onPress: () => onFailure({ error: 'Deprecated method' }) }]
+    );
   }
 
   /**
-   * Mock payment for development/testing
+   * Get Razorpay configuration
    */
-  private async mockPayment(
-    amount: number,
-    onSuccess: (response: RazorpayResponse) => void,
-    onFailure: (error: any) => void
-  ): Promise<void> {
-    return new Promise((resolve) => {
-      Alert.alert(
-        'Payment Gateway',
-        `Process payment of ₹${(amount / 100).toFixed(2)}?\n\n(Using Test Mode)`,
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-            onPress: () => {
-              onFailure({ error: 'Payment cancelled by user' });
-              resolve();
-            },
-          },
-          {
-            text: 'Pay Now',
-            onPress: () => {
-              // Simulate payment processing
-              setTimeout(() => {
-                onSuccess({
-                  razorpay_payment_id: `pay_${Date.now()}`,
-                  razorpay_order_id: `order_${Date.now()}`,
-                  razorpay_signature: `sig_${Date.now()}`,
-                });
-                resolve();
-              }, 1000);
-            },
-          },
-        ],
-        { cancelable: false }
-      );
-    });
+  getConfig() {
+    return {
+      keyId: RAZORPAY_KEY_ID,
+      keySecret: RAZORPAY_KEY_SECRET,
+    };
+  }
+
+  /**
+   * Validate Razorpay configuration
+   */
+  isConfigured(): boolean {
+    return !!(RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET);
   }
 }
 
 /**
- * Standalone mock payment function
+ * Utility function to create Razorpay order ID
+ * In production, this should be done on backend
  */
-export const mockPayment = async (
-  amount: number,
-  onSuccess: (response: RazorpayResponse) => void,
-  onFailure: (error: any) => void
-): Promise<void> => {
-  return new Promise((resolve) => {
-    Alert.alert(
-      'Mock Payment',
-      `Simulate payment of ₹${(amount / 100).toFixed(2)}?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-          onPress: () => {
-            onFailure({ error: 'Payment cancelled' });
-            resolve();
-          },
-        },
-        {
-          text: 'Success',
-          onPress: () => {
-            onSuccess({
-              razorpay_payment_id: `pay_mock_${Date.now()}`,
-              razorpay_order_id: `order_mock_${Date.now()}`,
-              razorpay_signature: `sig_mock_${Date.now()}`,
-            });
-            resolve();
-          },
-        },
-        {
-          text: 'Fail',
-          style: 'destructive',
-          onPress: () => {
-            onFailure({ error: 'Payment failed' });
-            resolve();
-          },
-        },
-      ],
-      { cancelable: false }
-    );
-  });
+export const generateOrderId = (prefix: string = 'order'): string => {
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 9);
+  return `${prefix}_${timestamp}_${random}`;
+};
+
+/**
+ * Format amount for Razorpay (convert rupees to paise)
+ */
+export const formatAmountForRazorpay = (amount: number): number => {
+  return Math.round(amount * 100);
+};
+
+/**
+ * Format amount from Razorpay (convert paise to rupees)
+ */
+export const formatAmountFromRazorpay = (amount: number): number => {
+  return amount / 100;
 };
 
 export default RazorpayService.getInstance();
