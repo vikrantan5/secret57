@@ -2,7 +2,7 @@ import React from 'react';
 import { create } from 'zustand';
 import { supabase } from '../services/supabase';
 import * as ImagePicker from 'expo-image-picker';
-import { uploadImageToSupabase } from '../utils/imageUpload';
+import { uploadImageToSupabase, generateSignedUrl } from '../utils/imageUpload';
 
 export interface Seller {
   id: string;
@@ -49,8 +49,8 @@ interface SellerState {
   }) => Promise<{ success: boolean; error?: string }>;
   uploadCompanyLogo: (sellerId: string, imageUri: string) => Promise<{ success: boolean; url?: string; error?: string }>;
   uploadVerificationDocument: (sellerId: string, imageUri: string) => Promise<{ success: boolean; url?: string; error?: string }>;
+  getDocumentSignedUrl: (documentUrl: string, expiresIn?: number) => Promise<string | null>;
 }
-
 export const useSellerStore = create<SellerState>((set, get) => ({
   seller: null,
   loading: false,
@@ -154,13 +154,13 @@ export const useSellerStore = create<SellerState>((set, get) => ({
       return { success: false, error: error.message || 'Failed to upload logo' };
     }
   },
-
   uploadVerificationDocument: async (sellerId: string, imageUri: string) => {
     try {
       const result = await uploadImageToSupabase(
         imageUri,
         'seller-documents',
-        sellerId
+        sellerId,
+        10 // 10MB max for documents
       );
 
       if (!result.success || !result.url) {
@@ -196,4 +196,29 @@ export const useSellerStore = create<SellerState>((set, get) => ({
       return { success: false, error: error.message || 'Failed to upload document' };
     }
   },
-})); // <-- FIXED: Closing Zustand store
+
+  /**
+   * Generate signed URL for viewing private seller documents
+   * Since seller-documents bucket is private, we need signed URLs
+   */
+  getDocumentSignedUrl: async (documentUrl: string, expiresIn: number = 3600) => {
+    try {
+      // Extract file path from the document URL
+      const urlParts = documentUrl.split('/seller-documents/');
+      if (urlParts.length < 2) {
+        console.error('Invalid document URL format');
+        return null;
+      }
+
+      const filePath = urlParts[1];
+      
+      // Generate signed URL
+      const signedUrl = await generateSignedUrl('seller-documents', filePath, expiresIn);
+      
+      return signedUrl;
+    } catch (error: any) {
+      console.error('Error generating signed URL:', error);
+      return null;
+    }
+  },
+}));

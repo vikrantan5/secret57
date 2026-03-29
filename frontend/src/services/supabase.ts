@@ -46,6 +46,7 @@ export interface User {
   phone: string;
   role: 'customer' | 'seller' | 'admin';
   seller_status?: 'pending' | 'approved' | 'rejected';
+  avatar_url?: string; // Added for user avatars
   created_at: string;
 }
 
