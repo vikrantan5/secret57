@@ -342,8 +342,8 @@ export default function OrderDetailScreen() {
         )}
 
         {/* Action Buttons */}
-        {canCancel && !showCancelModal && (
-          <View style={styles.actionButtons}>
+        <View style={styles.actionButtons}>
+          {canCancel && !showCancelModal && (
             <TouchableOpacity
               style={[styles.actionButton, styles.cancelButton]}
               onPress={() => setShowCancelModal(true)}
@@ -352,8 +352,32 @@ export default function OrderDetailScreen() {
               <Ionicons name="close-circle" size={20} color={colors.surface} />
               <Text style={styles.cancelButtonText}>Cancel Order</Text>
             </TouchableOpacity>
-          </View>
-        )}
+          )}
+          
+          {/* Report Seller Button */}
+          {order.status === 'delivered' && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.reportButton]}
+              onPress={() => router.push(`/complaints/create?orderId=${orderId}&sellerId=${order.items?.[0]?.seller_id}`)}
+              data-testid="report-seller-button"
+            >
+              <Ionicons name="flag-outline" size={20} color={colors.surface} />
+              <Text style={styles.reportButtonText}>Report Issue</Text>
+            </TouchableOpacity>
+          )}
+          
+          {/* Request Refund Button */}
+          {order.status === 'delivered' && order.payment_status === 'paid' && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.refundButton]}
+              onPress={() => router.push(`/order/${orderId}/refund`)}
+              data-testid="request-refund-button"
+            >
+              <Ionicons name="return-down-back-outline" size={20} color={colors.surface} />
+              <Text style={styles.refundButtonText}>Request Refund</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         <View style={{ height: spacing.xl }} />
       </ScrollView>
@@ -622,6 +646,24 @@ const styles = StyleSheet.create({
     backgroundColor: colors.error,
   },
   cancelButtonText: {
+    ...typography.body,
+    color: colors.surface,
+    fontWeight: '600',
+  },
+    reportButton: {
+    backgroundColor: colors.warning,
+    marginTop: spacing.sm,
+  },
+  reportButtonText: {
+    ...typography.body,
+    color: colors.surface,
+    fontWeight: '600',
+  },
+  refundButton: {
+    backgroundColor: colors.info,
+    marginTop: spacing.sm,
+  },
+  refundButtonText: {
     ...typography.body,
     color: colors.surface,
     fontWeight: '600',

@@ -265,12 +265,10 @@ export default function AdminPaymentsDashboardScreen() {
 
   const exportToCSV = async () => {
     try {
-      const csvHeader = 'Type,ID,Customer,Seller,Category,Amount,Status,Date
-';
+      const csvHeader = 'Type,ID,Customer,Seller,Category,Amount,Status,Date';
       const csvRows = filteredPayments.map(p =>
         `${p.type},${p.id},${p.customer_name},${p.seller_name},${p.category_name},₹${p.amount.toFixed(2)},${p.status},${new Date(p.created_at).toLocaleDateString()}`
-      ).join('
-');
+      ).join('');
 
       const csvContent = csvHeader + csvRows;
       const filename = `payments_${Date.now()}.csv`;
@@ -321,6 +319,51 @@ export default function AdminPaymentsDashboardScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
+             {/* Quick Access Cards */}
+        <View style={styles.quickAccessContainer}>
+          <Text style={styles.quickAccessTitle}>Quick Access</Text>
+          <View style={styles.quickAccessGrid}>
+            <TouchableOpacity
+              style={[styles.quickAccessCard, shadows.sm]}
+              onPress={() => router.push('/admin/payouts')}
+            >
+              <View style={[styles.quickAccessIcon, { backgroundColor: colors.primary + '15' }]}>
+                <Ionicons name="cash-outline" size={24} color={colors.primary} />
+              </View>
+              <Text style={styles.quickAccessLabel}>Payouts</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.quickAccessCard, shadows.sm]}
+              onPress={() => router.push('/admin/refunds')}
+            >
+              <View style={[styles.quickAccessIcon, { backgroundColor: colors.error + '15' }]}>
+                <Ionicons name="return-down-back-outline" size={24} color={colors.error} />
+              </View>
+              <Text style={styles.quickAccessLabel}>Refunds</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.quickAccessCard, shadows.sm]}
+              onPress={() => router.push('/admin/complaints')}
+            >
+              <View style={[styles.quickAccessIcon, { backgroundColor: colors.warning + '15' }]}>
+                <Ionicons name="flag-outline" size={24} color={colors.warning} />
+              </View>
+              <Text style={styles.quickAccessLabel}>Complaints</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.quickAccessCard, shadows.sm]}
+              onPress={() => router.push('/admin/orders')}
+            >
+              <View style={[styles.quickAccessIcon, { backgroundColor: colors.info + '15' }]}>
+                <Ionicons name="cube-outline" size={24} color={colors.info} />
+              </View>
+              <Text style={styles.quickAccessLabel}>Orders</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
         {/* Analytics Cards */}
         <ScrollView
           horizontal
@@ -808,5 +851,39 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textLight,
     marginTop: spacing.xs,
+  },
+    quickAccessContainer: {
+    padding: spacing.lg,
+  },
+  quickAccessTitle: {
+    ...typography.h4,
+    color: colors.text,
+    fontWeight: '700',
+    marginBottom: spacing.md,
+  },
+  quickAccessGrid: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    flexWrap: 'wrap',
+  },
+  quickAccessCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    alignItems: 'center',
+    width: '47%',
+  },
+  quickAccessIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  quickAccessLabel: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '600',
   },
 });
