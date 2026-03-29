@@ -44,10 +44,7 @@ export default function AdminPayoutsScreen() {
     loadData();
   }, []);
 
-  const loadData = async () => {
-    await fetchEligibleSellers();
-    await loadPayouts();
-  };
+
   const loadData = async () => {
     await fetchEligibleSellers();
     await loadPayouts();
@@ -219,8 +216,7 @@ ${result.errors.join('')}` : ''
                   const result = await updatePayoutStatus(payoutId, newStatus, ref || undefined);
                   if (result.success) {
                     Alert.alert('Success', `Payout marked as ${newStatus}`);
-                    loadPayouts();
-                    fetchSellerRevenues();
+                     await loadData();
                   } else {
                     Alert.alert('Error', result.error || 'Failed to update status');
                   }
@@ -232,8 +228,7 @@ ${result.errors.join('')}` : ''
             const result = await updatePayoutStatus(payoutId, newStatus);
             if (result.success) {
               Alert.alert('Success', `Payout marked as ${newStatus}`);
-              loadPayouts();
-              fetchSellerRevenues();
+                   await loadData();
             } else {
               Alert.alert('Error', result.error || 'Failed to update status');
             }
@@ -311,7 +306,7 @@ ${result.errors.join('')}` : ''
 
           {payoutLoading ? (
             <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
-          ) : eligibleSellers.length === 0 ? (
+                   ) : eligibleSellers.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="checkmark-circle-outline" size={60} color={colors.success} />
               <Text style={styles.emptyText}>All caught up!</Text>
@@ -552,6 +547,52 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
+    batchSection: {
+    backgroundColor: colors.surface,
+    margin: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+  },
+  batchInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  batchTextContainer: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  batchTitle: {
+    ...typography.h4,
+    color: colors.text,
+    fontWeight: '700',
+  },
+  batchSubtitle: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.xs / 2,
+  },
+  batchNote: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs / 2,
+    fontStyle: 'italic',
+  },
+  batchButton: {
+    backgroundColor: colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+    gap: spacing.sm,
+  },
+  batchButtonText: {
+    ...typography.body,
+    color: colors.surface,
+    fontWeight: '600',
+  },
   section: {
     padding: spacing.lg,
   },
@@ -572,6 +613,12 @@ const styles = StyleSheet.create({
     ...typography.h4,
     color: colors.text,
     marginTop: spacing.md,
+  },
+    emptySubtext: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    textAlign: 'center',
   },
   sellersList: {
     gap: spacing.md,
