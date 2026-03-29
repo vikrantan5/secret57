@@ -19,8 +19,10 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useServiceStore } from '../../src/store/serviceStore';
 import { useBookingStore } from '../../src/store/bookingStore';
 import { useAuthStore } from '../../src/store/authStore';
+import { usePaymentStore } from '../../src/store/paymentStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { YouTubePlayerComponent } from '../../src/components/ui/YouTubePlayer';
+import RazorpayService from '../../src/services/razorpay';
 
 const { width } = Dimensions.get('window');
 
@@ -32,8 +34,10 @@ export default function ServiceDetailScreen() {
   const { user } = useAuthStore();
   const { selectedService, loading, fetchServiceById } = useServiceStore();
   const { createBooking } = useBookingStore();
+  const { createPayment, updatePaymentStatus } = usePaymentStore();
   
   const [showBookingForm, setShowBookingForm] = useState(false);
+  const [processingPayment, setProcessingPayment] = useState(false);
   const [bookingData, setBookingData] = useState({
     date: '',
     time: '',
@@ -99,38 +103,106 @@ export default function ServiceDetailScreen() {
       }
     }
 
-    const result = await createBooking({
-      customer_id: user.id,
-      seller_id: selectedService?.seller_id,
-      service_id: serviceId,
-      booking_date: bookingData.date,
-      booking_time: bookingData.time,
-      location_type: bookingData.locationType,
-      address: bookingData.locationType === 'visit_customer' ? bookingData.address : null,
-      city: bookingData.locationType === 'visit_customer' ? bookingData.city : null,
-      state: bookingData.locationType === 'visit_customer' ? bookingData.state : null,
-      pincode: bookingData.locationType === 'visit_customer' ? bookingData.pincode : null,
-      notes: bookingData.notes || null,
-      total_amount: selectedService?.price || 0,
-    });
+    setProcessingPayment(true);
 
-    if (result.success) {
-      Alert.alert(
-        'Booking Successful!',
-        'Your booking request has been submitted',
-        [
-          {
-            text: 'View Booking',
-            onPress: () => router.push('/(tabs)/bookings'),
+    try {
+      // Step 1: Create booking
+      const result = await createBooking({
+        customer_id: user.id,
+        seller_id: selectedService?.seller_id,
+        service_id: serviceId,
+        booking_date: bookingData.date,
+        booking_time: bookingData.time,
+        location_type: bookingData.locationType,
+        address: bookingData.locationType === 'visit_customer' ? bookingData.address : null,
+        city: bookingData.locationType === 'visit_customer' ? bookingData.city : null,
+        state: bookingData.locationType === 'visit_customer' ? bookingData.state : null,
+        pincode: bookingData.locationType === 'visit_customer' ? bookingData.pincode : null,
+        notes: bookingData.notes || null,
+        total_amount: selectedService?.price || 0,
+      });
+
+      if (!result.success || !result.booking) {
+        throw new Error(result.error || 'Failed to create booking');
+      }
+
+      const bookingId = result.booking.id;
+
+      // Step 2: Process payment
+      const amount = selectedService?.price || 0;
+      
+      RazorpayService.openCheckout(
+        {
+          amount: Math.round(amount * 100), // Convert to paise
+          currency: 'INR',
+          name: 'ServiceHub',
+          description: selectedService?.name || 'Service Booking',
+          order_id: bookingId,
+          prefill: {
+            name: user.name,
+            email: user.email,
+            contact: user.phone,
           },
-          {
-            text: 'OK',
+          theme: {
+            color: colors.primary,
           },
-        ]
+        },
+        async (response) => {
+          // Payment successful
+          try {
+            // Create payment record
+            const paymentResult = await createPayment({
+              booking_id: bookingId,
+              amount: amount,
+              payment_method: 'razorpay',
+            });
+
+                    if (paymentResult.success && paymentResult.payment) {
+              // Update payment status
+              await updatePaymentStatus(
+                paymentResult.payment.id,
+                'success',
+                response
+              );
+
+              // Auto-confirm booking after successful payment
+              const { updateBookingStatus } = require('../../src/store/bookingStore').useBookingStore.getState();
+              await updateBookingStatus(bookingId, 'confirmed');
+
+              setProcessingPayment(false);
+              setShowBookingForm(false);
+
+              Alert.alert(
+                'Booking Confirmed!',
+                'Your booking has been confirmed and payment received. The seller will contact you soon.',
+                [
+                  {
+                    text: 'View Booking',
+                    onPress: () => router.push('/(tabs)/bookings'),
+                  },
+                  {
+                    text: 'OK',
+                  },
+                ]
+              );
+            }
+          } catch (error: any) {
+            console.error('Payment record error:', error);
+            setProcessingPayment(false);
+            Alert.alert('Error', 'Payment successful but failed to update booking. Please contact support.');
+          }
+        },
+        (error) => {
+          // Payment failed
+          console.error('Payment failed:', error);
+          setProcessingPayment(false);
+          Alert.alert('Payment Failed', error.error || 'Payment was not successful. Please try again.');
+        }
       );
-      setShowBookingForm(false);
-    } else {
-      Alert.alert('Error', result.error || 'Failed to create booking');
+    } catch (error: any) {
+      console.error('Booking error:', error);
+      setProcessingPayment(false);
+      Alert.alert('Error', error.message || 'Failed to create booking');
     }
   };
 

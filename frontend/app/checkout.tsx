@@ -15,10 +15,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../src/store/authStore';
 import { useCartStore } from '../src/store/cartStore';
 import { useOrderStore } from '../src/store/orderStore';
+import { usePaymentStore } from '../src/store/paymentStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../src/constants/theme';
+import RazorpayService from '../src/services/razorpay';
 
-// Note: For production, you'd use react-native-razorpay
-// For now, we'll simulate the payment flow
+// Note: Using Razorpay test credentials
 const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_RVeELbQdxuBBiv';
 
 export default function CheckoutScreen() {
@@ -26,6 +27,7 @@ export default function CheckoutScreen() {
   const { user } = useAuthStore();
   const { items, total, clearCart } = useCartStore();
   const { createOrder, updatePaymentStatus } = useOrderStore();
+   const { createPayment, updatePaymentStatus: updatePaymentStatusInStore } = usePaymentStore();
   
   const [loading, setLoading] = useState(false);
   const [shippingInfo, setShippingInfo] = useState({
@@ -81,42 +83,83 @@ export default function CheckoutScreen() {
 
       const orderId = result.order.id;
 
-      // Step 2: Initialize Razorpay payment
-      // Note: In a real React Native app, you'd use react-native-razorpay
-      // For web/testing, we can use Razorpay's web integration
-      
-      // For demonstration, we'll simulate a successful payment
-      // In production, you'd integrate with Razorpay SDK:
-      /*
-      const options = {
-        description: 'ServiceHub Order',
-        image: 'https://your-logo-url.png',
-        currency: 'INR',
-        key: RAZORPAY_KEY_ID,
-        amount: Math.round(finalTotal * 100), // Razorpay expects amount in paise
-        name: 'ServiceHub',
-        order_id: `order_${orderId}`, // Generate from backend
-        prefill: {
-          email: user.email,
-          contact: shippingInfo.phone,
-          name: shippingInfo.name,
+      // Step 2: Process Razorpay payment
+      RazorpayService.openCheckout(
+        {
+          amount: Math.round(finalTotal * 100), // Convert to paise
+          currency: 'INR',
+          name: 'ServiceHub',
+          description: 'Product Order',
+          order_id: orderId,
+          prefill: {
+            name: shippingInfo.name,
+            email: user.email,
+            contact: shippingInfo.phone,
+          },
+          theme: {
+            color: colors.primary,
+          },
         },
-        theme: { color: colors.primary },
-      };
-      
-      RazorpayCheckout.open(options)
-        .then((data) => {
-          // Payment success
-          handlePaymentSuccess(orderId, data);
-        })
-        .catch((error) => {
-          // Payment failed
-          handlePaymentFailure(orderId, error);
-        });
-      */
+        async (response) => {
+          // Payment successful
+          try {
+            // Create payment record
+            const paymentResult = await createPayment({
+              order_id: orderId,
+              amount: finalTotal,
+              payment_method: 'razorpay',
+            });
 
-      // Simulated payment success (for demonstration)
-      await simulatePayment(orderId);
+            if (paymentResult.success && paymentResult.payment) {
+              // Update payment status with Razorpay details
+              await updatePaymentStatusInStore(
+                paymentResult.payment.id,
+                'success',
+                response
+              );
+
+              // Update order payment status
+              const paymentData = {
+                method: 'razorpay',
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              };
+              await updatePaymentStatus(orderId, paymentData);
+
+              // Clear cart
+              clearCart();
+              
+              setLoading(false);
+              
+              Alert.alert(
+                'Order Placed Successfully!',
+                'Your order has been placed and payment confirmed',
+                [
+                  {
+                    text: 'View Order',
+                    onPress: () => router.replace('/orders'),
+                  },
+                  {
+                    text: 'Continue Shopping',
+                    onPress: () => router.replace('/(tabs)/home'),
+                  },
+                ]
+              );
+            }
+          } catch (error: any) {
+            console.error('Payment record error:', error);
+            setLoading(false);
+            Alert.alert('Error', 'Payment successful but failed to update order. Please contact support.');
+          }
+        },
+        (error) => {
+          // Payment failed
+          console.error('Payment failed:', error);
+          setLoading(false);
+          Alert.alert('Payment Failed', error.error || 'Payment was not successful. Please try again.');
+        }
+      );
 
     } catch (error: any) {
       console.error('Checkout error:', error);
