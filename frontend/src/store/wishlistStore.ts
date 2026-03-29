@@ -3,6 +3,7 @@ import { supabase } from '../services/supabase';
 
 interface WishlistState {
   wishlistItems: string[]; // product IDs
+  items: string[]; // Alias for compatibility with profile screen
   loading: boolean;
   
   addToWishlist: (productId: string, userId: string) => Promise<{ success: boolean; error?: string }>;
@@ -14,6 +15,7 @@ interface WishlistState {
 
 export const useWishlistStore = create<WishlistState>((set, get) => ({
   wishlistItems: [],
+  items: [], // Alias for compatibility
   loading: false,
 
   addToWishlist: async (productId: string, userId: string) => {
@@ -29,8 +31,8 @@ export const useWishlistStore = create<WishlistState>((set, get) => ({
 
       set(state => ({
         wishlistItems: [...state.wishlistItems, productId],
+        items: [...state.wishlistItems, productId], // Update alias
       }));
-
       return { success: true };
     } catch (error: any) {
       console.error('Error in addToWishlist:', error);
@@ -53,8 +55,8 @@ export const useWishlistStore = create<WishlistState>((set, get) => ({
 
       set(state => ({
         wishlistItems: state.wishlistItems.filter(id => id !== productId),
+        items: state.wishlistItems.filter(id => id !== productId), // Update alias
       }));
-
       return { success: true };
     } catch (error: any) {
       console.error('Error in removeFromWishlist:', error);
@@ -75,6 +77,7 @@ export const useWishlistStore = create<WishlistState>((set, get) => ({
 
       set({ 
         wishlistItems: data?.map(w => w.product_id) || [],
+        items: data?.map(w => w.product_id) || [], // Update alias
         loading: false 
       });
     } catch (error) {
