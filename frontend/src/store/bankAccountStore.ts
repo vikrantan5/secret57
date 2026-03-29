@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '../services/supabase';
+import RazorpayPayoutService from '../services/razorpayPayout';
 
 export interface SellerBankAccount {
   id: string;
@@ -9,6 +10,10 @@ export interface SellerBankAccount {
   ifsc_code: string;
   bank_name: string;
   account_type: 'savings' | 'current';
+  upi_id?: string;
+  pan_number?: string;
+  razorpay_contact_id?: string;
+  razorpay_fund_account_id?: string;
   is_verified: boolean;
   is_primary: boolean;
   created_at: string;
@@ -46,9 +51,17 @@ interface BankAccountState {
     ifsc_code: string;
     bank_name: string;
     account_type?: 'savings' | 'current';
+    upi_id?: string;
+    pan_number?: string;
   }) => Promise<{ success: boolean; error?: string }>;
   updateBankAccount: (id: string, data: Partial<SellerBankAccount>) => Promise<{ success: boolean; error?: string }>;
   deleteBankAccount: (id: string) => Promise<{ success: boolean; error?: string }>;
+  setPrimaryAccount: (id: string, sellerId: string) => Promise<{ success: boolean; error?: string }>;
+  
+  // Validation Functions
+  validateIFSC: (ifsc: string) => boolean;
+  validateAccountNumber: (accountNumber: string) => boolean;
+  validatePAN: (pan: string) => boolean;
   
   // Payout Functions
   fetchPayouts: (sellerId: string) => Promise<void>;
@@ -101,9 +114,88 @@ export const useBankAccountStore = create<BankAccountState>((set, get) => ({
     try {
       set({ loading: true });
 
+      // Validate inputs
+      if (!get().validateIFSC(data.ifsc_code)) {
+        set({ loading: false });
+        return { success: false, error: 'Invalid IFSC code format' };
+      }
+
+      if (!get().validateAccountNumber(data.account_number)) {
+        set({ loading: false });
+        return { success: false, error: 'Invalid account number (must be 9-18 digits)' };
+      }
+
+      if (data.pan_number && !get().validatePAN(data.pan_number)) {
+        set({ loading: false });
+        return { success: false, error: 'Invalid PAN format' };
+      }
+
+      // Get seller details
+      const { data: seller, error: sellerError } = await supabase
+        .from('sellers')
+        .select('*, users(*)')
+        .eq('id', data.seller_id)
+        .single();
+
+      if (sellerError || !seller) {
+        set({ loading: false });
+        return { success: false, error: 'Seller not found' };
+      }
+
+      // Create or get Razorpay Contact
+      let razorpay_contact_id = seller.razorpay_contact_id;
+
+      if (!razorpay_contact_id) {
+        const contactResult = await RazorpayPayoutService.createContact({
+          name: seller.company_name || seller.users?.name || 'Unknown',
+          email: seller.users?.email || '',
+          phone: seller.users?.phone || ''
+        });
+
+        if (!contactResult.success) {
+          console.warn('Razorpay contact creation failed:', contactResult.error);
+          // Continue anyway - can be created later
+        } else {
+          razorpay_contact_id = contactResult.contact_id;
+
+          // Update seller with contact_id
+          await supabase
+            .from('sellers')
+            .update({ razorpay_contact_id })
+            .eq('id', data.seller_id);
+        }
+      }
+
+      // Create Razorpay Fund Account if contact exists
+      let razorpay_fund_account_id;
+      if (razorpay_contact_id) {
+        const fundAccountResult = await RazorpayPayoutService.createFundAccount({
+          contact_id: razorpay_contact_id,
+          account_holder_name: data.account_holder_name,
+          account_number: data.account_number,
+          ifsc_code: data.ifsc_code
+        });
+
+        if (!fundAccountResult.success) {
+          console.warn('Razorpay fund account creation failed:', fundAccountResult.error);
+          // Continue anyway - can be created later
+        } else {
+          razorpay_fund_account_id = fundAccountResult.fund_account_id;
+        }
+      }
+
+      // Save bank account to Supabase
       const accountData = {
-        ...data,
+        seller_id: data.seller_id,
+        account_holder_name: data.account_holder_name,
+        account_number: data.account_number,
+        ifsc_code: data.ifsc_code.toUpperCase(),
+        bank_name: data.bank_name,
         account_type: data.account_type || 'savings',
+        upi_id: data.upi_id,
+        pan_number: data.pan_number?.toUpperCase(),
+        razorpay_contact_id,
+        razorpay_fund_account_id,
         is_verified: false,
         is_primary: get().bankAccounts.length === 0, // First account is primary
       };
@@ -130,7 +222,6 @@ export const useBankAccountStore = create<BankAccountState>((set, get) => ({
       return { success: false, error: error.message || 'Failed to add bank account' };
     }
   },
-
   updateBankAccount: async (id, data) => {
     try {
       set({ loading: true });
@@ -157,9 +248,22 @@ export const useBankAccountStore = create<BankAccountState>((set, get) => ({
     }
   },
 
-  deleteBankAccount: async (id) => {
+   deleteBankAccount: async (id) => {
     try {
       set({ loading: true });
+
+      // Check if it's the only account
+      if (get().bankAccounts.length === 1) {
+        set({ loading: false });
+        return { success: false, error: 'Cannot delete the only bank account' };
+      }
+
+      // Check if it's primary
+      const account = get().bankAccounts.find(acc => acc.id === id);
+      if (account?.is_primary && get().bankAccounts.length > 1) {
+        set({ loading: false });
+        return { success: false, error: 'Cannot delete primary account. Set another account as primary first.' };
+      }
 
       const { error } = await supabase
         .from('seller_bank_accounts')
@@ -183,6 +287,56 @@ export const useBankAccountStore = create<BankAccountState>((set, get) => ({
     }
   },
 
+  setPrimaryAccount: async (id, sellerId) => {
+    try {
+      set({ loading: true });
+
+      // Unset all other primary accounts for this seller
+      await supabase
+        .from('seller_bank_accounts')
+        .update({ is_primary: false })
+        .eq('seller_id', sellerId);
+
+      // Set this account as primary
+      const { error } = await supabase
+        .from('seller_bank_accounts')
+        .update({ is_primary: true })
+        .eq('id', id);
+
+      if (error) {
+        set({ loading: false });
+        return { success: false, error: error.message };
+      }
+
+      // Update local state
+      const updatedAccounts = get().bankAccounts.map(acc => ({
+        ...acc,
+        is_primary: acc.id === id
+      }));
+
+      set({ bankAccounts: updatedAccounts, loading: false });
+      return { success: true };
+    } catch (error: any) {
+      set({ loading: false });
+      return { success: false, error: error.message || 'Failed to set primary account' };
+    }
+  },
+
+  // Validation Functions
+  validateIFSC: (ifsc) => {
+    const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+    return ifscRegex.test(ifsc.toUpperCase());
+  },
+
+  validateAccountNumber: (accountNumber) => {
+    const cleaned = accountNumber.replace(/\s/g, '');
+    return /^\d{9,18}$/.test(cleaned);
+  },
+
+  validatePAN: (pan) => {
+    const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+    return panRegex.test(pan.toUpperCase());
+  },
   fetchPayouts: async (sellerId: string) => {
     try {
       set({ loading: true });

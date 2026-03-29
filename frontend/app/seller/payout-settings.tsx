@@ -20,7 +20,7 @@ import { Input } from '../../src/components/ui/Input';
 export default function PayoutSettingsScreen() {
   const router = useRouter();
   const { seller } = useSellerStore();
-  const { bankAccounts, payouts, fetchBankAccounts, fetchPayouts, addBankAccount, deleteBankAccount, loading } = useBankAccountStore();
+  const { bankAccounts, payouts, fetchBankAccounts, fetchPayouts, addBankAccount, deleteBankAccount, validateIFSC, validateAccountNumber, validatePAN, loading } = useBankAccountStore();
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [accountHolderName, setAccountHolderName] = useState('');
@@ -29,6 +29,8 @@ export default function PayoutSettingsScreen() {
   const [ifscCode, setIfscCode] = useState('');
   const [bankName, setBankName] = useState('');
   const [accountType, setAccountType] = useState<'savings' | 'current'>('savings');
+  const [upiId, setUpiId] = useState('');
+  const [panNumber, setPanNumber] = useState('');
   const [errors, setErrors] = useState<any>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -46,9 +48,22 @@ export default function PayoutSettingsScreen() {
     if (!accountNumber.trim()) newErrors.accountNumber = 'Account number is required';
     if (!confirmAccountNumber.trim()) newErrors.confirmAccountNumber = 'Please confirm account number';
     if (accountNumber !== confirmAccountNumber) newErrors.confirmAccountNumber = 'Account numbers do not match';
-    if (!ifscCode.trim()) newErrors.ifscCode = 'IFSC code is required';
-    if (ifscCode.length !== 11) newErrors.ifscCode = 'IFSC code must be 11 characters';
+    
+    if (!ifscCode.trim()) {
+      newErrors.ifscCode = 'IFSC code is required';
+    } else if (!validateIFSC(ifscCode)) {
+      newErrors.ifscCode = 'Invalid IFSC code format (e.g., SBIN0001234)';
+    }
+    
+    if (!validateAccountNumber(accountNumber)) {
+      newErrors.accountNumber = 'Account number must be 9-18 digits';
+    }
+    
     if (!bankName.trim()) newErrors.bankName = 'Bank name is required';
+    
+    if (panNumber && !validatePAN(panNumber)) {
+      newErrors.panNumber = 'Invalid PAN format (e.g., ABCDE1234F)';
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -75,6 +90,8 @@ export default function PayoutSettingsScreen() {
         ifsc_code: ifscCode.toUpperCase(),
         bank_name: bankName,
         account_type: accountType,
+        upi_id: upiId || undefined,
+        pan_number: panNumber ? panNumber.toUpperCase() : undefined,
       });
 
       if (result.success) {
@@ -86,6 +103,8 @@ export default function PayoutSettingsScreen() {
         setIfscCode('');
         setBankName('');
         setAccountType('savings');
+        setUpiId('');
+        setPanNumber('');
         setErrors({});
         setShowAddForm(false);
       } else {
@@ -232,6 +251,24 @@ export default function PayoutSettingsScreen() {
                 onChangeText={setBankName}
                 placeholder="Enter bank name"
                 error={errors.bankName}
+              />
+                <Input
+                label="UPI ID (Optional)"
+                value={upiId}
+                onChangeText={setUpiId}
+                placeholder="yourname@upi"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+
+              <Input
+                label="PAN Number (Optional)"
+                value={panNumber}
+                onChangeText={(text) => setPanNumber(text.toUpperCase())}
+                placeholder="ABCDE1234F"
+                autoCapitalize="characters"
+                maxLength={10}
+                error={errors.panNumber}
               />
 
               {/* Account Type */}

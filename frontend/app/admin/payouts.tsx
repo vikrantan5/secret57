@@ -14,76 +14,43 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useBankAccountStore } from '../../src/store/bankAccountStore';
+import { usePayoutStore } from '../../src/store/payoutStore';
 import { supabase } from '../../src/services/supabase';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
 
-interface SellerWithRevenue {
-  seller_id: string;
-  company_name: string;
-  total_revenue: number;
-  total_payouts: number;
-  pending_amount: number;
-  bank_account?: any;
-}
-
 export default function AdminPayoutsScreen() {
   const router = useRouter();
   const { createPayout, updatePayoutStatus, fetchAllPayouts, loading } = useBankAccountStore();
+  const { 
+    eligibleSellers, 
+    payouts: storePayouts,
+    generateBatchPayouts,
+    fetchEligibleSellers,
+    processPayout,
+    loading: payoutLoading
+  } = usePayoutStore();
   
-  const [sellers, setSellers] = useState<SellerWithRevenue[]>([]);
   const [allPayouts, setAllPayouts] = useState<any[]>([]);
-  const [loadingSellers, setLoadingSellers] = useState(true);
-  const [selectedSeller, setSelectedSeller] = useState<SellerWithRevenue | null>(null);
+  const [selectedSeller, setSelectedSeller] = useState<any>(null);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
   const [payoutAmount, setPayoutAmount] = useState('');
   const [payoutNotes, setPayoutNotes] = useState('');
-  const [transactionRef, setTransactionRef] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [generatingBatch, setGeneratingBatch] = useState(false);
 
   useEffect(() => {
-    fetchSellerRevenues();
-    loadPayouts();
+    loadData();
   }, []);
 
-  const fetchSellerRevenues = async () => {
-    try {
-      setLoadingSellers(true);
-
-      // Fetch seller revenue summary view
-      const { data: revenueData, error } = await supabase
-        .from('seller_payout_summary')
-        .select('*');
-
-      if (error) {
-        console.error('Error fetching revenue:', error);
-        return;
-      }
-
-      // Fetch bank accounts for each seller
-      const sellersWithBanks = await Promise.all(
-        (revenueData || []).map(async (seller) => {
-          const { data: bankAccounts } = await supabase
-            .from('seller_bank_accounts')
-            .select('*')
-            .eq('seller_id', seller.seller_id)
-            .eq('is_primary', true)
-            .single();
-
-          return {
-            ...seller,
-            bank_account: bankAccounts,
-          };
-        })
-      );
-
-      setSellers(sellersWithBanks);
-      setLoadingSellers(false);
-    } catch (error) {
-      console.error('Error in fetchSellerRevenues:', error);
-      setLoadingSellers(false);
-    }
+  const loadData = async () => {
+    await fetchEligibleSellers();
+    await loadPayouts();
+  };
+  const loadData = async () => {
+    await fetchEligibleSellers();
+    await loadPayouts();
   };
 
   const loadPayouts = async () => {
@@ -91,20 +58,98 @@ export default function AdminPayoutsScreen() {
     setAllPayouts(payouts);
   };
 
-  const handleInitiatePayout = (seller: SellerWithRevenue) => {
-    if (!seller.bank_account) {
+  const handleGenerateBatchPayouts = async () => {
+    Alert.alert(
+      'Generate Batch Payouts',
+      `This will create payouts for ${eligibleSellers.length} eligible sellers. Continue?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Generate',
+          onPress: async () => {
+            try {
+              setGeneratingBatch(true);
+              const result = await generateBatchPayouts();
+              
+              if (result.success) {
+                Alert.alert(
+                  'Batch Generation Complete',
+                  `Created: ${result.created}
+Failed: ${result.failed}${
+                    result.errors.length > 0 ? `
+
+Errors:
+${result.errors.join('')}` : ''
+                  }`
+                );
+                await loadData();
+              } else {
+                Alert.alert('Error', result.errors[0] || 'Failed to generate batch payouts');
+              }
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Something went wrong');
+            } finally {
+              setGeneratingBatch(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleInitiatePayout = async (seller: any) => {
+    // Get seller's primary bank account
+    const { data: bankAccount } = await supabase
+      .from('seller_bank_accounts')
+      .select('*')
+      .eq('seller_id', seller.seller_id)
+      .eq('is_primary', true)
+      .single();
+
+    if (!bankAccount) {
       Alert.alert('Error', 'Seller has not added bank account details yet.');
       return;
     }
 
-    if (seller.pending_amount <= 0) {
-      Alert.alert('Info', 'No pending amount to pay out for this seller.');
+    if (seller.net_eligible_amount <= 0) {
+      Alert.alert('Info', 'No eligible amount to pay out for this seller.');
       return;
     }
 
-    setSelectedSeller(seller);
-    setPayoutAmount(seller.pending_amount.toFixed(2));
+    setSelectedSeller({ ...seller, bank_account: bankAccount });
+    setPayoutAmount(seller.net_eligible_amount.toFixed(2));
     setShowPayoutModal(true);
+  };
+
+  const handleProcessPayoutViaRazorpay = async (payoutId: string) => {
+    Alert.alert(
+      'Process Payout via Razorpay',
+      "This will initiate a real money transfer to the seller's bank account. Continue?",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Process',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setProcessing(true);
+              const result = await processPayout(payoutId);
+              
+              if (result.success) {
+                Alert.alert('Success', 'Payout processed successfully via Razorpay!');
+                await loadData();
+              } else {
+                Alert.alert('Error', result.error || 'Failed to process payout');
+              }
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Something went wrong');
+            } finally {
+              setProcessing(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleCreatePayout = async () => {
@@ -119,8 +164,8 @@ export default function AdminPayoutsScreen() {
       return;
     }
 
-    if (amount > selectedSeller.pending_amount) {
-      Alert.alert('Error', `Amount cannot exceed pending amount of ₹${selectedSeller.pending_amount.toFixed(2)}`);
+    if (amount > selectedSeller.net_eligible_amount) {
+      Alert.alert('Error', `Amount cannot exceed eligible amount of ₹${selectedSeller.net_eligible_amount.toFixed(2)}`);
       return;
     }
 
@@ -131,6 +176,7 @@ export default function AdminPayoutsScreen() {
         seller_id: selectedSeller.seller_id,
         bank_account_id: selectedSeller.bank_account.id,
         amount,
+        order_ids: selectedSeller.eligible_order_ids || [],
         notes: payoutNotes || undefined,
       });
 
@@ -140,8 +186,7 @@ export default function AdminPayoutsScreen() {
         setPayoutAmount('');
         setPayoutNotes('');
         setSelectedSeller(null);
-        fetchSellerRevenues();
-        loadPayouts();
+        await loadData();
       } else {
         Alert.alert('Error', result.error || 'Failed to create payout');
       }
@@ -221,26 +266,60 @@ export default function AdminPayoutsScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Seller Payouts</Text>
-        <TouchableOpacity onPress={() => { fetchSellerRevenues(); loadPayouts(); }}>
+        <TouchableOpacity onPress={loadData}>
           <Ionicons name="refresh" size={24} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Sellers with Pending Payouts */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Sellers - Pending Payouts</Text>
+        {/* Batch Payout Generation Button */}
+        {eligibleSellers.length > 0 && (
+          <View style={[styles.batchSection, shadows.md]}>
+            <View style={styles.batchInfo}>
+              <Ionicons name="flash" size={32} color={colors.warning} />
+              <View style={styles.batchTextContainer}>
+                <Text style={styles.batchTitle}>Eligible for Batch Payout</Text>
+                <Text style={styles.batchSubtitle}>
+                  {eligibleSellers.length} sellers • Total: ₹
+                  {eligibleSellers.reduce((sum, s) => sum + s.net_eligible_amount, 0).toFixed(2)}
+                </Text>
+                <Text style={styles.batchNote}>
+                  (Orders delivered ≥7 days ago • Min ₹500)
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[styles.batchButton, shadows.sm]}
+              onPress={handleGenerateBatchPayouts}
+              disabled={generatingBatch}
+            >
+              {generatingBatch ? (
+                <ActivityIndicator color={colors.surface} />
+              ) : (
+                <>
+                  <Ionicons name="layers" size={20} color={colors.surface} />
+                  <Text style={styles.batchButtonText}>Generate Batch Payouts</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
 
-          {loadingSellers ? (
+        {/* Eligible Sellers */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Eligible Sellers (≥₹500)</Text>
+
+          {payoutLoading ? (
             <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
-          ) : sellers.length === 0 ? (
+          ) : eligibleSellers.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="people-outline" size={60} color={colors.textSecondary} />
-              <Text style={styles.emptyText}>No sellers found</Text>
+              <Ionicons name="checkmark-circle-outline" size={60} color={colors.success} />
+              <Text style={styles.emptyText}>All caught up!</Text>
+              <Text style={styles.emptySubtext}>No eligible sellers at the moment</Text>
             </View>
           ) : (
             <View style={styles.sellersList}>
-              {sellers.map((seller) => (
+              {eligibleSellers.map((seller) => (
                 <View key={seller.seller_id} style={[styles.sellerCard, shadows.sm]}>
                   <View style={styles.sellerHeader}>
                     <View style={styles.sellerIcon}>
@@ -249,47 +328,46 @@ export default function AdminPayoutsScreen() {
                     <View style={styles.sellerInfo}>
                       <Text style={styles.sellerName}>{seller.company_name}</Text>
                       <Text style={styles.sellerSubtext}>
-                        {seller.bank_account ? seller.bank_account.bank_name : 'No bank account'}
+                        {seller.eligible_order_count} orders eligible
                       </Text>
                     </View>
                   </View>
 
                   <View style={styles.revenueGrid}>
                     <View style={styles.revenueItem}>
-                      <Text style={styles.revenueLabel}>Total Revenue</Text>
+                      <Text style={styles.revenueLabel}>Gross Revenue</Text>
                       <Text style={[styles.revenueValue, { color: colors.primary }]}>
-                        ₹{seller.total_revenue.toFixed(2)}
+                        ₹{seller.total_eligible_revenue.toFixed(2)}
                       </Text>
                     </View>
                     <View style={styles.revenueItem}>
-                      <Text style={styles.revenueLabel}>Total Paid</Text>
+                      <Text style={styles.revenueLabel}>Commission (10%)</Text>
+                      <Text style={[styles.revenueValue, { color: colors.error }]}>
+                        -₹{(seller.total_eligible_revenue * 0.10).toFixed(2)}
+                      </Text>
+                    </View>
+                    <View style={styles.revenueItem}>
+                      <Text style={styles.revenueLabel}>Net Payout</Text>
                       <Text style={[styles.revenueValue, { color: colors.success }]}>
-                        ₹{seller.total_payouts.toFixed(2)}
-                      </Text>
-                    </View>
-                    <View style={styles.revenueItem}>
-                      <Text style={styles.revenueLabel}>Pending</Text>
-                      <Text style={[styles.revenueValue, { color: colors.warning }]}>
-                        ₹{seller.pending_amount.toFixed(2)}
+                        ₹{seller.net_eligible_amount.toFixed(2)}
                       </Text>
                     </View>
                   </View>
 
-                  {seller.pending_amount > 0 && (
-                    <TouchableOpacity
-                      style={[styles.payoutButton, shadows.sm]}
-                      onPress={() => handleInitiatePayout(seller)}
-                      disabled={!seller.bank_account}
-                    >
-                      <Ionicons name="cash-outline" size={20} color={colors.surface} />
-                      <Text style={styles.payoutButtonText}>Initiate Payout</Text>
-                    </TouchableOpacity>
-                  )}
+                  <TouchableOpacity
+                    style={[styles.payoutButton, shadows.sm]}
+                    onPress={() => handleInitiatePayout(seller)}
+                  >
+                    <Ionicons name="cash-outline" size={20} color={colors.surface} />
+                    <Text style={styles.payoutButtonText}>Create Payout</Text>
+                  </TouchableOpacity>
                 </View>
               ))}
             </View>
           )}
         </View>
+
+        {/* Removed - Now showing eligible sellers above */}
 
         {/* Payout History */}
         <View style={styles.section}>
@@ -342,14 +420,16 @@ export default function AdminPayoutsScreen() {
                     <Text style={styles.payoutRef}>Ref: {payout.transaction_reference}</Text>
                   )}
 
-                  {payout.status === 'pending' && (
+                                {payout.status === 'pending' && (
                     <View style={styles.payoutActions}>
                       <TouchableOpacity
                         style={[styles.actionButton, { backgroundColor: colors.primary + '15' }]}
-                        onPress={() => handleUpdatePayoutStatus(payout.id, 'processing')}
+                        onPress={() => handleProcessPayoutViaRazorpay(payout.id)}
+                        disabled={processing}
                       >
+                        <Ionicons name="logo-usd" size={16} color={colors.primary} />
                         <Text style={[styles.actionButtonText, { color: colors.primary }]}>
-                          Mark Processing
+                          Process via Razorpay
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
