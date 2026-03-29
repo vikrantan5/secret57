@@ -7,6 +7,12 @@ import * as Haptics from 'expo-haptics';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 import { Product } from '../../store/productStore';
 
+import { Dimensions } from "react-native";
+const { width } = Dimensions.get("window");
+
+const CARD_WIDTH = (width - 32 - 16) / 2; 
+// (screen – horizontal padding – gap) / 2
+
 interface EnhancedProductCardProps {
   product: Product;
   onPress: () => void;
@@ -161,21 +167,29 @@ export const EnhancedProductCard: React.FC<EnhancedProductCardProps> = ({
 };
 
 const styles = StyleSheet.create({
+  // card: {
+  //   width: '48%',
+  //   backgroundColor: colors.surface,
+  //   borderRadius: borderRadius.xl,
+  //   marginBottom: spacing.md,
+  //   ...shadows.md,
+  //   overflow: 'hidden',
+  //   elevation: 4, // Android shadow
+  // },
   card: {
-    width: '48%',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
-    marginBottom: spacing.md,
-    ...shadows.md,
-    overflow: 'hidden',
-    elevation: 4, // Android shadow
+  width: CARD_WIDTH,
+  backgroundColor: colors.surface,
+  borderRadius: borderRadius.xl,
+  marginBottom: spacing.md,
+  overflow: 'hidden',
   },
-  imageContainer: {
-    width: '100%',
-    aspectRatio: 1, // Square aspect ratio for consistency
-    position: 'relative',
-    backgroundColor: colors.border,
-  },
+imageContainer: {
+  width: '100%',
+  height: 160,       // this works now because width is correct
+  borderTopLeftRadius: borderRadius.xl,
+  borderTopRightRadius: borderRadius.xl,
+  overflow: 'hidden',
+},
   image: {
     width: '100%',
     height: '100%',

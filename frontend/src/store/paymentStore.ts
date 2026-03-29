@@ -162,82 +162,52 @@ export const usePaymentStore = create<PaymentState>((set, get) => ({
     customerPhone
   ) => {
     return new Promise((resolve) => {
-      // For development/testing with Expo, use mock payment
-      // In production with a proper backend, use actual Razorpay
-      
-      const USE_MOCK = true; // Set to false when backend is ready
-
-      if (USE_MOCK) {
-        mockPayment(
+      // REAL RAZORPAY IMPLEMENTATION - NO MOCK
+      RazorpayService.openCheckout(
+        {
           amount,
-          async (response) => {
-            // Payment successful
-            const paymentResult = await get().createPayment({
-              order_id: orderId,
-              booking_id: bookingId,
-              amount: amount / 100, // Convert paise to rupees
-              payment_method: 'razorpay',
-            });
+          currency: 'INR',
+          name: 'Hybrid Bazaar',
+          description: orderId ? 'Product Order' : 'Service Booking',
+          order_id: orderId || bookingId, // Use actual order/booking ID
+          prefill: {
+            name: customerName,
+            email: customerEmail,
+            contact: customerPhone,
+          },
+          theme: {
+            color: '#5B7CFF',
+          },
+        },
+        async (response) => {
+          // Payment successful - create payment record
+          const paymentResult = await get().createPayment({
+            order_id: orderId,
+            booking_id: bookingId,
+            amount: amount / 100, // Convert paise to rupees
+            payment_method: 'razorpay',
+          });
 
-            if (paymentResult.success && paymentResult.payment) {
-              await get().updatePaymentStatus(
-                paymentResult.payment.id,
-                'success',
-                response
-              );
-              resolve({ success: true });
-            } else {
-              resolve({ success: false, error: 'Failed to record payment' });
-            }
-          },
-          (error) => {
-            // Payment failed
-            resolve({ success: false, error: error.error || 'Payment failed' });
+          if (paymentResult.success && paymentResult.payment) {
+            await get().updatePaymentStatus(
+              paymentResult.payment.id,
+              'success',
+              response
+            );
+            resolve({ success: true });
+          } else {
+            resolve({ success: false, error: 'Failed to record payment' });
           }
-        );
-      } else {
-        // Real Razorpay implementation
-        RazorpayService.openCheckout(
-          {
-            amount,
-            currency: 'INR',
-            name: 'ServiceHub',
-            description: orderId ? 'Product Order' : 'Service Booking',
-            prefill: {
-              name: customerName,
-              email: customerEmail,
-              contact: customerPhone,
-            },
-            theme: {
-              color: '#5B7CFF',
-            },
-          },
-          async (response) => {
-            const paymentResult = await get().createPayment({
-              order_id: orderId,
-              booking_id: bookingId,
-              amount: amount / 100,
-              payment_method: 'razorpay',
-            });
-
-            if (paymentResult.success && paymentResult.payment) {
-              await get().updatePaymentStatus(
-                paymentResult.payment.id,
-                'success',
-                response
-              );
-              resolve({ success: true });
-            } else {
-              resolve({ success: false, error: 'Failed to record payment' });
-            }
-          },
-          (error) => {
-            resolve({ success: false, error: error.error || 'Payment failed' });
-          }
-        );
-      }
+        },
+        (error) => {
+          // Payment failed
+          console.error('Razorpay payment failed:', error);
+          resolve({ success: false, error: error.error || 'Payment failed' });
+        }
+      );
     });
   },
+
 
   fetchUserPayments: async (userId: string) => {
     try {

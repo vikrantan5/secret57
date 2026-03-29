@@ -329,6 +329,7 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 1000,
   },
+  
   animatedHeaderGradient: {
     flexDirection: 'row',
     justifyContent: 'space-between',
