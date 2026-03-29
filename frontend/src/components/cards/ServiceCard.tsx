@@ -3,9 +3,10 @@ import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
 import { Service } from '../../store/serviceStore';
+import { formatDistance } from '../../services/locationService';
 
 interface ServiceCardProps {
-  service: Service;
+  service: Service & { distance?: number | null };
   onPress: () => void;
 }
 
@@ -55,6 +56,13 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({ service, onPress }) =>
         {service.video_url && (
           <View style={styles.videoBadge}>
             <Ionicons name="play-circle" size={24} color={colors.white} />
+          </View>
+        )}
+          {/* Distance Badge */}
+        {service.distance !== undefined && service.distance !== null && (
+          <View style={styles.distanceBadge}>
+            <Ionicons name="location" size={14} color={colors.surface} />
+            <Text style={styles.distanceText}>{formatDistance(service.distance)}</Text>
           </View>
         )}
       </View>
@@ -144,6 +152,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     borderRadius: borderRadius.full,
     padding: spacing.xs,
+  },
+   distanceBadge: {
+    position: 'absolute',
+    top: spacing.md,
+    left: spacing.md,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  distanceText: {
+    ...typography.caption,
+    color: colors.surface,
+    fontWeight: '700',
+    fontSize: 11,
   },
   content: {
     padding: spacing.md,

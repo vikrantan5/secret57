@@ -16,6 +16,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../src/store/authStore';
 import { useSellerStore } from '../../src/store/sellerStore';
 import { useServiceStore } from '../../src/store/serviceStore';
+import { useServiceLocationStore } from '../../src/store/serviceLocationStore';
+import { getCurrentLocation, getAddressFromCoordinates } from '../../src/services/locationService';
 
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
@@ -28,7 +30,7 @@ export default function AddServiceScreen() {
   const { user } = useAuthStore();
   const { seller } = useSellerStore();
   const { createService } = useServiceStore();
-
+  const { addServiceLocation, fetchSellerLocations, locations } = useServiceLocationStore();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -38,6 +40,45 @@ export default function AddServiceScreen() {
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<any>({});
+  
+  // Service location fields
+  const [address, setAddress] = useState('');
+  const [city, setCity] = useState('');
+  const [pincode, setPincode] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [radiusKm, setRadiusKm] = useState('10');
+  const [fetchingLocation, setFetchingLocation] = useState(false);
+  const [hasExistingLocation, setHasExistingLocation] = useState(false);
+
+  useEffect(() => {
+    if (seller?.id) {
+      loadSellerLocations();
+    }
+  }, [seller?.id]);
+
+  const loadSellerLocations = async () => {
+    if (seller?.id) {
+      await fetchSellerLocations(seller.id);
+    }
+  };
+
+  useEffect(() => {
+    // Check if seller already has a location
+    if (locations.length > 0) {
+      setHasExistingLocation(true);
+      // Pre-fill with primary location
+      const primaryLocation = locations.find(l => l.is_primary) || locations[0];
+      if (primaryLocation) {
+        setAddress(primaryLocation.address);
+        setCity(primaryLocation.city);
+        setPincode(primaryLocation.pincode);
+        setLatitude(primaryLocation.latitude.toString());
+        setLongitude(primaryLocation.longitude.toString());
+        setRadiusKm(primaryLocation.radius_km.toString());
+      }
+    }
+  }, [locations]);
 
   // No longer need to fetch categories or manage categoryId state
 
@@ -66,13 +107,44 @@ export default function AddServiceScreen() {
     setImages(images.filter((_, i) => i !== index));
   };
 
+  
+  const handleUseCurrentLocation = async () => {
+    setFetchingLocation(true);
+    try {
+      const location = await getCurrentLocation();
+      if (location) {
+        const addressData = await getAddressFromCoordinates(location.latitude, location.longitude);
+        if (addressData) {
+          setAddress(addressData.address);
+          setCity(addressData.city);
+          setPincode(addressData.pincode);
+          setLatitude(location.latitude.toString());
+          setLongitude(location.longitude.toString());
+          Alert.alert('Success', 'Location fetched successfully!');
+        }
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Could not fetch location');
+    } finally {
+      setFetchingLocation(false);
+    }
+  };
+
   const validate = () => {
     const newErrors: any = {};
 
     if (!name.trim()) newErrors.name = 'Service name is required';
     if (!description.trim()) newErrors.description = 'Description is required';
     if (!basePrice || parseFloat(basePrice) <= 0) newErrors.basePrice = 'Valid price is required';
-
+   // Validate location (only if not already exists)
+    if (!hasExistingLocation) {
+      if (!address.trim()) newErrors.address = 'Service address is required';
+      if (!city.trim()) newErrors.city = 'City is required';
+      if (!pincode.trim()) newErrors.pincode = 'Pincode is required';
+      if (pincode.trim() && !/^\d{6}$/.test(pincode.trim())) {
+        newErrors.pincode = 'Invalid pincode (6 digits required)';
+      }
+    }
 
       // Validate YouTube URL if provided
     if (videoUrl.trim() && !isValidYouTubeUrl(videoUrl.trim())) {
@@ -101,7 +173,28 @@ export default function AddServiceScreen() {
     try {
       setLoading(true);
 
-         // Upload images first
+      // Step 1: Create/Update service location (if new or changed)
+      if (!hasExistingLocation || address || city || pincode) {
+        const locationData = {
+          seller_id: seller.id,
+          address: address.trim(),
+          city: city.trim(),
+          pincode: pincode.trim(),
+          latitude: latitude ? parseFloat(latitude) : undefined,
+          longitude: longitude ? parseFloat(longitude) : undefined,
+          radius_km: radiusKm ? parseInt(radiusKm) : 10,
+        };
+
+        const locationResult = await addServiceLocation(locationData);
+        
+        if (!locationResult.success) {
+          Alert.alert('Location Error', locationResult.error || 'Failed to save service location');
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Step 2: Upload images
       let imageUrls: string[] = [];
       if (images.length > 0) {
         imageUrls = await uploadMultipleImages(
@@ -112,14 +205,15 @@ export default function AddServiceScreen() {
         console.log(`Uploaded ${imageUrls.length} service images`);
       }
 
+      // Step 3: Create service
       const serviceData = {
         seller_id: seller.id,
-           category_id: seller.category_id, // Auto-assign from seller's category
+        category_id: seller.category_id,
         name,
         description,
         price: parseFloat(basePrice),
         duration: duration ? parseInt(duration) : null,
-             video_url: videoUrl.trim() || null,
+        video_url: videoUrl.trim() || null,
         images: imageUrls,
         is_active: true,
       };
@@ -230,6 +324,118 @@ export default function AddServiceScreen() {
             <View style={styles.successMessage}>
               <Ionicons name="checkmark-circle" size={16} color={colors.success} />
               <Text style={styles.successText}>Valid YouTube URL</Text>
+            </View>
+          )}
+
+
+             </View>
+
+        {/* Service Location */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>
+              {hasExistingLocation ? 'Service Location (Optional - Update if needed)' : 'Service Location *'}
+            </Text>
+            {!hasExistingLocation && (
+              <TouchableOpacity
+                style={styles.locationButton}
+                onPress={handleUseCurrentLocation}
+                disabled={fetchingLocation}
+              >
+                <Ionicons name="locate" size={16} color={colors.primary} />
+                <Text style={styles.locationButtonText}>
+                  {fetchingLocation ? 'Fetching...' : 'Use Current'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {hasExistingLocation && (
+            <View style={styles.infoBox}>
+              <Ionicons name="information-circle" size={20} color={colors.primary} />
+              <Text style={styles.infoText}>
+                You already have a service location. You can update it below or leave it as is.
+              </Text>
+            </View>
+          )}
+
+          <Input
+            label="Service Address *"
+            value={address}
+            onChangeText={setAddress}
+            placeholder="Street address, building name"
+            multiline
+            numberOfLines={2}
+            error={errors.address}
+          />
+
+          <View style={styles.row}>
+            <View style={styles.halfInput}>
+              <Input
+                label="City *"
+                value={city}
+                onChangeText={setCity}
+                placeholder="City"
+                error={errors.city}
+              />
+            </View>
+            <View style={styles.halfInput}>
+              <Input
+                label="Pincode *"
+                value={pincode}
+                onChangeText={setPincode}
+                placeholder="000000"
+                keyboardType="number-pad"
+                maxLength={6}
+                error={errors.pincode}
+              />
+            </View>
+          </View>
+
+          <Input
+            label="Service Radius (km)"
+            value={radiusKm}
+            onChangeText={setRadiusKm}
+            placeholder="10"
+            keyboardType="number-pad"
+            helpText="Customers within this radius can book your service"
+          />
+
+          {/* Optional: Manual coordinates */}
+          <TouchableOpacity 
+            style={styles.advancedToggle}
+            onPress={() => setErrors({ ...errors, showAdvanced: !errors.showAdvanced })}
+          >
+            <Text style={styles.advancedToggleText}>
+              {errors.showAdvanced ? 'Hide' : 'Show'} Advanced (Coordinates)
+            </Text>
+            <Ionicons 
+              name={errors.showAdvanced ? 'chevron-up' : 'chevron-down'} 
+              size={20} 
+              color={colors.textSecondary} 
+            />
+          </TouchableOpacity>
+
+          {errors.showAdvanced && (
+            <View style={styles.row}>
+              <View style={styles.halfInput}>
+                <Input
+                  label="Latitude"
+                  value={latitude}
+                  onChangeText={setLatitude}
+                  placeholder="Auto-filled"
+                  keyboardType="decimal-pad"
+                />
+              </View>
+              <View style={styles.halfInput}>
+                <Input
+                  label="Longitude"
+                  value={longitude}
+                  onChangeText={setLongitude}
+                  placeholder="Auto-filled"
+                  keyboardType="decimal-pad"
+                />
+              </View>
             </View>
           )}
 
@@ -345,5 +551,58 @@ const styles = StyleSheet.create({
   successText: {
     ...typography.caption,
     color: colors.success,
+  },
+
+   sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.primary + '15',
+    borderRadius: borderRadius.md,
+  },
+  locationButtonText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: colors.primary + '10',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+  },
+  infoText: {
+    ...typography.bodySmall,
+    color: colors.text,
+    flex: 1,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  halfInput: {
+    flex: 1,
+  },
+  advancedToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  advancedToggleText: {
+    ...typography.body,
+    color: colors.textSecondary,
   },
 });

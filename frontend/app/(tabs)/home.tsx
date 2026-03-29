@@ -18,10 +18,12 @@ import { FlashList } from '@shopify/flash-list';
 
 import { useProductStore } from '../../src/store/productStore';
 import { useServiceStore } from '../../src/store/serviceStore';
+import { useServiceLocationStore } from '../../src/store/serviceLocationStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { useCategoryStore } from '../../src/store/categoryStore';
 import { useCartStore } from '../../src/store/cartStore';
 import { useNotificationStore } from '../../src/store/notificationStore';
+import { getCurrentLocation } from '../../src/services/locationService';
 
 import { BannerSlider } from '../../src/components/ui/BannerSlider';
 import { CategoryBox } from '../../src/components/ui/CategoryBox';
@@ -47,8 +49,13 @@ export default function HomeScreen() {
   const { categories, fetchCategories, loading: categoriesLoading } = useCategoryStore();
   const { products, fetchProducts, loading: productsLoading } = useProductStore();
   const { services, fetchServices, loading: servicesLoading } = useServiceStore();
+  const { getServicesNearby } = useServiceLocationStore();
   const { addItem } = useCartStore();
   const { unreadCount, fetchNotifications } = useNotificationStore();
+  
+  const [nearbyServices, setNearbyServices] = useState<any[]>([]);
+  const [loadingNearby, setLoadingNearby] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   // Sample banners - you can fetch these from your backend
   const banners = [
@@ -71,7 +78,32 @@ export default function HomeScreen() {
 
   useEffect(() => {
     loadData();
+    loadUserLocation();
   }, [user]);
+
+  const loadUserLocation = async () => {
+    try {
+      const location = await getCurrentLocation();
+      if (location) {
+        setUserLocation(location);
+        loadNearbyServices(location.latitude, location.longitude);
+      }
+    } catch (error) {
+      console.log('Could not fetch user location:', error);
+    }
+  };
+
+  const loadNearbyServices = async (lat: number, lon: number) => {
+    try {
+      setLoadingNearby(true);
+      const nearby = await getServicesNearby(lat, lon, 50); // 50km max
+      setNearbyServices(nearby.slice(0, 10)); // Top 10 nearest
+    } catch (error) {
+      console.error('Error loading nearby services:', error);
+    } finally {
+      setLoadingNearby(false);
+    }
+  };
 
   const loadData = async () => {
     fetchCategories();
@@ -310,6 +342,48 @@ export default function HomeScreen() {
           </View>
         )}
 
+
+           {/* Nearby Services Section */}
+        {nearbyServices.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleContainer}>
+                <Ionicons name="location" size={24} color={colors.primary} />
+                <View>
+                  <Text style={styles.sectionTitle}>Services Near You</Text>
+                  <Text style={styles.sectionSubtitle}>Available in your area</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => {
+                if (userLocation) {
+                  loadNearbyServices(userLocation.latitude, userLocation.longitude);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }
+              }}>
+                <Ionicons name="refresh" size={20} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+
+            {loadingNearby ? (
+              <View style={styles.servicesList}>
+                {[1, 2].map((i) => (
+                  <ServiceCardSkeleton key={i} />
+                ))}
+              </View>
+            ) : (
+              <View style={styles.servicesList}>
+                {nearbyServices.map((service) => (
+                  <ServiceCard
+                    key={service.id}
+                    service={service}
+                    onPress={() => router.push(`/service/${service.id}`)}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Bottom Spacing */}
         <View style={{ height: spacing.xxl }} />
       </Animated.ScrollView>
@@ -442,6 +516,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
+  },
+    sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   sectionTitle: {
     ...typography.h3,
