@@ -9,25 +9,42 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "description": "Multi-vendor marketplace and service booking platform",
+
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.servicehub.app"
+      "bundleIdentifier": "com.servicehub.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "ServiceHub needs your location to show nearby services and sellers."
+      }
     },
+
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#5B7CFF"
       },
       "package": "com.servicehub.app",
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
     },
+
     "web": {
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+
     "plugins": [
       "expo-router",
+      [
+        "expo-location",
+        {
+          "locationPermission": "ServiceHub requires location access to show nearby services and sellers."
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -38,6 +55,7 @@
         }
       ]
     ],
+
     "experiments": {
       "typedRoutes": true
     }

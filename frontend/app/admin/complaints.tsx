@@ -102,7 +102,7 @@ export default function AdminComplaintsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name=\"arrow-back\" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Complaints Management</Text>
         <View style={styles.statsContainer}>
@@ -145,11 +145,11 @@ export default function AdminComplaintsScreen() {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size=\"large\" color={colors.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : filteredComplaints.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name=\"document-text-outline\" size={80} color={colors.textLight} />
+          <Ionicons name="document-text-outline" size={80} color={colors.textLight} />
           <Text style={styles.emptyText}>No complaints found</Text>
         </View>
       ) : (
@@ -165,7 +165,7 @@ export default function AdminComplaintsScreen() {
                 {/* Header */}
                 <View style={styles.complaintHeader}>
                   <View style={styles.typeContainer}>
-                    <Ionicons name=\"warning\" size={16} color={colors.error} />
+                    <Ionicons name="warning" size={16} color={colors.error} />
                     <Text style={styles.typeText}>
                       {reportTypeLabels[complaint.report_type] || complaint.report_type}
                     </Text>
@@ -203,7 +203,7 @@ export default function AdminComplaintsScreen() {
                 {/* Images Preview */}
                 {complaint.images && complaint.images.length > 0 && (
                   <View style={styles.imagePreviewContainer}>
-                    <Ionicons name=\"image\" size={16} color={colors.textLight} />
+                    <Ionicons name="image" size={16} color={colors.textLight} />
                     <Text style={styles.imageCount}>{complaint.images.length} image(s)</Text>
                   </View>
                 )}
@@ -215,7 +215,7 @@ export default function AdminComplaintsScreen() {
                   </Text>
                   <View style={styles.actionButton}>
                     <Text style={styles.actionText}>Review</Text>
-                    <Ionicons name=\"chevron-forward\" size={16} color={colors.primary} />
+                    <Ionicons name="chevron-forward" size={16} color={colors.primary} />
                   </View>
                 </View>
               </TouchableOpacity>
@@ -228,7 +228,7 @@ export default function AdminComplaintsScreen() {
       {/* Update Modal */}
       <Modal
         visible={modalVisible}
-        animationType=\"slide\"
+        animationType="slide"
         transparent={true}
         onRequestClose={() => setModalVisible(false)}
       >
@@ -237,7 +237,7 @@ export default function AdminComplaintsScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Review Complaint</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name=\"close\" size={24} color={colors.text} />
+                <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
 
@@ -307,11 +307,11 @@ export default function AdminComplaintsScreen() {
                       style={styles.notesInput}
                       value={adminNotes}
                       onChangeText={setAdminNotes}
-                      placeholder=\"Add notes about this complaint...\"
+                      placeholder="Add notes about this complaint..."
                       placeholderTextColor={colors.textLight}
                       multiline
                       numberOfLines={4}
-                      textAlignVertical=\"top\"
+                      textAlignVertical="top"
                     />
                   </View>
 
