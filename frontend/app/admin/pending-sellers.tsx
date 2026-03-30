@@ -3,15 +3,16 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   Alert,
   RefreshControl,
   Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { supabase } from '../../src/services/supabase';
 
@@ -24,11 +25,11 @@ export default function PendingSellersScreen() {
   useEffect(() => {
     loadPendingSellers();
   }, []);
-    const loadPendingSellers = async () => {
+
+  const loadPendingSellers = async () => {
     try {
       setLoading(true);
       
-      // First, get pending sellers from sellers table
       const { data: sellersData, error: sellersError } = await supabase
         .from('sellers')
         .select(`
@@ -39,12 +40,8 @@ export default function PendingSellersScreen() {
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
-      if (sellersError) {
-        console.error('Error loading pending sellers:', sellersError);
-        throw sellersError;
-      }
+      if (sellersError) throw sellersError;
       
-      // Also get users who registered as sellers but haven't completed company setup
       const { data: usersData, error: usersError } = await supabase
         .from('users')
         .select('*')
@@ -52,17 +49,13 @@ export default function PendingSellersScreen() {
         .eq('seller_status', 'pending')
         .order('created_at', { ascending: false });
 
-      if (usersError) {
-        console.error('Error loading pending users:', usersError);
-      }
+      if (usersError) console.error('Error loading pending users:', usersError);
 
-      // Filter out users who already have a seller profile
       const sellerUserIds = new Set((sellersData || []).map(s => s.user_id));
       const usersWithoutSellerProfile = (usersData || []).filter(
         user => !sellerUserIds.has(user.id)
       );
 
-      // Combine both lists
       const combinedPending = [
         ...(sellersData || []),
         ...usersWithoutSellerProfile.map(user => ({
@@ -79,10 +72,6 @@ export default function PendingSellersScreen() {
         }))
       ];
       
-      console.log('Pending sellers loaded:', sellersData?.length || 0);
-      console.log('Pending users (no profile):', usersWithoutSellerProfile.length);
-      console.log('Total pending:', combinedPending.length);
-      
       setSellers(combinedPending);
     } catch (error: any) {
       console.error('Error loading pending sellers:', error);
@@ -91,6 +80,7 @@ export default function PendingSellersScreen() {
       setLoading(false);
     }
   };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadPendingSellers();
@@ -107,30 +97,23 @@ export default function PendingSellersScreen() {
           text: 'Approve',
           onPress: async () => {
             try {
-              // If seller hasn't completed company setup
               if (seller.isIncomplete) {
-                // Update user's seller_status
                 const { error: userError } = await supabase
                   .from('users')
                   .update({ seller_status: 'approved' })
                   .eq('id', sellerId);
-
                 if (userError) throw userError;
               } else {
-                // Normal seller approval
                 const { error } = await supabase
                   .from('sellers')
                   .update({ status: 'approved' })
                   .eq('id', sellerId);
-
                 if (error) throw error;
 
-                // Also update user's seller_status
                 const { error: userError } = await supabase
                   .from('users')
                   .update({ seller_status: 'approved' })
                   .eq('id', seller.user_id);
-
                 if (userError) console.error('Error updating user status:', userError);
               }
               
@@ -146,7 +129,7 @@ export default function PendingSellersScreen() {
     );
   };
 
-   const handleReject = async (sellerId: string, companyName: string, seller: any) => {
+  const handleReject = async (sellerId: string, companyName: string, seller: any) => {
     Alert.prompt(
       'Reject Seller',
       `Provide reason for rejecting ${companyName}:`,
@@ -157,19 +140,13 @@ export default function PendingSellersScreen() {
           style: 'destructive',
           onPress: async (reason) => {
             try {
-              // If seller hasn't completed company setup
               if (seller.isIncomplete) {
-                // Update user's seller_status
                 const { error: userError } = await supabase
                   .from('users')
-                  .update({ 
-                    seller_status: 'rejected'
-                  })
+                  .update({ seller_status: 'rejected' })
                   .eq('id', sellerId);
-
                 if (userError) throw userError;
               } else {
-                // Normal seller rejection
                 const { error } = await supabase
                   .from('sellers')
                   .update({ 
@@ -177,15 +154,12 @@ export default function PendingSellersScreen() {
                     rejection_reason: reason || 'Not specified'
                   })
                   .eq('id', sellerId);
-
                 if (error) throw error;
 
-                // Also update user's seller_status
                 const { error: userError } = await supabase
                   .from('users')
                   .update({ seller_status: 'rejected' })
                   .eq('id', seller.user_id);
-
                 if (userError) console.error('Error updating user status:', userError);
               }
               
@@ -202,40 +176,59 @@ export default function PendingSellersScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Pending Sellers</Text>
-        <View style={{ width: 24 }} />
-      </View>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Gradient Header */}
+      <LinearGradient
+        colors={[colors.warning, '#F59E0B']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={colors.white} />
+          </TouchableOpacity>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle}>Pending Approvals</Text>
+            <Text style={styles.headerSubtitle}>{sellers.length} sellers awaiting review</Text>
+          </View>
+          <TouchableOpacity onPress={loadPendingSellers} style={styles.refreshButton}>
+            <Ionicons name="refresh" size={24} color={colors.white} />
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
 
       <ScrollView
+        style={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {sellers.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="checkmark-circle-outline" size={80} color={colors.success} />
+            <View style={styles.emptyIconBox}>
+              <Ionicons name="checkmark-circle" size={60} color={colors.success} />
+            </View>
             <Text style={styles.emptyTitle}>All caught up!</Text>
             <Text style={styles.emptySubtitle}>No pending seller approvals</Text>
           </View>
         ) : (
           <View style={styles.sellerList}>
             {sellers.map((seller) => (
-              <View key={seller.id} style={[styles.sellerCard, shadows.sm]}>
+              <View key={seller.id} style={[styles.sellerCard, shadows.md]}>
                 {seller.isIncomplete && (
-                  <View style={[styles.incompleteBadge]}>
+                  <View style={styles.incompleteBadge}>
                     <Ionicons name="alert-circle" size={16} color={colors.warning} />
                     <Text style={styles.incompleteText}>Company Setup Incomplete</Text>
                   </View>
                 )}
+                
                 {seller.company_logo && (
                   <Image source={{ uri: seller.company_logo }} style={styles.logo} />
                 )}
+                
                 <Text style={styles.companyName}>{seller.company_name}</Text>
-                  {seller.category && (
+                
+                {seller.category && (
                   <View style={[styles.categoryBadge, { 
                     backgroundColor: seller.category.type === 'booking' ? '#F59E0B20' : 
                                      seller.category.type === 'ecommerce' ? '#10B98120' : '#8B5CF620' 
@@ -254,36 +247,47 @@ export default function PendingSellersScreen() {
                     </Text>
                   </View>
                 )}
-                <View style={styles.infoRow}>
-                  <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
-                  <Text style={styles.infoText}>{seller.user?.name || 'N/A'}</Text>
+                
+                <View style={styles.infoSection}>
+                  <View style={styles.infoRow}>
+                    <Ionicons name="person" size={16} color={colors.primary} />
+                    <Text style={styles.infoText}>{seller.user?.name || 'N/A'}</Text>
+                  </View>
+                  
+                  {!seller.isIncomplete && (
+                    <>
+                      <View style={styles.infoRow}>
+                        <Ionicons name="location" size={16} color={colors.primary} />
+                        <Text style={styles.infoText}>{seller.city}, {seller.state}</Text>
+                      </View>
+                      {seller.description && (
+                        <View style={styles.descriptionBox}>
+                          <Text style={styles.description} numberOfLines={2}>
+                            {seller.description}
+                          </Text>
+                        </View>
+                      )}
+                    </>
+                  )}
+                  
+                  <View style={styles.dateRow}>
+                    <Ionicons name="calendar" size={14} color={colors.textLight} />
+                    <Text style={styles.dateText}>
+                      Applied: {new Date(seller.created_at).toLocaleDateString()}
+                    </Text>
+                  </View>
                 </View>
-                {!seller.isIncomplete && (
-                  <>
-                    <View style={styles.infoRow}>
-                      <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
-                      <Text style={styles.infoText}>{seller.city}, {seller.state}</Text>
-                    </View>
-                    {seller.description && (
-                      <Text style={styles.description} numberOfLines={2}>
-                        {seller.description}
-                      </Text>
-                    )}
-                  </>
-                )}
-                <Text style={styles.dateText}>
-                  Applied: {new Date(seller.created_at).toLocaleDateString()}
-                </Text>
+                
                 <View style={styles.actions}>
                   <TouchableOpacity
-                    style={[styles.actionButton, styles.rejectButton]}
+                    style={[styles.actionButton, styles.rejectButton, shadows.sm]}
                     onPress={() => handleReject(seller.id, seller.company_name, seller)}
                   >
                     <Ionicons name="close-circle" size={20} color={colors.white} />
                     <Text style={styles.actionButtonText}>Reject</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.actionButton, styles.approveButton]}
+                    style={[styles.actionButton, styles.approveButton, shadows.sm]}
                     onPress={() => handleApprove(seller.id, seller.company_name, seller)}
                   >
                     <Ionicons name="checkmark-circle" size={20} color={colors.white} />
@@ -294,6 +298,7 @@ export default function PendingSellersScreen() {
             ))}
           </View>
         )}
+        <View style={{ height: spacing.xxl }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -304,31 +309,59 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
+  headerGradient: {
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
+    borderBottomLeftRadius: borderRadius.xxl,
+    borderBottomRightRadius: borderRadius.xxl,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.lg,
-    paddingTop: spacing.xl,
+    paddingHorizontal: spacing.lg,
   },
   backButton: {
-    padding: spacing.xs,
+    padding: spacing.sm,
+    marginRight: spacing.md,
   },
-  title: {
-    ...typography.h3,
-    color: colors.text,
+  headerTextContainer: {
     flex: 1,
-    textAlign: 'center',
+  },
+  headerTitle: {
+    ...typography.h3,
+    color: colors.white,
+    fontWeight: '700',
+  },
+  headerSubtitle: {
+    ...typography.bodySmall,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: spacing.xs / 2,
+  },
+  refreshButton: {
+    padding: spacing.sm,
+  },
+  content: {
+    flex: 1,
+    marginTop: -spacing.lg,
   },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: spacing.xxl * 2,
+    paddingVertical: spacing.xxl * 2,
+  },
+  emptyIconBox: {
+    width: 120,
+    height: 120,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.success + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
   },
   emptyTitle: {
     ...typography.h3,
     color: colors.text,
-    marginTop: spacing.lg,
+    fontWeight: '600',
   },
   emptySubtitle: {
     ...typography.body,
@@ -340,9 +373,27 @@ const styles = StyleSheet.create({
   },
   sellerCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     padding: spacing.lg,
     marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  incompleteBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F59E0B20',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+    gap: spacing.xs / 2,
+  },
+  incompleteText: {
+    ...typography.caption,
+    color: '#F59E0B',
+    fontWeight: '700',
   },
   logo: {
     width: 80,
@@ -351,12 +402,15 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: spacing.md,
     backgroundColor: colors.border,
+    borderWidth: 3,
+    borderColor: colors.primaryVeryLight,
   },
   companyName: {
     ...typography.h4,
     color: colors.text,
     textAlign: 'center',
     marginBottom: spacing.sm,
+    fontWeight: '700',
   },
   categoryBadge: {
     flexDirection: 'row',
@@ -366,34 +420,50 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs / 2,
     borderRadius: borderRadius.full,
     gap: spacing.xs / 2,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   categoryText: {
     ...typography.caption,
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 11,
+  },
+  infoSection: {
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    paddingTop: spacing.md,
+    marginBottom: spacing.md,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   infoText: {
     ...typography.body,
     color: colors.textSecondary,
   },
-  description: {
-    ...typography.body,
-    color: colors.text,
-    marginTop: spacing.sm,
+  descriptionBox: {
+    backgroundColor: colors.background,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginTop: spacing.xs,
     marginBottom: spacing.sm,
+  },
+  description: {
+    ...typography.bodySmall,
+    color: colors.text,
+    lineHeight: 20,
+  },
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
   },
   dateText: {
     ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
+    color: colors.textLight,
   },
   actions: {
     flexDirection: 'row',
@@ -405,7 +475,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.md,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     gap: spacing.xs,
   },
   approveButton: {
@@ -417,22 +487,6 @@ const styles = StyleSheet.create({
   actionButtonText: {
     ...typography.body,
     color: colors.white,
-    fontWeight: '600',
-  },
-   incompleteBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F59E0B20',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
-    gap: spacing.xs / 2,
-  },
-  incompleteText: {
-    ...typography.caption,
-    color: '#F59E0B',
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

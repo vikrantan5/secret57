@@ -47,17 +47,36 @@ export const getCurrentLocation = async (): Promise<LocationCoordinates | null> 
     const hasPermission = await requestLocationPermission();
     if (!hasPermission) return null;
 
-    const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
-    });
+    // 🔥 CHECK IF GPS IS ENABLED
+    const servicesEnabled = await Location.hasServicesEnabledAsync();
+    if (!servicesEnabled) {
+      Alert.alert(
+        "Location Disabled",
+        "Please enable GPS / Location Services from settings."
+      );
+      return null;
+    }
+
+    // 🔥 Try reading last known location first (FASTER & ALWAYS AVAILABLE)
+    let location = await Location.getLastKnownPositionAsync();
+
+    // If null → then get fresh location
+    if (!location) {
+      location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+    }
 
     return {
       latitude: location.coords.latitude,
       longitude: location.coords.longitude,
     };
   } catch (error) {
-    console.error('Error getting current location:', error);
-    Alert.alert('Error', 'Failed to get your current location. Please try again.');
+    console.error("Error getting current location:", error);
+    Alert.alert(
+      "Location Error",
+      "Unable to fetch your location. Make sure GPS is enabled."
+    );
     return null;
   }
 };

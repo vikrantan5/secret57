@@ -309,13 +309,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
   },
-  filterTab: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    marginRight: spacing.sm,
-    backgroundColor: colors.surface,
-  },
+filterTab: {
+  height: 50,             // 🔥 FIX
+  justifyContent: 'center',
+  alignItems: 'center',
+  paddingHorizontal: 20,
+  borderRadius: 12,
+  marginRight: 10,
+  backgroundColor: colors.surface,
+},
   filterTabActive: {
     backgroundColor: colors.primary,
   },
@@ -327,12 +329,14 @@ const styles = StyleSheet.create({
   filterTabTextActive: {
     color: colors.white,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    gap: spacing.sm,
-  },
+statsContainer: {
+  flexDirection: 'row',
+  paddingHorizontal: spacing.lg,
+  marginBottom: spacing.md,
+  gap: spacing.sm,
+
+  
+},
   statBox: {
     flex: 1,
     backgroundColor: colors.surface,

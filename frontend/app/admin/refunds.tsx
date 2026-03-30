@@ -408,33 +408,37 @@ const styles = StyleSheet.create({
   filterContainer: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
+   
   },
-  filterTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginRight: spacing.sm,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surface,
-    gap: spacing.xs,
-  },
+filterTab: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  paddingHorizontal: spacing.md,
+  height: 38,            // 🔥 Fixed height (best size)
+  marginRight: spacing.sm,
+  borderRadius: 20,      // Capsule shape
+  backgroundColor: colors.surface,
+  gap: spacing.xs,
+},
   filterTabActive: {
     backgroundColor: colors.primary,
   },
-  filterText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
+filterText: {
+  ...typography.bodySmall,
+  fontSize: 13,          // 🔥 Slightly smaller
+  color: colors.textSecondary,
+  fontWeight: '600',
+},
   filterTextActive: {
     color: colors.surface,
   },
-  filterCount: {
-    ...typography.caption,
-    color: colors.textLight,
-    fontWeight: '700',
-  },
+filterCount: {
+  ...typography.caption,
+  fontSize: 12,          // 🔥 Cleaner UI
+  color: colors.textLight,
+  fontWeight: '700',
+},
   filterCountActive: {
     color: colors.surface,
   },

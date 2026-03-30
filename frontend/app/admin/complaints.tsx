@@ -370,39 +370,50 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontWeight: '700',
   },
-  filterContainer: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  filterTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginRight: spacing.sm,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surface,
-    gap: spacing.xs,
-  },
-  filterTabActive: {
-    backgroundColor: colors.primary,
-  },
-  filterText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  filterTextActive: {
-    color: colors.surface,
-  },
-  filterCount: {
-    ...typography.caption,
-    color: colors.textLight,
-    fontWeight: '700',
-  },
-  filterCountActive: {
-    color: colors.surface,
-  },
+filterContainer: {
+  paddingHorizontal: spacing.lg,
+  paddingVertical: spacing.sm, // was md — TOO BIG
+},
+
+filterTab: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+
+  height: 36,                         // 🔥 FIXED HEIGHT
+  paddingHorizontal: spacing.sm,      // smaller
+  paddingVertical: 0,                 // ZERO padding → slim UI
+
+  marginRight: spacing.sm,
+  borderRadius: 18,                   // better capsule shape
+  backgroundColor: colors.surface,
+
+  gap: 4,
+},
+
+filterTabActive: {
+  backgroundColor: colors.primary,
+},
+
+filterText: {
+  fontSize: 13,                       // override typography.bodySmall
+  color: colors.textSecondary,
+  fontWeight: '600',
+},
+
+filterTextActive: {
+  color: colors.surface,
+},
+
+filterCount: {
+  fontSize: 12,
+  color: colors.textLight,
+  fontWeight: '700',
+},
+
+filterCountActive: {
+  color: colors.surface,
+},
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
