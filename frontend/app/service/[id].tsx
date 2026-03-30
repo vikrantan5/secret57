@@ -177,6 +177,7 @@ export default function ServiceDetailScreen() {
       const amount = selectedService?.price || 0;
 
       // Create payment record
+      console.log('Creating payment record for booking:', currentBookingId);
       const paymentResult = await createPayment({
         booking_id: currentBookingId,
         amount: amount,
@@ -184,16 +185,20 @@ export default function ServiceDetailScreen() {
       });
 
       if (paymentResult.success && paymentResult.payment) {
+        console.log('Payment record created:', paymentResult.payment.id);
+        
         // Update payment status
         await updatePaymentStatus(
           paymentResult.payment.id,
           'success',
           response
         );
+        console.log('Payment status updated to success');
 
         // Auto-confirm booking after successful payment
         const { updateBookingStatus } = require('../../src/store/bookingStore').useBookingStore.getState();
         await updateBookingStatus(currentBookingId, 'confirmed');
+        console.log('Booking status updated to confirmed');
 
         setProcessingPayment(false);
         setShowBookingForm(false);
@@ -213,7 +218,7 @@ export default function ServiceDetailScreen() {
           ]
         );
       } else {
-        throw new Error('Failed to record payment');
+        throw new Error(paymentResult.error || 'Failed to record payment');
       }
     } catch (error: any) {
       console.error('Payment record error:', error);
@@ -226,9 +231,24 @@ export default function ServiceDetailScreen() {
     console.error('Service payment failed:', error);
     setShowRazorpay(false);
     setProcessingPayment(false);
+    
+    // Show detailed error message
+    const errorMessage = error?.error || error?.description || error?.message || 'Payment was not successful. Please try again.';
     Alert.alert(
       'Payment Failed', 
-      error.error || error.description || 'Payment was not successful. Please try again.'
+      errorMessage,
+      [
+        {
+          text: 'Try Again',
+          onPress: () => {
+            setShowRazorpay(true);
+          },
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
     );
   };
 

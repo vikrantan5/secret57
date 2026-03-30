@@ -177,15 +177,26 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
       if (data.type === 'success') {
         onSuccess(data.data);
       } else if (data.type === 'failure') {
-        onFailure(data.data);
+        onFailure({
+          error: data.data.error || 'Payment failed',
+          description: data.data.error,
+          code: data.data.code,
+          reason: data.data.reason,
+        });
       } else if (data.type === 'dismiss') {
         onClose();
       } else if (data.type === 'error') {
-        onFailure(data.data);
+        onFailure({
+          error: data.data.error || 'Payment processing error',
+          description: data.data.error,
+        });
       }
     } catch (error) {
       console.error('Error parsing Razorpay message:', error);
-      onFailure({ error: 'Payment processing error' });
+      onFailure({ 
+        error: 'Payment processing error',
+        description: 'Failed to process payment response'
+      });
     }
   };
 

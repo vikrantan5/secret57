@@ -54,6 +54,7 @@ export default function ProductDetailScreen() {
     addItem({
       id: product.id,
       productId: product.id,
+      sellerId: product.seller_id,
       name: product.name,
       price: product.price,
       quantity: quantity,

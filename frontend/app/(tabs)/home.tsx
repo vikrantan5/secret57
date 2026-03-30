@@ -121,11 +121,12 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  const handleAddToCart = (product: any) => {
+   const handleAddToCart = (product: any) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     addItem({
       id: product.id,
       productId: product.id,
+      sellerId: product.seller_id,
       name: product.name,
       price: product.price,
       quantity: 1,

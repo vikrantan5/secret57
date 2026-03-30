@@ -130,6 +130,7 @@ export default function CheckoutScreen() {
 
     try {
       // Create payment record
+      console.log('Creating payment record for order:', currentOrderId);
       const paymentResult = await createPayment({
         order_id: currentOrderId,
         amount: finalTotal,
@@ -137,12 +138,15 @@ export default function CheckoutScreen() {
       });
 
       if (paymentResult.success && paymentResult.payment) {
+        console.log('Payment record created:', paymentResult.payment.id);
+        
         // Update payment status with Razorpay details
         await updatePaymentStatusInStore(
           paymentResult.payment.id,
           'success',
           response
         );
+        console.log('Payment status updated to success');
 
         // Update order payment status
         const paymentData = {
@@ -152,6 +156,7 @@ export default function CheckoutScreen() {
           razorpay_signature: response.razorpay_signature,
         };
         await updatePaymentStatus(currentOrderId, paymentData);
+        console.log('Order payment status updated');
 
         // Clear cart
         clearCart();
@@ -164,7 +169,7 @@ export default function CheckoutScreen() {
           [
             {
               text: 'View Orders',
-              onPress: () => router.replace('/(tabs)/orders'),
+              onPress: () => router.replace('/orders'),
             },
             {
               text: 'Continue Shopping',
@@ -173,7 +178,7 @@ export default function CheckoutScreen() {
           ]
         );
       } else {
-        throw new Error('Failed to record payment');
+        throw new Error(paymentResult.error || 'Failed to record payment');
       }
     } catch (error: any) {
       console.error('Payment record error:', error);
@@ -186,9 +191,22 @@ export default function CheckoutScreen() {
     console.error('Payment failed:', error);
     setShowRazorpay(false);
     setLoading(false);
+    
+    // Show detailed error message
+    const errorMessage = error?.error || error?.description || error?.message || 'Payment was not successful. Please try again.';
     Alert.alert(
       'Payment Failed', 
-      error.error || error.description || 'Payment was not successful. Please try again.'
+      errorMessage,
+      [
+        {
+          text: 'Try Again',
+          onPress: () => handlePayment(),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
     );
   };
 
