@@ -192,8 +192,30 @@ export default function CheckoutScreen() {
     setShowRazorpay(false);
     setLoading(false);
     
-    // Show detailed error message
-    const errorMessage = error?.error || error?.description || error?.message || 'Payment was not successful. Please try again.';
+    // Show detailed error message with better formatting
+    let errorMessage = 'Payment was not successful. Please try again.';
+    
+    if (error?.description) {
+      errorMessage = error.description;
+    } else if (error?.error) {
+      errorMessage = error.error;
+    } else if (error?.message) {
+      errorMessage = error.message;
+    }
+    
+    // Add specific error codes
+    if (error?.code) {
+      errorMessage += `
+
+Error Code: ${error.code}`;
+    }
+    
+    if (error?.reason) {
+      errorMessage += `
+Reason: ${error.reason}`;
+    }
+    
+    console.log('Formatted error message:', errorMessage);
     Alert.alert(
       'Payment Failed', 
       errorMessage,
