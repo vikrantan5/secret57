@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { useAuthStore } from '../src/store/authStore';
 import { useCartStore } from '../src/store/cartStore';
 import { useOrderStore } from '../src/store/orderStore';
 import { usePaymentStore } from '../src/store/paymentStore';
+import { useAddressStore } from '../src/store/addressStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../src/constants/theme';
 import { RazorpayPayment } from '../src/components/RazorpayPayment';
 import { generateOrderId } from '../src/services/razorpay';
@@ -28,10 +29,11 @@ export default function CheckoutScreen() {
   const { user } = useAuthStore();
   const { items, total, clearCart } = useCartStore();
   const { createOrder, updatePaymentStatus } = useOrderStore();
-   const { createPayment, updatePaymentStatus: updatePaymentStatusInStore } = usePaymentStore();
+  const { createPayment, updatePaymentStatus: updatePaymentStatusInStore } = usePaymentStore();
+  const { addresses, getDefaultAddress, fetchUserAddresses } = useAddressStore();
   
   const [loading, setLoading] = useState(false);
-    const [showRazorpay, setShowRazorpay] = useState(false);
+  const [showRazorpay, setShowRazorpay] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
   const [razorpayOrderId, setRazorpayOrderId] = useState<string>('');
   const [shippingInfo, setShippingInfo] = useState({
@@ -43,6 +45,24 @@ export default function CheckoutScreen() {
     pincode: '',
   });
 
+  // Load user addresses and auto-fill with default address
+  useEffect(() => {
+    if (user?.id) {
+      fetchUserAddresses(user.id).then(() => {
+        const defaultAddr = getDefaultAddress();
+        if (defaultAddr) {
+          setShippingInfo({
+            name: defaultAddr.full_name,
+            phone: defaultAddr.phone,
+            address: defaultAddr.address_line1 + (defaultAddr.address_line2 ? `, ${defaultAddr.address_line2}` : ''),
+            city: defaultAddr.city,
+            state: defaultAddr.state,
+            pincode: defaultAddr.pincode,
+          });
+        }
+      });
+    }
+  }, [user]);
   const deliveryCharges = 0; // FREE delivery
   const discount = 0;
   const finalTotal = total + deliveryCharges - discount;
@@ -230,7 +250,16 @@ export default function CheckoutScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Shipping Information */}
         <View style={[styles.card, shadows.sm]}>
-          <Text style={styles.cardTitle}>Shipping Information</Text>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Shipping Information</Text>
+            <TouchableOpacity 
+              onPress={() => router.push('/profile/addresses')}
+              style={styles.manageAddressButton}
+            >
+              <Ionicons name="location" size={16} color={colors.primary} />
+              <Text style={styles.manageAddressText}>Manage</Text>
+            </TouchableOpacity>
+          </View>
           
           <Text style={styles.inputLabel}>Full Name *</Text>
           <TextInput
@@ -416,10 +445,30 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderRadius: borderRadius.lg,
   },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
   cardTitle: {
     ...typography.h4,
     color: colors.text,
-    marginBottom: spacing.md,
+  },
+  manageAddressButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.primary + '15',
+    borderRadius: borderRadius.sm,
+  },
+  manageAddressText: {
+    ...typography.bodySmall,
+    color: colors.primary,
+    fontWeight: '600',
+
   },
   inputLabel: {
     ...typography.body,

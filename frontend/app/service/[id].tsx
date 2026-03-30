@@ -20,6 +20,7 @@ import { useServiceStore } from '../../src/store/serviceStore';
 import { useBookingStore } from '../../src/store/bookingStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { usePaymentStore } from '../../src/store/paymentStore';
+import { useAddressStore } from '../../src/store/addressStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { YouTubePlayerComponent } from '../../src/components/ui/YouTubePlayer';
 import { RazorpayPayment } from '../../src/components/RazorpayPayment';
@@ -36,6 +37,7 @@ export default function ServiceDetailScreen() {
   const { selectedService, loading, fetchServiceById } = useServiceStore();
   const { createBooking } = useBookingStore();
   const { createPayment, updatePaymentStatus } = usePaymentStore();
+  const { addresses, getDefaultAddress, fetchUserAddresses } = useAddressStore();
   
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
@@ -66,6 +68,24 @@ export default function ServiceDetailScreen() {
       fetchServiceById(serviceId);
     }
   }, [serviceId]);
+
+  // Load user addresses and auto-fill with default address
+  useEffect(() => {
+    if (user?.id && showBookingForm) {
+      fetchUserAddresses(user.id).then(() => {
+        const defaultAddr = getDefaultAddress();
+        if (defaultAddr && bookingData.locationType === 'visit_customer') {
+          setBookingData(prev => ({
+            ...prev,
+            address: defaultAddr.address_line1 + (defaultAddr.address_line2 ? `, ${defaultAddr.address_line2}` : ''),
+            city: defaultAddr.city,
+            state: defaultAddr.state,
+            pincode: defaultAddr.pincode,
+          }));
+        }
+      });
+    }
+  }, [user, showBookingForm, bookingData.locationType]);
 
 
 

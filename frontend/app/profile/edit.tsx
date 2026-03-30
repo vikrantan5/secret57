@@ -21,7 +21,7 @@ import { colors, spacing, typography, borderRadius, shadows } from '../../src/co
 
 export default function EditProfileScreen() {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user, setUser } = useAuthStore();
   const { userData, updateUserProfile, uploadAvatar, loading } = useUserStore();
 
   const [name, setName] = useState(user?.name || '');
