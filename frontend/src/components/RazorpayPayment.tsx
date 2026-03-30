@@ -31,12 +31,19 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
   customerDetails,
   description = 'Payment',
 }) => {
+  console.log('RazorpayPayment initialized with:', {
+    keyId: RAZORPAY_KEY_ID,
+    orderId,
+    amount,
+    customerDetails,
+  });
+
   const htmlContent = `
     <!DOCTYPE html>
     <html>
     <head>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-      <meta charset="UTF-8">
+      <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">
+      <meta charset=\"UTF-8\">
       <style>
         body {
           margin: 0;
@@ -98,28 +105,51 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
           color: #F87171;
           margin-top: 20px;
           font-size: 14px;
+          padding: 10px;
+          background: #FEE2E2;
+          border-radius: 6px;
+        }
+        .debug {
+          margin-top: 20px;
+          font-size: 12px;
+          color: #999;
+          text-align: left;
         }
       </style>
     </head>
     <body>
-      <div class="container">
-        <div class="logo">🛒 ServiceHub</div>
-        <div class="info">${description}</div>
-        <div class="amount">₹${amount.toFixed(2)}</div>
-        <button class="btn" id="payBtn">Pay Now</button>
-        <div class="loading" id="loading" style="display:none;">Loading payment gateway...</div>
-        <div class="error" id="error" style="display:none;"></div>
+      <div class=\"container\">
+        <div class=\"logo\">🛒 ServiceHub</div>
+        <div class=\"info\">${description}</div>
+        <div class=\"amount\">₹${amount.toFixed(2)}</div>
+        <button class=\"btn\" id=\"payBtn\">Pay Now</button>
+        <div class=\"loading\" id=\"loading\" style=\"display:none;\">Loading payment gateway...</div>
+        <div class=\"error\" id=\"error\" style=\"display:none;\"></div>
+        <div class=\"debug\" id=\"debug\"></div>
       </div>
       
       <script>
+        // Debug logger
+        function logDebug(message) {
+          console.log('[Razorpay]', message);
+          var debugDiv = document.getElementById('debug');
+          debugDiv.textContent += message + '\
+';
+        }
+
         // Global error handler
         window.onerror = function(msg, url, lineNo, columnNo, error) {
-          console.error('Global error:', msg, error);
-          showError('Failed to load payment gateway. Please try again.');
+          logDebug('Global error: ' + msg);
+          showError('Failed to load payment gateway. Please check your internet connection.');
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'error',
+            data: { error: 'Script loading failed: ' + msg }
+          }));
           return false;
         };
 
         function showError(message) {
+          logDebug('Error: ' + message);
           var errorDiv = document.getElementById('error');
           errorDiv.textContent = message;
           errorDiv.style.display = 'block';
@@ -128,6 +158,7 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
         }
 
         function showLoading(message) {
+          logDebug('Loading: ' + message);
           var loadingDiv = document.getElementById('loading');
           loadingDiv.textContent = message;
           loadingDiv.style.display = 'block';
@@ -139,70 +170,73 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
         function loadRazorpayScript() {
           return new Promise(function(resolve, reject) {
             if (typeof Razorpay !== 'undefined') {
-              console.log('Razorpay already loaded');
+              logDebug('Razorpay already loaded');
               resolve();
               return;
             }
 
+            logDebug('Loading Razorpay script from CDN...');
             var script = document.createElement('script');
             script.src = 'https://checkout.razorpay.com/v1/checkout.js';
             script.onload = function() {
-              console.log('Razorpay script loaded successfully');
+              logDebug('Razorpay script loaded successfully');
               resolve();
             };
-            script.onerror = function() {
-              console.error('Failed to load Razorpay script');
-              reject(new Error('Failed to load Razorpay library'));
+            script.onerror = function(e) {
+              logDebug('Failed to load Razorpay script: ' + e);
+              reject(new Error('Failed to load Razorpay library. Please check your internet connection.'));
             };
             document.head.appendChild(script);
           });
         }
 
         function openRazorpay() {
-          showLoading('Opening payment gateway...');
+          showLoading('Connecting to payment gateway...');
           
           loadRazorpayScript()
             .then(function() {
-              console.log('Initializing Razorpay with:', {
-                key: "${RAZORPAY_KEY_ID}",
+              var razorpayConfig = {
+                key: \"${RAZORPAY_KEY_ID}\",
                 amount: ${Math.round(amount * 100)},
-                currency: "INR",
-                orderId: "${orderId}"
-              });
+                currency: \"INR\",
+                orderId: \"${orderId}\"
+              };
+              
+              logDebug('Initializing Razorpay with config: ' + JSON.stringify(razorpayConfig));
 
               if (typeof Razorpay === 'undefined') {
                 throw new Error('Razorpay library not loaded');
               }
 
               var options = {
-                key: "${RAZORPAY_KEY_ID}",
+                key: \"${RAZORPAY_KEY_ID}\",
                 amount: ${Math.round(amount * 100)},
-                currency: "INR",
-                name: "ServiceHub",
-                description: "${description.replace(/"/g, '"')}",
-                order_id: "${orderId}",
+                currency: \"INR\",
+                name: \"ServiceHub\",
+                description: \"${description.replace(/\"/g, '\\"')}\",
+                order_id: \"${orderId}\",
                 prefill: {
-                  name: "${customerDetails.name.replace(/"/g, '"')}",
-                  email: "${customerDetails.email}",
-                  contact: "${customerDetails.contact}"
+                  name: \"${customerDetails.name.replace(/\"/g, '\\"')}\",
+                  email: \"${customerDetails.email}\",
+                  contact: \"${customerDetails.contact}\"
                 },
                 theme: {
-                  color: "#4F7C82"
+                  color: \"#4F7C82\"
                 },
                 handler: function (response) {
-                  console.log('Payment success:', response);
+                  logDebug('Payment success: ' + JSON.stringify(response));
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'success',
                     data: {
                       razorpay_payment_id: response.razorpay_payment_id,
-                      razorpay_order_id: response.razorpay_order_id,
+                      razorpay_order_id: response.razorpay_order_id || \"${orderId}\",
                       razorpay_signature: response.razorpay_signature
                     }
                   }));
                 },
                 modal: {
                   ondismiss: function() {
-                    console.log('Payment dismissed');
+                    logDebug('Payment modal dismissed by user');
                     document.getElementById('loading').style.display = 'none';
                     document.getElementById('payBtn').disabled = false;
                     window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -215,23 +249,25 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
               var rzp = new Razorpay(options);
               
               rzp.on('payment.failed', function (response) {
-                console.error('Payment failed:', response);
+                logDebug('Payment failed: ' + JSON.stringify(response.error));
+                var errorMsg = response.error.description || response.error.reason || 'Payment failed';
                 window.ReactNativeWebView.postMessage(JSON.stringify({
                   type: 'failure',
                   data: {
-                    error: response.error.description || 'Payment failed',
+                    error: errorMsg,
                     code: response.error.code,
-                    reason: response.error.reason
+                    reason: response.error.reason,
+                    description: response.error.description
                   }
                 }));
               });
               
-              console.log('Opening Razorpay checkout...');
+              logDebug('Opening Razorpay checkout modal...');
               rzp.open();
               document.getElementById('loading').style.display = 'none';
             })
             .catch(function(error) {
-              console.error('Razorpay initialization error:', error);
+              logDebug('Razorpay initialization error: ' + error.message);
               showError(error.message || 'Failed to initialize payment gateway');
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'error',
@@ -242,11 +278,13 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
 
         // Button click handler
         document.getElementById('payBtn').addEventListener('click', function() {
+          logDebug('Pay Now button clicked');
           openRazorpay();
         });
 
         // Auto-open after a short delay
         setTimeout(function() {
+          logDebug('Auto-opening payment gateway...');
           openRazorpay();
         }, 500);
       </script>
@@ -256,39 +294,48 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
 
   const handleMessage = (event: any) => {
     try {
-      console.log('Raw Razorpay message:', event.nativeEvent.data);
+      console.log('📨 Raw Razorpay WebView message:', event.nativeEvent.data);
       const data = JSON.parse(event.nativeEvent.data);
       
-      console.log('Parsed Razorpay message:', data);
+      console.log('📦 Parsed Razorpay message type:', data.type);
+      console.log('📦 Parsed Razorpay message data:', JSON.stringify(data.data, null, 2));
       
       if (data.type === 'success') {
-        console.log('Payment successful - data:', data.data);
+        console.log('✅ Payment successful!');
+        console.log('Payment ID:', data.data.razorpay_payment_id);
+        console.log('Order ID:', data.data.razorpay_order_id);
         onSuccess(data.data);
       } else if (data.type === 'failure') {
-        console.error('Payment failed - data:', data.data);
+        console.error('❌ Payment failed');
+        console.error('Error code:', data.data.code);
+        console.error('Error reason:', data.data.reason);
+        console.error('Error description:', data.data.description);
         onFailure({
           error: data.data.error || 'Payment failed',
-          description: data.data.error || 'Payment could not be processed',
+          description: data.data.description || data.data.error || 'Payment could not be processed',
           code: data.data.code,
           reason: data.data.reason,
         });
       } else if (data.type === 'dismiss') {
-        console.log('Payment modal dismissed by user');
+        console.log('⚠️ Payment modal dismissed by user');
         onClose();
       } else if (data.type === 'error') {
-        console.error('Payment error - data:', data.data);
+        console.error('🔴 Payment processing error');
+        console.error('Error details:', data.data.error);
         onFailure({
           error: data.data.error || 'Payment processing error',
-          description: data.data.error || 'An error occurred while processing payment',
+          description: data.data.error || 'An error occurred while loading the payment gateway. Please check your internet connection and try again.',
         });
       } else {
-        console.warn('Unknown message type:', data.type);
+        console.warn('⚠️ Unknown message type received:', data.type);
       }
     } catch (error) {
-      console.error('Error parsing Razorpay message:', error, 'Raw data:', event.nativeEvent.data);
+      console.error('❌ Error parsing Razorpay WebView message');
+      console.error('Parse error:', error);
+      console.error('Raw data received:', event.nativeEvent.data);
       onFailure({ 
         error: 'Payment processing error',
-        description: 'Failed to process payment response. Please try again.'
+        description: 'Failed to process payment response. This might be due to a network issue. Please try again.'
       });
     }
   };
