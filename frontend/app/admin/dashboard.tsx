@@ -199,6 +199,71 @@ export default function AdminDashboardScreen() {
           ))}
         </View>
 
+                {/* Financial Management */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Financial Management</Text>
+          
+          <TouchableOpacity
+            style={[styles.actionCard, shadows.sm]}
+            onPress={() => router.push('/admin/payments-dashboard' as any)}
+            data-testid="payment-dashboard-link"
+          >
+            <View style={[styles.actionIcon, { backgroundColor: colors.primary + '20' }]}>
+              <Ionicons name="bar-chart" size={24} color={colors.primary} />
+            </View>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionTitle}>Payment Dashboard</Text>
+              <Text style={styles.actionSubtitle}>View all transactions and analytics</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionCard, shadows.sm]}
+            onPress={() => router.push('/admin/payouts' as any)}
+            data-testid="payouts-link"
+          >
+            <View style={[styles.actionIcon, { backgroundColor: colors.success + '20' }]}>
+              <Ionicons name="cash" size={24} color={colors.success} />
+            </View>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionTitle}>Seller Payouts</Text>
+              <Text style={styles.actionSubtitle}>Manage and process payouts to sellers</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionCard, shadows.sm]}
+            onPress={() => router.push('/admin/refunds' as any)}
+            data-testid="refunds-link"
+          >
+            <View style={[styles.actionIcon, { backgroundColor: colors.error + '20' }]}>
+              <Ionicons name="return-down-back" size={24} color={colors.error} />
+            </View>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionTitle}>Refund Requests</Text>
+              <Text style={styles.actionSubtitle}>Review and process customer refunds</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionCard, shadows.sm]}
+            onPress={() => router.push('/admin/complaints' as any)}
+            data-testid="complaints-link"
+          >
+            <View style={[styles.actionIcon, { backgroundColor: colors.warning + '20' }]}>
+              <Ionicons name="flag" size={24} color={colors.warning} />
+            </View>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionTitle}>Complaints Management</Text>
+              <Text style={styles.actionSubtitle}>Handle customer complaints and reports</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+
         {/* Quick Actions */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
