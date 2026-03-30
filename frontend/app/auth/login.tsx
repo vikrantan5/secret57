@@ -3,19 +3,20 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
   Alert,
   TouchableOpacity,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Input } from '../../src/components/ui/Input';
 import { Button } from '../../src/components/ui/Button';
 import { useAuthStore } from '../../src/store/authStore';
-import { colors, spacing, typography, borderRadius } from '../../src/constants/theme';
+import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -45,10 +46,31 @@ export default function LoginScreen() {
     }
   };
 
- const roleColor = role === 'customer' ? colors.customer : role === 'seller' ? colors.seller : colors.admin;
+  const roleConfig = {
+    customer: {
+      color: '#60A5FA',
+      icon: 'cart' as const,
+      title: 'Customer Login',
+      subtitle: 'Welcome back! Login to continue shopping',
+    },
+    seller: {
+      color: '#8B5CF6',
+      icon: 'storefront' as const,
+      title: 'Seller Login',
+      subtitle: 'Manage your store and grow your business',
+    },
+    admin: {
+      color: colors.primaryDark,
+      icon: 'shield-checkmark' as const,
+      title: 'Admin Login',
+      subtitle: 'Access your admin dashboard',
+    },
+  };
+
+  const config = roleConfig[role];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -58,71 +80,136 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
+          {/* Header with Gradient */}
+          <LinearGradient
+            colors={[config.color, config.color + 'CC']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.header}
           >
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-
-                   <View style={styles.header}>
-            <View style={[styles.iconContainer, { backgroundColor: roleColor + '15' }]}>
-              <Ionicons
-                name={role === 'customer' ? 'cart' : role === 'seller' ? 'storefront' : 'shield-checkmark'}
-                size={40}
-                color={roleColor}
-              />
-            </View>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>
-              Login as {role === 'customer' ? 'Customer' : role === 'seller' ? 'Seller' : 'Admin'}
-            </Text>
-          </View>
-
-          <View style={styles.form}>
-            <Input
-              label="Email"
-              placeholder="Enter your email"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              leftIcon="mail"
-            />
-
-            <Input
-              label="Password"
-              placeholder="Enter your password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              leftIcon="lock-closed"
-            />
-
-            <TouchableOpacity style={styles.forgotPassword}>
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <Ionicons name="arrow-back" size={24} color={colors.white} />
             </TouchableOpacity>
 
-            <Button
-              title="Login"
-              onPress={handleLogin}
-              loading={loading}
-              fullWidth
-              style={{ backgroundColor: roleColor }}
-            />
-
-            {role !== 'admin' && (
-              <View style={styles.registerContainer}>
-                <Text style={styles.registerText}>Don't have an account? </Text>
-                <TouchableOpacity
-                  onPress={() => router.push(`/auth/register?role=${role}`)}
-                >
-                  <Text style={[styles.registerLink, { color: roleColor }]}>
-                    Register
-                  </Text>
-                </TouchableOpacity>
+            <View style={styles.headerContent}>
+              <View style={styles.iconContainer}>
+                <Ionicons
+                  name={config.icon}
+                  size={48}
+                  color={colors.white}
+                />
               </View>
-            )}
+              <Text style={styles.title}>{config.title}</Text>
+              <Text style={styles.subtitle}>{config.subtitle}</Text>
+            </View>
+          </LinearGradient>
+
+          {/* Form Section */}
+          <View style={styles.formContainer}>
+            <View style={[styles.formCard, shadows.lg]}>
+              <Text style={styles.formTitle}>Sign In</Text>
+
+              <Input
+                label="Email Address"
+                placeholder="Enter your email"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                leftIcon="mail"
+              />
+
+              <Input
+                label="Password"
+                placeholder="Enter your password"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                leftIcon="lock-closed"
+              />
+
+              <TouchableOpacity style={styles.forgotPassword}>
+                <Text style={[styles.forgotPasswordText, { color: config.color }]}>
+                  Forgot Password?
+                </Text>
+              </TouchableOpacity>
+
+              <Button
+                title="Login"
+                onPress={handleLogin}
+                loading={loading}
+                fullWidth
+                style={{ backgroundColor: config.color }}
+              />
+
+              {role !== 'admin' && (
+                <View style={styles.registerContainer}>
+                  <Text style={styles.registerText}>Don't have an account? </Text>
+                  <TouchableOpacity
+                    onPress={() => router.push(`/auth/register?role=${role}`)}
+                  >
+                    <Text style={[styles.registerLink, { color: config.color }]}>
+                      Register Now
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
+            {/* Features */}
+            <View style={styles.featuresContainer}>
+              {role === 'customer' && (
+                <>
+                  <View style={styles.featureItem}>
+                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                    <Text style={styles.featureText}>Wide variety of products & services</Text>
+                  </View>
+                  <View style={styles.featureItem}>
+                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                    <Text style={styles.featureText}>Secure payment options</Text>
+                  </View>
+                  <View style={styles.featureItem}>
+                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                    <Text style={styles.featureText}>Fast delivery & booking</Text>
+                  </View>
+                </>
+              )}
+              {role === 'seller' && (
+                <>
+                  <View style={styles.featureItem}>
+                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                    <Text style={styles.featureText}>Reach thousands of customers</Text>
+                  </View>
+                  <View style={styles.featureItem}>
+                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                    <Text style={styles.featureText}>Easy store management</Text>
+                  </View>
+                  <View style={styles.featureItem}>
+                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                    <Text style={styles.featureText}>Quick payouts</Text>
+                  </View>
+                </>
+              )}
+              {role === 'admin' && (
+                <>
+                  <View style={styles.featureItem}>
+                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                    <Text style={styles.featureText}>Complete platform control</Text>
+                  </View>
+                  <View style={styles.featureItem}>
+                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                    <Text style={styles.featureText}>Advanced analytics</Text>
+                  </View>
+                  <View style={styles.featureItem}>
+                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                    <Text style={styles.featureText}>User management</Text>
+                  </View>
+                </>
+              )}
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -140,34 +227,63 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    padding: spacing.lg,
-  },
-  backButton: {
-    marginBottom: spacing.lg,
   },
   header: {
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxxl,
+    paddingHorizontal: spacing.lg,
+    borderBottomLeftRadius: borderRadius.xxl,
+    borderBottomRightRadius: borderRadius.xxl,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+  },
+  headerContent: {
+    alignItems: 'center',
   },
   iconContainer: {
-    width: 80,
-    height: 80,
+    width: 88,
+    height: 88,
     borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
   title: {
     ...typography.h2,
-    color: colors.text,
+    color: colors.white,
     marginBottom: spacing.xs,
+    fontWeight: '700',
   },
   subtitle: {
     ...typography.body,
-    color: colors.textSecondary,
+    color: colors.white,
+    opacity: 0.95,
+    textAlign: 'center',
   },
-  form: {
-    flex: 1,
+  formContainer: {
+    marginTop: -spacing.xxl,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  formCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
+  },
+  formTitle: {
+    ...typography.h3,
+    color: colors.text,
+    fontWeight: '700',
+    marginBottom: spacing.lg,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
@@ -175,7 +291,7 @@ const styles = StyleSheet.create({
   },
   forgotPasswordText: {
     ...typography.bodySmall,
-    color: colors.primary,
+    fontWeight: '600',
   },
   registerContainer: {
     flexDirection: 'row',
@@ -189,5 +305,21 @@ const styles = StyleSheet.create({
   registerLink: {
     ...typography.body,
     fontWeight: '600',
+  },
+  featuresContainer: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  featureText: {
+    ...typography.body,
+    color: colors.text,
+    flex: 1,
   },
 });

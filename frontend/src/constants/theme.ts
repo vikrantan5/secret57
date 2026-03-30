@@ -1,49 +1,57 @@
 // ServiceHub Theme Configuration
-// Professional blue/purple color scheme
+// Modern Teal/Cyan color scheme
 
 export const colors = {
-  // Primary colors
-  primary: '#5B7CFF',
-  primaryLight: '#7B95FF',
-  primaryDark: '#3B5CDF',
+  // Primary colors - Modern Teal Palette
+  primary: '#4F7C82',
+  primaryLight: '#93B1B5',
+  primaryDark: '#0B2E33',
+  primaryVeryLight: '#B8E3E9',
   
   // Secondary colors
-  secondary: '#8B5CF6',
-  secondaryLight: '#A78BFA',
-  secondaryDark: '#7C3AED',
+  secondary: '#5B9BA5',
+  secondaryLight: '#7DB4BE',
+  secondaryDark: '#3A6E77',
   
   // Neutral colors
-  background: '#F8F9FE',
+  background: '#F0F8F9',
   surface: '#FFFFFF',
-  surfaceLight: '#F3F4F6',
+  surfaceLight: '#F7FCFD',
+  surfaceTeal: '#E8F4F5',
   
   // Text colors
-  text: '#1F2937',
-  textSecondary: '#6B7280',
-  textLight: '#9CA3AF',
+  text: '#0B2E33',
+  textSecondary: '#4F7C82',
+  textLight: '#93B1B5',
   
   // Status colors
-  success: '#10B981',
-  error: '#EF4444',
-  warning: '#F59E0B',
-  info: '#3B82F6',
+  success: '#34D399',
+  error: '#F87171',
+  warning: '#FBBF24',
+  info: '#60A5FA',
   
   // Border colors
-  border: '#E5E7EB',
-  borderLight: '#F3F4F6',
+  border: '#D1E5E8',
+  borderLight: '#E8F4F5',
   
   // Overlays
-  overlay: 'rgba(0, 0, 0, 0.5)',
-  overlayLight: 'rgba(0, 0, 0, 0.3)',
+  overlay: 'rgba(11, 46, 51, 0.6)',
+  overlayLight: 'rgba(11, 46, 51, 0.3)',
   
-
   // Additional colors
   white: '#FFFFFF',
   black: '#000000',
+  purple: '#8B5CF6',
+  
   // Role specific colors
-  customer: '#5B7CFF',
-  seller: '#8B5CF6',
-  admin: '#EF4444',
+  customer: '#4F7C82',
+  seller: '#5B9BA5',
+  admin: '#0B2E33',
+  
+  // Gradient colors
+  gradientStart: '#B8E3E9',
+  gradientMid: '#4F7C82',
+  gradientEnd: '#0B2E33',
 };
 
 export const spacing = {
@@ -53,13 +61,15 @@ export const spacing = {
   lg: 24,
   xl: 32,
   xxl: 48,
+  xxxl: 64,
 };
 
 export const borderRadius = {
   sm: 8,
   md: 12,
   lg: 16,
-  xl: 24,
+  xl: 20,
+  xxl: 24,
   full: 9999,
 };
 
@@ -108,33 +118,43 @@ export const typography = {
 
 export const shadows = {
   sm: {
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  md: {
-    shadowColor: '#000',
+    shadowColor: '#0B2E33',
     shadowOffset: {
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  lg: {
-    shadowColor: '#000',
+  md: {
+    shadowColor: '#0B2E33',
     shadowOffset: {
       width: 0,
       height: 4,
     },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  lg: {
+    shadowColor: '#0B2E33',
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
     elevation: 8,
+  },
+  xl: {
+    shadowColor: '#0B2E33',
+    shadowOffset: {
+      width: 0,
+      height: 12,
+    },
+    shadowOpacity: 0.20,
+    shadowRadius: 16,
+    elevation: 12,
   },
 };
