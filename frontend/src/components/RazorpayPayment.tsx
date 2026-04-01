@@ -42,8 +42,10 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
     <!DOCTYPE html>
     <html>
     <head>
-      <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">
-      <meta charset=\"UTF-8\">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+      <meta charset="UTF-8">
+          <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src *; img-src * data: blob: 'unsafe-inline'; frame-src *; style-src * 'unsafe-inline';">
+      <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
       <style>
         body {
           margin: 0;
@@ -109,32 +111,39 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
           background: #FEE2E2;
           border-radius: 6px;
         }
-        .debug {
+               .debug {
           margin-top: 20px;
-          font-size: 12px;
-          color: #999;
+          font-size: 11px;
+          color: #666;
           text-align: left;
+          background: #f5f5f5;
+          padding: 10px;
+          border-radius: 6px;
+          max-height: 200px;
+          overflow-y: auto;
+          font-family: monospace;
         }
       </style>
     </head>
     <body>
-      <div class=\"container\">
-        <div class=\"logo\">🛒 ServiceHub</div>
-        <div class=\"info\">${description}</div>
-        <div class=\"amount\">₹${amount.toFixed(2)}</div>
-        <button class=\"btn\" id=\"payBtn\">Pay Now</button>
-        <div class=\"loading\" id=\"loading\" style=\"display:none;\">Loading payment gateway...</div>
-        <div class=\"error\" id=\"error\" style=\"display:none;\"></div>
-        <div class=\"debug\" id=\"debug\"></div>
+      <div class="container">
+        <div class="logo">🛒 ServiceHub</div>
+        <div class="info">${description}</div>
+        <div class="amount">₹${amount.toFixed(2)}</div>
+        <button class="btn" id="payBtn">Pay Now</button>
+        <div class="loading" id="loading" style="display:none;">Loading payment gateway...</div>
+        <div class="error" id="error" style="display:none;"></div>
+        <div class="debug" id="debug"></div>
       </div>
       
       <script>
         // Debug logger
         function logDebug(message) {
-          console.log('[Razorpay]', message);
+          var timestamp = new Date().toLocaleTimeString();
+          console.log('[Razorpay ' + timestamp + ']', message);
           var debugDiv = document.getElementById('debug');
-          debugDiv.textContent += message + '\
-';
+          debugDiv.innerHTML += '[' + timestamp + '] ' + message + '<br>';
+          debugDiv.scrollTop = debugDiv.scrollHeight;
         }
 
         // Global error handler
@@ -169,24 +178,40 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
         // Load Razorpay script dynamically
         function loadRazorpayScript() {
           return new Promise(function(resolve, reject) {
+            // Check if Razorpay is already loaded
             if (typeof Razorpay !== 'undefined') {
-              logDebug('Razorpay already loaded');
+              logDebug('Razorpay already loaded from head script');
               resolve();
               return;
             }
 
-            logDebug('Loading Razorpay script from CDN...');
-            var script = document.createElement('script');
-            script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-            script.onload = function() {
-              logDebug('Razorpay script loaded successfully');
-              resolve();
-            };
-            script.onerror = function(e) {
-              logDebug('Failed to load Razorpay script: ' + e);
-              reject(new Error('Failed to load Razorpay library. Please check your internet connection.'));
-            };
-            document.head.appendChild(script);
+            // Wait a bit for the head script to load
+            logDebug('Waiting for Razorpay to load from head...');
+            var attempts = 0;
+            var checkInterval = setInterval(function() {
+              attempts++;
+              if (typeof Razorpay !== 'undefined') {
+                logDebug('Razorpay loaded after ' + attempts + ' attempts');
+                clearInterval(checkInterval);
+                resolve();
+              } else if (attempts > 20) {
+                logDebug('Razorpay failed to load after 20 attempts, trying dynamic load...');
+                clearInterval(checkInterval);
+                
+                // Fallback: try to load dynamically
+                var script = document.createElement('script');
+                script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+                script.onload = function() {
+                  logDebug('Razorpay script loaded dynamically');
+                  resolve();
+                };
+                script.onerror = function(e) {
+                  logDebug('Failed to load Razorpay script: ' + e);
+                  reject(new Error('Failed to load Razorpay library. Please check your internet connection.'));
+                };
+                document.head.appendChild(script);
+              }
+            }, 100);
           });
         }
 
@@ -195,33 +220,27 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
           
           loadRazorpayScript()
             .then(function() {
-              var razorpayConfig = {
-                key: \"${RAZORPAY_KEY_ID}\",
-                amount: ${Math.round(amount * 100)},
-                currency: \"INR\",
-                orderId: \"${orderId}\"
-              };
+              logDebug('Razorpay script ready, checking if Razorpay is defined...');
               
-              logDebug('Initializing Razorpay with config: ' + JSON.stringify(razorpayConfig));
-
               if (typeof Razorpay === 'undefined') {
-                throw new Error('Razorpay library not loaded');
+                throw new Error('Razorpay is still undefined after loading');
               }
+              
+              logDebug('Razorpay is defined, creating options...');
 
               var options = {
-                key: \"${RAZORPAY_KEY_ID}\",
+                key: "${RAZORPAY_KEY_ID}",
                 amount: ${Math.round(amount * 100)},
-                currency: \"INR\",
-                name: \"ServiceHub\",
-                description: \"${description.replace(/\"/g, '\\"')}\",
-                order_id: \"${orderId}\",
+                currency: "INR",
+                name: "ServiceHub",
+                description: "${description.replace(/"/g, '"')}",
                 prefill: {
-                  name: \"${customerDetails.name.replace(/\"/g, '\\"')}\",
-                  email: \"${customerDetails.email}\",
-                  contact: \"${customerDetails.contact}\"
+                  name: "${customerDetails.name.replace(/"/g, '"')}",
+                  email: "${customerDetails.email}",
+                  contact: "${customerDetails.contact}"
                 },
                 theme: {
-                  color: \"#4F7C82\"
+                  color: "#4F7C82"
                 },
                 handler: function (response) {
                   logDebug('Payment success: ' + JSON.stringify(response));
@@ -229,8 +248,8 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
                     type: 'success',
                     data: {
                       razorpay_payment_id: response.razorpay_payment_id,
-                      razorpay_order_id: response.razorpay_order_id || \"${orderId}\",
-                      razorpay_signature: response.razorpay_signature
+                       razorpay_order_id: "${orderId}",
+                      razorpay_signature: response.razorpay_signature || ''
                     }
                   }));
                 },
@@ -246,7 +265,9 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
                 }
               };
               
+             logDebug('Creating Razorpay instance with options: ' + JSON.stringify(options));
               var rzp = new Razorpay(options);
+              logDebug('Razorpay instance created successfully');
               
               rzp.on('payment.failed', function (response) {
                 logDebug('Payment failed: ' + JSON.stringify(response.error));
@@ -262,8 +283,14 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
                 }));
               });
               
-              logDebug('Opening Razorpay checkout modal...');
-              rzp.open();
+             logDebug('Opening Razorpay checkout modal...');
+              try {
+                rzp.open();
+                logDebug('Razorpay checkout modal opened successfully');
+              } catch (openError) {
+                logDebug('Error opening Razorpay modal: ' + openError);
+                throw openError;
+              }
               document.getElementById('loading').style.display = 'none';
             })
             .catch(function(error) {
@@ -277,16 +304,28 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
         }
 
         // Button click handler
-        document.getElementById('payBtn').addEventListener('click', function() {
+        var payButton = document.getElementById('payBtn');
+        var isProcessing = false;
+        
+        payButton.addEventListener('click', function(e) {
+          e.preventDefault();
+          if (isProcessing) {
+            logDebug('Payment already in progress, ignoring click');
+            return;
+          }
           logDebug('Pay Now button clicked');
+          isProcessing = true;
           openRazorpay();
         });
 
         // Auto-open after a short delay
         setTimeout(function() {
-          logDebug('Auto-opening payment gateway...');
-          openRazorpay();
-        }, 500);
+          if (!isProcessing) {
+            logDebug('Auto-opening payment gateway...');
+            isProcessing = true;
+            openRazorpay();
+          }
+        }, 1000);
       </script>
     </body>
     </html>
