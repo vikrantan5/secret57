@@ -274,6 +274,7 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
                     }
                   }
                 },
+                
                  method: {
                   upi: true,
                   card: true,
