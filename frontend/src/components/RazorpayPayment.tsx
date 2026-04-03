@@ -130,21 +130,26 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
         <div class="logo">🛒 ServiceHub</div>
         <div class="info">${description}</div>
         <div class="amount">₹${amount.toFixed(2)}</div>
-               <!-- Test Mode Info -->
-        <div style="background: #10B981; padding: 16px; border-radius: 8px; margin: 15px 0; font-size: 14px; color: white; text-align: left;">
-          <strong style="font-size: 16px;">🎯 RAZORPAY TEST MODE - HOW TO TEST:</strong><br>
-          <div style="margin-top: 12px; background: rgba(255,255,255,0.25); padding: 14px; border-radius: 6px; line-height: 1.9;">
-            <strong style="font-size: 15px;">✅ METHOD 1: Using Test Card (Recommended)</strong><br>
-            <strong>1.</strong> Click on <strong>"Cards"</strong> option<br>
-            <strong>2.</strong> Enter: <span style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 3px; font-family: monospace;">4111 1111 1111 1111</span><br>
-            <strong>3.</strong> CVV: <span style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 3px; font-family: monospace;">123</span> | Expiry: <span style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 3px; font-family: monospace;">12/30</span><br>
-            <strong>4.</strong> Click <strong>"Pay"</strong> button<br>
-            <strong>5.</strong> On next page, click <strong>"Success"</strong> button<br>
+                            <!-- Test Mode Info -->
+        <div style="background: #10B981; padding: 16px; border-radius: 8px; margin: 15px 0; font-size: 13px; color: white; text-align: left;">
+          <strong style="font-size: 16px;">🎯 TEST MODE - Payment Instructions:</strong><br>
+          <div style="margin-top: 12px; background: rgba(255,255,255,0.25); padding: 14px; border-radius: 6px; line-height: 1.8;">
+            <strong style="font-size: 14px;">✅ Working Test Cards for India:</strong><br><br>
+            <strong>Option 1 - Visa (Recommended):</strong><br>
+            • Card: <span style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 3px; font-family: monospace;">4111 1111 1111 1111</span><br>
+            • CVV: <span style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 3px; font-family: monospace;">123</span> | Expiry: <span style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 3px; font-family: monospace;">12/30</span><br><br>
+            
+            <strong>Option 2 - Mastercard:</strong><br>
+            • Card: <span style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 3px; font-family: monospace;">5555 5555 5555 4444</span><br>
+            • CVV: <span style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 3px; font-family: monospace;">123</span> | Expiry: <span style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 3px; font-family: monospace;">12/30</span><br><br>
+            
+            <strong>Option 3 - RuPay (Indian):</strong><br>
+            • Card: <span style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 3px; font-family: monospace;">6074 6500 0000 0063</span><br>
+            • CVV: <span style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 3px; font-family: monospace;">123</span> | Expiry: <span style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 3px; font-family: monospace;">12/30</span>
           </div>
           <div style="margin-top: 10px; font-size: 12px; background: rgba(255,255,255,0.15); padding: 10px; border-radius: 6px;">
-            💡 <strong>Note:</strong> If card doesn't work, try:<br>
-            • Card: 5555 5555 5555 4444 (Mastercard)<br>
-            • Or any other payment method available
+            📝 <strong>Steps:</strong> Select payment method → Enter card → Click "Pay" → On next page click "Success"<br>
+            💡 You can also try UPI, Wallets, or Netbanking options
           </div>
         </div>
         
@@ -253,26 +258,7 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
                 currency: "INR",
                 name: "ServiceHub",
                 description: "${description.replace(/"/g, '"')}",
-                  method: "card",
-                allow_retry: true,
-                config: {
-                  display: {
-                    blocks: {
-                      card: {
-                        name: "Pay with Cards",
-                        instruments: [
-                          {
-                            method: "card"
-                          }
-                        ]
-                      }
-                    },
-                    sequence: ["block.card"],
-                    preferences: {
-                      show_default_blocks: true
-                    }
-                  }
-                },
+              
                 prefill: {
                   name: "${customerDetails.name.replace(/"/g, '"')}",
                   email: "${customerDetails.email}",
@@ -280,6 +266,20 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
                 },
                 theme: {
                   color: "#4F7C82"
+                },
+                config: {
+                  display: {
+                    preferences: {
+                      show_default_blocks: true
+                    }
+                  }
+                },
+                 method: {
+                  upi: true,
+                  card: true,
+                  netbanking: true,
+                  wallet: true,
+                  emi: false
                 },
                 handler: function (response) {
                   logDebug('Payment success: ' + JSON.stringify(response));
@@ -308,17 +308,37 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
               var rzp = new Razorpay(options);
               logDebug('Razorpay instance created successfully');
               
-              rzp.on('payment.failed', function (response) {
+                       rzp.on('payment.failed', function (response) {
                 logDebug('Payment failed: ' + JSON.stringify(response.error));
                 var errorMsg = response.error.description || response.error.reason || 'Payment failed';
-               // Handle specific error cases
+                
+                // Handle specific error cases with helpful messages
                 if (response.error.code === 'BAD_REQUEST_ERROR') {
                   if (response.error.reason === 'card_number_invalid') {
-                    errorMsg = '⚠️ Card validation failed. In TEST MODE, try using card: 4111 1111 1111 1111 (CVV: 123, Expiry: 12/30). After entering card details, click "Pay" then click "Success" button on the next page.';
-                  } else if (response.error.description && response.error.description.includes('another method')) {
-                    errorMsg = '⚠️ This payment method is not available in test mode. Please try the Cards option: Click "Cards" → Enter 4111 1111 1111 1111 → CVV: 123 → Expiry: 12/30 → Click "Pay" → Click "Success" on next page.';
+                    errorMsg = '⚠️ Invalid card number. Please use one of these TEST cards:' +
+                               '✅ Visa: 4111 1111 1111 1111' +
+                               '✅ Mastercard: 5555 5555 5555 4444' +
+                               '✅ RuPay: 6074 6500 0000 0063' +
+                               'CVV: 123 | Expiry: 12/30' +
+                               'Then click "Pay" → "Success"';
+                  } else if (response.error.reason === 'payment_failed') {
+                    errorMsg = '⚠️ Payment declined. In TEST mode, after entering card details, make sure to:' +
+                               '1. Click the "Pay" button' +
+                               '2. On the next screen, click "Success" button to simulate successful payment';
+                  } else if (response.error.description && (
+                    response.error.description.includes('International') || 
+                    response.error.description.includes('not supported') ||
+                    response.error.description.includes('another method')
+                  )) {
+                    errorMsg = '⚠️ This card/payment method is restricted. Please try:' +
+                               '✅ Visa: 4111 1111 1111 1111' +
+                               '✅ Mastercard: 5555 5555 5555 4444' +
+                               '✅ RuPay: 6074 6500 0000 0063' +
+                               '✅ Or use UPI/Wallets/Netbanking' +
+                               'CVV: 123 | Expiry: 12/30';
                   }
                 }
+                
                 window.ReactNativeWebView.postMessage(JSON.stringify({
                   type: 'failure',
                   data: {
