@@ -130,17 +130,23 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
         <div class="logo">🛒 ServiceHub</div>
         <div class="info">${description}</div>
         <div class="amount">₹${amount.toFixed(2)}</div>
-          <!-- Test Mode Info -->
+               <!-- Test Mode Info -->
         <div style="background: #FEF3C7; padding: 12px; border-radius: 8px; margin: 15px 0; font-size: 13px; color: #92400E; text-align: left;">
-          <strong>📝 Test Mode - Use Test Card:</strong><br>
+          <strong>📝 Test Mode - Use Indian Test Cards:</strong><br>
           <div style="font-family: monospace; margin-top: 8px; background: white; padding: 8px; border-radius: 4px;">
-            Card: 4111 1111 1111 1111<br>
-            CVV: 111<br>
-            Expiry: 12/26<br>
-            OTP: 1234 (if asked)
+            <strong>Mastercard (Domestic):</strong><br>
+            Card: 5104 0155 5555 5558<br>
+            CVV: Any 3 digits (e.g., 123)<br>
+            Expiry: Any future date (e.g., 12/30)<br>
+            <br>
+            <strong>Visa (Domestic):</strong><br>
+            Card: 4718 6091 0820 4366<br>
+            CVV: Any 3 digits (e.g., 123)<br>
+            Expiry: Any future date (e.g., 12/30)<br>
           </div>
           <div style="margin-top: 8px; font-size: 12px;">
-            ⚠️ Only Indian test cards work. International cards will be rejected.
+            ⚠️ Only Indian domestic test cards work. International cards will be rejected.<br>
+            💡 On the payment page, click "Success" to complete payment.
           </div>
         </div>
         
@@ -244,6 +250,7 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
 
               var options = {
                 key: "${RAZORPAY_KEY_ID}",
+                 order_id: "${orderId}",
                 amount: ${Math.round(amount * 100)},
                 currency: "INR",
                 name: "ServiceHub",
@@ -262,7 +269,7 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
                     type: 'success',
                     data: {
                       razorpay_payment_id: response.razorpay_payment_id,
-                       razorpay_order_id: "${orderId}",
+                       razorpay_order_id: response.razorpay_order_id || "${orderId}",
                       razorpay_signature: response.razorpay_signature || ''
                     }
                   }));
