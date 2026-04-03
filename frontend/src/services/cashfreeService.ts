@@ -155,11 +155,14 @@ export class CashfreeService {
     return !!this.CASHFREE_APP_ID;
   }
 
-  /**
+   /**
    * Get payment session URL for WebView
+   * Using cashfree.js SDK approach via redirect
    */
   getPaymentSessionUrl(paymentSessionId: string): string {
-    return `https://sandbox.cashfree.com/pg/view/order?payment_session_id=${paymentSessionId}`;
+    // Remove the duplicate \"payment\" suffix if it exists (Cashfree API bug)
+    const cleanSessionId = paymentSessionId.replace(/payment$/, '');
+    return `https://payments-test.cashfree.com/order/#${cleanSessionId}`;
   }
 }
 
