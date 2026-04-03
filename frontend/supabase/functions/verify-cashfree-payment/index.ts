@@ -4,8 +4,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
-const CASHFREE_APP_ID = Deno.env.get('CASHFREE_APP_ID') ;
-const CASHFREE_SECRET_KEY = Deno.env.get('CASHFREE_SECRET_KEY') ;
+const CASHFREE_APP_ID = Deno.env.get('EXPO_PUBLIC_CASHFREE_APP_ID') ;
+const CASHFREE_SECRET_KEY = Deno.env.get('EXPO_PUBLIC_CASHFREE_SECRET_KEY') ;
 const CASHFREE_API_URL = 'https://sandbox.cashfree.com/pg/orders';
 
 const corsHeaders = {

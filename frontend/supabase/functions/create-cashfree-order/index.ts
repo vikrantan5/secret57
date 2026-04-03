@@ -4,8 +4,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
-const CASHFREE_APP_ID = Deno.env.get('CASHFREE_APP_ID') ;
-const CASHFREE_SECRET_KEY = Deno.env.get('CASHFREE_SECRET_KEY');
+const CASHFREE_APP_ID = Deno.env.get('EXPO_PUBLIC_CASHFREE_APP_ID') ;
+const CASHFREE_SECRET_KEY = Deno.env.get('EXPO_PUBLIC_CASHFREE_SECRET_KEY');
 const CASHFREE_API_URL = 'https://sandbox.cashfree.com/pg/orders'; // Use production URL for live
 
 interface OrderRequest {
@@ -55,21 +55,16 @@ serve(async (req) => {
     // Generate unique order ID
     const order_id = `order_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-    // Create Cashfree order
+     // Create Cashfree order
     const orderPayload = {
       order_id,
       order_amount: parseFloat(order_amount.toString()),
       order_currency,
-      order_note: order_note || 'Payment for order',
       customer_details: {
         customer_id,
         customer_name,
         customer_email,
         customer_phone
-      },
-      order_meta: {
-        return_url: return_url || 'https://yourapp.com/payment-success',
-        notify_url: notify_url || ''
       }
     };
 

@@ -5,8 +5,8 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
-const CASHFREE_APP_ID = Deno.env.get('CASHFREE_APP_ID') ;
-const CASHFREE_SECRET_KEY = Deno.env.get('CASHFREE_SECRET_KEY');
+const CASHFREE_APP_ID = Deno.env.get('EXPO_PUBLIC_CASHFREE_APP_ID') ;
+const CASHFREE_SECRET_KEY = Deno.env.get('EXPO_PUBLIC_CASHFREE_SECRET_KEY');
 const CASHFREE_API_URL = 'https://sandbox.cashfree.com/pg/orders';
 
 const corsHeaders = {
@@ -52,20 +52,16 @@ serve(async (req) => {
 
     console.log('Creating subscription order:', order_id);
 
-    // Create Cashfree order (payment goes to admin/platform account)
+      // Create Cashfree order (payment goes to admin/platform account)
     const orderPayload = {
       order_id,
       order_amount: parseFloat(subscription_amount.toString()),
       order_currency: 'INR',
-      order_note: `Subscription: ${plan_name}`,
       customer_details: {
         customer_id: seller_id,
         customer_name: seller_name,
         customer_email: seller_email,
         customer_phone: seller_phone
-      },
-      order_meta: {
-        return_url: return_url || 'https://yourapp.com/subscription-success'
       }
     };
 

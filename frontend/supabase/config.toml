@@ -400,6 +400,7 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 
 
 # Edge Functions Configuration - Disable JWT verification for public payment endpoints
+# Legacy Razorpay Functions (kept for backward compatibility)
 [functions.create-razorpay-order]
 verify_jwt = false
 
@@ -416,4 +417,24 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.get-payout-status]
+verify_jwt = false
+
+# Cashfree Payment Gateway Functions
+[functions.create-cashfree-order]
+verify_jwt = false
+
+[functions.verify-cashfree-payment]
+verify_jwt = false
+
+[functions.create-subscription-order]
+verify_jwt = false
+
+# Cashfree Payout Functions (Direct Seller Transfers)
+[functions.add-cashfree-beneficiary]
+verify_jwt = false
+
+[functions.verify-cashfree-beneficiary]
+verify_jwt = false
+
+[functions.create-cashfree-transfer]
 verify_jwt = false
