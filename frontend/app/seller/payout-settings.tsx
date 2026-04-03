@@ -375,17 +375,23 @@ export default function PayoutSettingsScreen() {
                         {account.account_type.charAt(0).toUpperCase() + account.account_type.slice(1)}
                       </Text>
                     </View>
-                    <View style={styles.detailRow}>
+                                      <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Status</Text>
                       <View style={[
                         styles.statusBadge,
-                        account.is_verified ? styles.verifiedBadge : styles.unverifiedBadge
+                        account.verification_status === 'verified' ? styles.verifiedBadge : 
+                        account.verification_status === 'failed' ? styles.failedBadge :
+                        styles.unverifiedBadge
                       ]}>
                         <Text style={[
                           styles.statusText,
-                          account.is_verified ? styles.verifiedText : styles.unverifiedText
+                          account.verification_status === 'verified' ? styles.verifiedText : 
+                          account.verification_status === 'failed' ? styles.failedText :
+                          styles.unverifiedText
                         ]}>
-                          {account.is_verified ? 'Verified' : 'Pending Verification'}
+                          {account.verification_status === 'verified' ? 'Cashfree Verified' : 
+                           account.verification_status === 'failed' ? 'Verification Failed' :
+                           'Pending Verification'}
                         </Text>
                       </View>
                     </View>
@@ -702,6 +708,9 @@ const styles = StyleSheet.create({
   unverifiedBadge: {
     backgroundColor: colors.warning + '20',
   },
+  failedBadge: {
+    backgroundColor: colors.error + '20',
+  },
   statusText: {
     ...typography.caption,
     fontWeight: '600',
@@ -712,6 +721,9 @@ const styles = StyleSheet.create({
   },
   unverifiedText: {
     color: colors.warning,
+  },
+  failedText: {
+    color: colors.error,
   },
   deleteButton: {
     flexDirection: 'row',

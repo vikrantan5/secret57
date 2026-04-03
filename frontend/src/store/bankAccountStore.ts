@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '../services/supabase';
-import RazorpayPayoutService from '../services/razorpayPayout';
+import CashfreePayoutService from '../services/cashfreePayoutService';
 
 export interface SellerBankAccount {
   id: string;
@@ -12,6 +12,12 @@ export interface SellerBankAccount {
   account_type: 'savings' | 'current';
   upi_id?: string;
   pan_number?: string;
+    gst_number?: string;
+  cashfree_beneficiary_id?: string;
+  cashfree_bene_id?: string;
+  verification_status?: 'pending' | 'verified' | 'failed';
+  verification_date?: string;
+  // Deprecated Razorpay fields (kept for backward compatibility)
   razorpay_contact_id?: string;
   razorpay_fund_account_id?: string;
   is_verified: boolean;
@@ -115,17 +121,17 @@ export const useBankAccountStore = create<BankAccountState>((set, get) => ({
       set({ loading: true });
 
       // Validate inputs
-      if (!get().validateIFSC(data.ifsc_code)) {
+      if (!CashfreePayoutService.validateIFSC(data.ifsc_code)) {
         set({ loading: false });
         return { success: false, error: 'Invalid IFSC code format' };
       }
 
-      if (!get().validateAccountNumber(data.account_number)) {
+      if (!CashfreePayoutService.validateAccountNumber(data.account_number)) {
         set({ loading: false });
         return { success: false, error: 'Invalid account number (must be 9-18 digits)' };
       }
 
-      if (data.pan_number && !get().validatePAN(data.pan_number)) {
+      if (data.pan_number && !CashfreePayoutService.validatePAN(data.pan_number)) {
         set({ loading: false });
         return { success: false, error: 'Invalid PAN format' };
       }
@@ -142,46 +148,33 @@ export const useBankAccountStore = create<BankAccountState>((set, get) => ({
         return { success: false, error: 'Seller not found' };
       }
 
-      // Create or get Razorpay Contact
-      let razorpay_contact_id = seller.razorpay_contact_id;
+      // Generate unique beneficiary ID
+      const beneId = `SELLER_${data.seller_id.substring(0, 8)}_${Date.now()}`;
 
-      if (!razorpay_contact_id) {
-        const contactResult = await RazorpayPayoutService.createContact({
-          name: seller.company_name || seller.users?.name || 'Unknown',
-          email: seller.users?.email || '',
-          phone: seller.users?.phone || ''
-        });
+      // Add beneficiary to Cashfree
+      const beneficiaryResult = await CashfreePayoutService.addBeneficiary({
+        bene_id: beneId,
+        name: data.account_holder_name,
+        email: seller.users?.email || '',
+        phone: seller.users?.phone || '',
+        bank_account: data.account_number,
+        ifsc: data.ifsc_code.toUpperCase(),
+        address1: seller.address || 'Address',
+        city: seller.city || 'City',
+        state: seller.state || 'State',
+        pincode: seller.pincode || '000000'
+      });
 
-        if (!contactResult.success) {
-          console.warn('Razorpay contact creation failed:', contactResult.error);
-          // Continue anyway - can be created later
-        } else {
-          razorpay_contact_id = contactResult.contact_id;
+      let cashfree_beneficiary_id;
+      let verification_status: 'pending' | 'verified' | 'failed' = 'pending';
 
-          // Update seller with contact_id
-          await supabase
-            .from('sellers')
-            .update({ razorpay_contact_id })
-            .eq('id', data.seller_id);
-        }
-      }
-
-      // Create Razorpay Fund Account if contact exists
-      let razorpay_fund_account_id;
-      if (razorpay_contact_id) {
-        const fundAccountResult = await RazorpayPayoutService.createFundAccount({
-          contact_id: razorpay_contact_id,
-          account_holder_name: data.account_holder_name,
-          account_number: data.account_number,
-          ifsc_code: data.ifsc_code
-        });
-
-        if (!fundAccountResult.success) {
-          console.warn('Razorpay fund account creation failed:', fundAccountResult.error);
-          // Continue anyway - can be created later
-        } else {
-          razorpay_fund_account_id = fundAccountResult.fund_account_id;
-        }
+      if (beneficiaryResult.success) {
+        cashfree_beneficiary_id = beneficiaryResult.bene_id;
+        verification_status = 'verified';
+        console.log('Cashfree beneficiary created successfully:', cashfree_beneficiary_id);
+      } else {
+        console.warn('Cashfree beneficiary creation failed:', beneficiaryResult.error);
+        // Continue anyway - account can be verified later
       }
 
       // Save bank account to Supabase
@@ -194,9 +187,11 @@ export const useBankAccountStore = create<BankAccountState>((set, get) => ({
         account_type: data.account_type || 'savings',
         upi_id: data.upi_id,
         pan_number: data.pan_number?.toUpperCase(),
-        razorpay_contact_id,
-        razorpay_fund_account_id,
-        is_verified: false,
+        cashfree_beneficiary_id,
+        cashfree_bene_id: beneId,
+        verification_status,
+        verification_date: verification_status === 'verified' ? new Date().toISOString() : null,
+        is_verified: verification_status === 'verified',
         is_primary: get().bankAccounts.length === 0, // First account is primary
       };
 
@@ -324,18 +319,15 @@ export const useBankAccountStore = create<BankAccountState>((set, get) => ({
 
   // Validation Functions
   validateIFSC: (ifsc) => {
-    const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
-    return ifscRegex.test(ifsc.toUpperCase());
+    return CashfreePayoutService.validateIFSC(ifsc);
   },
 
   validateAccountNumber: (accountNumber) => {
-    const cleaned = accountNumber.replace(/\s/g, '');
-    return /^\d{9,18}$/.test(cleaned);
+    return CashfreePayoutService.validateAccountNumber(accountNumber);
   },
 
   validatePAN: (pan) => {
-    const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-    return panRegex.test(pan.toUpperCase());
+    return CashfreePayoutService.validatePAN(pan);
   },
   fetchPayouts: async (sellerId: string) => {
     try {
