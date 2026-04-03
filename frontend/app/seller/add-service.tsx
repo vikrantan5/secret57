@@ -9,6 +9,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +18,8 @@ import { useAuthStore } from '../../src/store/authStore';
 import { useSellerStore } from '../../src/store/sellerStore';
 import { useServiceStore } from '../../src/store/serviceStore';
 import { useServiceLocationStore } from '../../src/store/serviceLocationStore';
+import { useSubscriptionStore } from '../../src/store/subscriptionStore';
+import { useBankAccountStore } from '../../src/store/bankAccountStore';
 import { getCurrentLocation, getAddressFromCoordinates } from '../../src/services/locationService';
 
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
@@ -31,6 +34,8 @@ export default function AddServiceScreen() {
   const { seller } = useSellerStore();
   const { createService } = useServiceStore();
   const { addServiceLocation, fetchSellerLocations, locations } = useServiceLocationStore();
+  const { currentSubscription, fetchSellerSubscriptions, loading: subscriptionLoading } = useSubscriptionStore();
+  const { bankAccounts, fetchBankAccounts, loading: bankLoading } = useBankAccountStore();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -54,8 +59,14 @@ export default function AddServiceScreen() {
   useEffect(() => {
     if (seller?.id) {
       loadSellerLocations();
+      fetchSellerSubscriptions(seller.id);
+      fetchBankAccounts(seller.id);
     }
   }, [seller?.id]);
+
+  const hasActiveSubscription = currentSubscription && new Date(currentSubscription.expires_at) > new Date();
+  const hasBankAccount = bankAccounts.length > 0;
+  const verifiedBankAccount = bankAccounts.find(acc => acc.verification_status === 'verified');
 
   const loadSellerLocations = async () => {
     if (seller?.id) {
@@ -141,7 +152,7 @@ export default function AddServiceScreen() {
       if (!address.trim()) newErrors.address = 'Service address is required';
       if (!city.trim()) newErrors.city = 'City is required';
       if (!pincode.trim()) newErrors.pincode = 'Pincode is required';
-      if (pincode.trim() && !/^\d{6}$/.test(pincode.trim())) {
+      if (pincode.trim() && !/^d{6}$/.test(pincode.trim())) {
         newErrors.pincode = 'Invalid pincode (6 digits required)';
       }
     }
@@ -249,6 +260,63 @@ export default function AddServiceScreen() {
           <Text style={styles.title}>Add Service</Text>
           <View style={{ width: 24 }} />
         </View>
+
+         {/* Subscription & Bank Account Check */}
+        {(subscriptionLoading || bankLoading) ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Checking requirements...</Text>
+          </View>
+        ) : !hasActiveSubscription || !verifiedBankAccount ? (
+          <View style={styles.restrictionContainer}>
+            <Ionicons name="alert-circle" size={64} color={colors.warning} />
+            <Text style={styles.restrictionTitle}>Requirements Not Met</Text>
+            
+            {!hasActiveSubscription && (
+              <View style={styles.requirementCard}>
+                <Ionicons name="close-circle" size={24} color={colors.error} />
+                <View style={styles.requirementText}>
+                  <Text style={styles.requirementTitle}>Active Subscription Required</Text>
+                  <Text style={styles.requirementDesc}>
+                    You need an active subscription to add services
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {!verifiedBankAccount && (
+              <View style={styles.requirementCard}>
+                <Ionicons name="close-circle" size={24} color={colors.error} />
+                <View style={styles.requirementText}>
+                  <Text style={styles.requirementTitle}>Verified Bank Account Required</Text>
+                  <Text style={styles.requirementDesc}>
+                    Add and verify your bank account to receive payments
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <View style={styles.actionButtons}>
+              {!hasActiveSubscription && (
+                <Button
+                  title="View Subscription Plans"
+                  onPress={() => router.push('/seller/subscription')}
+                  variant="primary"
+                  style={styles.actionButton}
+                />
+              )}
+              {!verifiedBankAccount && (
+                <Button
+                  title="Add Bank Account"
+                  onPress={() => router.push('/seller/payout-settings')}
+                  variant="outline"
+                  style={styles.actionButton}
+                />
+              )}
+            </View>
+          </View>
+        ) : (
+          <>
 
           {/* Service Images */}
         <View style={styles.section}>
@@ -452,6 +520,8 @@ export default function AddServiceScreen() {
             fullWidth
           />
         </View>
+           </>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -604,5 +674,59 @@ const styles = StyleSheet.create({
   advancedToggleText: {
     ...typography.body,
     color: colors.textSecondary,
+  },
+   loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xxl,
+  },
+  loadingText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.md,
+  },
+  restrictionContainer: {
+    flex: 1,
+    alignItems: 'center',
+    padding: spacing.xl,
+    paddingTop: spacing.xxl,
+  },
+  restrictionTitle: {
+    ...typography.h3,
+    color: colors.text,
+    marginTop: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  requirementCard: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+    width: '100%',
+    ...shadows.sm,
+  },
+  requirementText: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  requirementTitle: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '600',
+    marginBottom: spacing.xs / 2,
+  },
+  requirementDesc: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+  },
+  actionButtons: {
+    width: '100%',
+    marginTop: spacing.xl,
+    gap: spacing.md,
+  },
+  actionButton: {
+    width: '100%',
   },
 });

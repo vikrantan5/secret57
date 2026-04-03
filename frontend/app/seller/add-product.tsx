@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +9,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +17,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../src/store/authStore';
 import { useSellerStore } from '../../src/store/sellerStore';
 import { useProductStore } from '../../src/store/productStore';
+import { useSubscriptionStore } from '../../src/store/subscriptionStore';
+import { useBankAccountStore } from '../../src/store/bankAccountStore';
 
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
@@ -28,6 +30,8 @@ export default function AddProductScreen() {
   const { user } = useAuthStore();
   const { seller } = useSellerStore();
   const { createProduct } = useProductStore();
+  const { currentSubscription, fetchSellerSubscriptions, loading: subscriptionLoading } = useSubscriptionStore();
+  const { bankAccounts, fetchBankAccounts, loading: bankLoading } = useBankAccountStore();
 
 
   const [name, setName] = useState('');
@@ -39,6 +43,21 @@ export default function AddProductScreen() {
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<any>({});
+
+
+  
+  // Check subscription and bank account
+  useEffect(() => {
+    if (seller?.id) {
+      fetchSellerSubscriptions(seller.id);
+      fetchBankAccounts(seller.id);
+    }
+  }, [seller?.id]);
+
+  const hasActiveSubscription = currentSubscription && new Date(currentSubscription.expires_at) > new Date();
+  const hasBankAccount = bankAccounts.length > 0;
+  const verifiedBankAccount = bankAccounts.find(acc => acc.verification_status === 'verified');
+
 
   // No longer need to fetch categories or manage categoryId state
 
@@ -173,31 +192,86 @@ export default function AddProductScreen() {
           <View style={{ width: 24 }} />
         </View>
 
-        {/* Product Images */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Product Images</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.imagesContainer}>
-              {images.map((image, index) => (
-                <View key={index} style={styles.imageItem}>
-                  <Image source={{ uri: image }} style={styles.productImage} />
-                  <TouchableOpacity
-                    style={styles.removeButton}
-                    onPress={() => removeImage(index)}
-                  >
-                    <Ionicons name="close-circle" size={24} color={colors.error} />
+        {/* Subscription & Bank Account Check */}
+        {(subscriptionLoading || bankLoading) ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Checking requirements...</Text>
+          </View>
+        ) : !hasActiveSubscription || !verifiedBankAccount ? (
+          <View style={styles.restrictionContainer}>
+            <Ionicons name="alert-circle" size={64} color={colors.warning} />
+            <Text style={styles.restrictionTitle}>Requirements Not Met</Text>
+            
+            {!hasActiveSubscription && (
+              <View style={styles.requirementCard}>
+                <Ionicons name="close-circle" size={24} color={colors.error} />
+                <View style={styles.requirementText}>
+                  <Text style={styles.requirementTitle}>Active Subscription Required</Text>
+                  <Text style={styles.requirementDesc}>
+                    You need an active subscription to add products
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {!verifiedBankAccount && (
+              <View style={styles.requirementCard}>
+                <Ionicons name="close-circle" size={24} color={colors.error} />
+                <View style={styles.requirementText}>
+                  <Text style={styles.requirementTitle}>Verified Bank Account Required</Text>
+                  <Text style={styles.requirementDesc}>
+                    Add and verify your bank account to receive payments
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <View style={styles.actionButtons}>
+              {!hasActiveSubscription && (
+                <Button
+                  title="View Subscription Plans"
+                  onPress={() => router.push('/seller/subscription')}
+                  variant="primary"
+                  style={styles.actionButton}
+                />
+              )}
+              {!verifiedBankAccount && (
+                <Button
+                  title="Add Bank Account"
+                  onPress={() => router.push('/seller/payout-settings')}
+                  variant="outline"
+                  style={styles.actionButton}
+                />
+              )}
+            </View>
+          </View>
+        ) : (
+          <>
+            {/* Product Images */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Product Images</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.imagesContainer}>
+                  {images.map((image, index) => (
+                    <View key={index} style={styles.imageItem}>
+                      <Image source={{ uri: image }} style={styles.productImage} />
+                      <TouchableOpacity
+                        style={styles.removeButton}
+                        onPress={() => removeImage(index)}
+                      >
+                        <Ionicons name="close-circle" size={24} color={colors.error} />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  <TouchableOpacity style={styles.addImageButton} onPress={pickImages}>
+                    <Ionicons name="add-circle" size={32} color={colors.primary} />
+                    <Text style={styles.addImageText}>Add Images</Text>
                   </TouchableOpacity>
                 </View>
-              ))}
-              <TouchableOpacity style={styles.addImageButton} onPress={pickImages}>
-                <Ionicons name="add-circle" size={32} color={colors.primary} />
-                <Text style={styles.addImageText}>Add Images</Text>
-              </TouchableOpacity>
+              </ScrollView>
             </View>
-          </ScrollView>
-        </View>
-
-        {/* Product Details */}
+             {/* Product Details */}
         <View style={styles.section}>
           <Input
             label="Product Name *"
@@ -257,11 +331,12 @@ export default function AddProductScreen() {
             fullWidth
           />
         </View>
+          </>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -345,5 +420,59 @@ const styles = StyleSheet.create({
   footer: {
     padding: spacing.lg,
     paddingBottom: spacing.xxl,
+  },
+    loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xxl,
+  },
+  loadingText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.md,
+  },
+  restrictionContainer: {
+    flex: 1,
+    alignItems: 'center',
+    padding: spacing.xl,
+    paddingTop: spacing.xxl,
+  },
+  restrictionTitle: {
+    ...typography.h3,
+    color: colors.text,
+    marginTop: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  requirementCard: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+    width: '100%',
+    ...shadows.sm,
+  },
+  requirementText: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  requirementTitle: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '600',
+    marginBottom: spacing.xs / 2,
+  },
+  requirementDesc: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+  },
+  actionButtons: {
+    width: '100%',
+    marginTop: spacing.xl,
+    gap: spacing.md,
+  },
+  actionButton: {
+    width: '100%',
   },
 });
