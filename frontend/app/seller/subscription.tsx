@@ -65,20 +65,20 @@ export default function SellerSubscription() {
       return;
     }
 
-    if (!user?.email || !seller.phone) {
+    if (!user?.email || !user?.phone) {
       Alert.alert('Error', 'Please complete your profile with email and phone number');
       return;
     }
 
     setSelectedPlan(plan);
 
-    try {
+ try {
       const result = await createSubscriptionOrder({
         seller_id: seller.id,
         plan_id: plan.id,
-        seller_name: seller.business_name || user.email,
+        seller_name: seller.company_name || user.name || user.email,
         seller_email: user.email,
-        seller_phone: seller.phone,
+        seller_phone: user.phone,
       });
 
       if (!result.success) {

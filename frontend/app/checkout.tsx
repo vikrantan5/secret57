@@ -464,8 +464,7 @@ export default function CheckoutScreen() {
       {showCashfree && cashfreeSessionId && (
         <CashfreePayment
           visible={showCashfree}
-          sessionId={cashfreeSessionId}
-          orderId={cashfreeOrderId}
+          paymentSessionId={cashfreeSessionId}
           onSuccess={handlePaymentSuccess}
           onFailure={handlePaymentFailure}
           onCancel={handlePaymentCancel}
