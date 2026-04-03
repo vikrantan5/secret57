@@ -62,11 +62,12 @@ export default function CheckoutScreen() {
       });
     }
   }, [user]);
+
   const deliveryCharges = 0; // FREE delivery
   const discount = 0;
   const finalTotal = total + deliveryCharges - discount;
 
-   const handlePayment = async () => {
+  const handlePayment = async () => {
     // Validate shipping info
     if (!shippingInfo.name || !shippingInfo.phone || !shippingInfo.address || 
         !shippingInfo.city || !shippingInfo.state || !shippingInfo.pincode) {
@@ -80,14 +81,14 @@ export default function CheckoutScreen() {
       return;
     }
 
-      // Prevent duplicate order creation
+    // Prevent duplicate order creation
     if (loading || processingPayment) {
       Alert.alert('Please Wait', 'Your order is being processed. Please do not press back or refresh.');
       return;
     }
 
-
     setLoading(true);
+    setProcessingPayment(true);
 
     try {
       // Step 1: Create order in database
@@ -114,7 +115,7 @@ export default function CheckoutScreen() {
       const orderId = result.order.id;
       setCurrentOrderId(orderId);
 
-    console.log('Order created, ID:', orderId);
+      console.log('Order created, ID:', orderId);
 
       // Step 2: Create Cashfree order via Service
       console.log('Creating Cashfree order for amount:', finalTotal);
@@ -126,7 +127,7 @@ export default function CheckoutScreen() {
         customer_name: shippingInfo.name,
         customer_email: user.email || '',
         customer_phone: shippingInfo.phone,
-        return_url: 'https://yourapp.com/payment-success', // Update with your actual URL
+        return_url: 'https://hybrid-bazaar.preview.emergentagent.com/payment-success',
       });
 
       console.log('Cashfree order result:', cashfreeOrderResult);
@@ -150,7 +151,7 @@ export default function CheckoutScreen() {
       console.error('Checkout error:', error);
       Alert.alert('Error', error.message || 'Failed to process checkout');
       setLoading(false);
-        setProcessingPayment(false);
+      setProcessingPayment(false);
     }
   };
 
@@ -248,51 +249,23 @@ export default function CheckoutScreen() {
       );
     }
   };
+
   const handlePaymentFailure = (error: string) => {
     console.error('Payment failed:', error);
     setShowCashfree(false);
     setLoading(false);
     setProcessingPayment(false);
     
-    Alert.alert('Payment Failed', error || 'Payment was cancelled or failed');
-  };
-
-  const handlePaymentCancel = () => {
-    console.log('Payment cancelled by user');
-    setShowCashfree(false);
-    setLoading(false);
-    setProcessingPayment(false);
-  };
-    let errorMessage = 'Payment was not successful. Please try again.';
-    
-    if (error?.description) {
-      errorMessage = error.description;
-    } else if (error?.error) {
-      errorMessage = error.error;
-    } else if (error?.message) {
-      errorMessage = error.message;
-    }
-    
-    // Add specific error codes
-    if (error?.code) {
-      errorMessage += `
-
-Error Code: ${error.code}`;
-    }
-    
-    if (error?.reason) {
-      errorMessage += `
-Reason: ${error.reason}`;
-    }
-    
-    console.log('Formatted error message:', errorMessage);
     Alert.alert(
       'Payment Failed', 
-      errorMessage,
+      error || 'Payment was cancelled or failed. Please try again.',
       [
         {
           text: 'Try Again',
-          onPress: () => handlePayment(),
+          onPress: () => {
+            setShowCashfree(false);
+            setProcessingPayment(false);
+          },
         },
         {
           text: 'Cancel',
@@ -302,49 +275,27 @@ Reason: ${error.reason}`;
     );
   };
 
-  const handlePaymentClose = () => {
-    setShowRazorpay(false);
+  const handlePaymentCancel = () => {
+    console.log('Payment cancelled by user');
+    setShowCashfree(false);
     setLoading(false);
     setProcessingPayment(false);
-  };
-  const simulatePayment = async (orderId: string) => {
-    // Simulate payment processing
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // Simulate successful payment
-    const paymentData = {
-      method: 'razorpay',
-      razorpay_order_id: `order_${Date.now()}`,
-      razorpay_payment_id: `pay_${Date.now()}`,
-      razorpay_signature: 'simulated_signature',
-    };
-
-    const paymentResult = await updatePaymentStatus(orderId, paymentData);
-
-    if (paymentResult.success) {
-      // Clear cart
-      clearCart();
-      
-      setLoading(false);
-      
-      Alert.alert(
-        'Order Placed Successfully!',
-        'Your order has been placed and payment confirmed',
-        [
-          {
-            text: 'View Order',
-            onPress: () => router.replace('/orders'),
-          },
-          {
-            text: 'Continue Shopping',
-            onPress: () => router.replace('/(tabs)/home'),
-          },
-        ]
-      );
-    } else {
-      setLoading(false);
-      Alert.alert('Error', 'Payment verification failed');
-    }
+    
+    Alert.alert(
+      'Payment Cancelled',
+      'You cancelled the payment. Your order is still pending.',
+      [
+        {
+          text: 'Try Again',
+          onPress: () => handlePayment(),
+        },
+        {
+          text: 'Go Back',
+          style: 'cancel',
+          onPress: () => router.back(),
+        },
+      ]
+    );
   };
 
   return (
@@ -472,7 +423,7 @@ Reason: ${error.reason}`;
           <View style={styles.paymentInfoRow}>
             <Ionicons name="shield-checkmark" size={20} color={colors.success} />
             <Text style={styles.paymentInfoText}>
-              Secure payment powered by Razorpay
+              Secure payment powered by Cashfree
             </Text>
           </View>
           <View style={styles.paymentInfoRow}>
@@ -495,7 +446,7 @@ Reason: ${error.reason}`;
         <TouchableOpacity
           style={[styles.placeOrderButton, loading && styles.disabledButton]}
           onPress={handlePayment}
-          disabled={loading}
+          disabled={loading || processingPayment}
           data-testid="place-order-button"
         >
           {loading ? (
@@ -508,21 +459,16 @@ Reason: ${error.reason}`;
           )}
         </TouchableOpacity>
       </View>
-        {/* Razorpay Payment Modal */}
-      {showRazorpay && (
-        <RazorpayPayment
-          visible={showRazorpay}
-          orderId={razorpayOrderId}
-          amount={finalTotal}
+
+      {/* Cashfree Payment Modal */}
+      {showCashfree && cashfreeSessionId && (
+        <CashfreePayment
+          visible={showCashfree}
+          sessionId={cashfreeSessionId}
+          orderId={cashfreeOrderId}
           onSuccess={handlePaymentSuccess}
           onFailure={handlePaymentFailure}
-          onClose={handlePaymentClose}
-          customerDetails={{
-            name: shippingInfo.name,
-            email: user?.email || '',
-            contact: shippingInfo.phone,
-          }}
-          description="Product Order Payment"
+          onCancel={handlePaymentCancel}
         />
       )}
     </SafeAreaView>
@@ -579,7 +525,6 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.primary,
     fontWeight: '600',
-
   },
   inputLabel: {
     ...typography.body,

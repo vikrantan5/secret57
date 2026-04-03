@@ -23,8 +23,8 @@ import { usePaymentStore } from '../../src/store/paymentStore';
 import { useAddressStore } from '../../src/store/addressStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { YouTubePlayerComponent } from '../../src/components/ui/YouTubePlayer';
-import { RazorpayPayment } from '../../src/components/RazorpayPayment';
-import { createRazorpayOrder, verifyRazorpayPayment } from '../../src/services/razorpayEdgeFunctions';
+// import { RazorpayPayment } from '../../src/components/RazorpayPayment';
+// import { createRazorpayOrder, verifyRazorpayPayment } from '../../src/services/razorpayEdgeFunctions';
 
 const { width } = Dimensions.get('window');
 
