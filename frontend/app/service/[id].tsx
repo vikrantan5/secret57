@@ -45,6 +45,7 @@ export default function ServiceDetailScreen() {
   const [currentBookingId, setCurrentBookingId] = useState<string>('');
   const [cashfreeSessionId, setCashfreeSessionId] = useState<string>('');
   const [cashfreeOrderId, setCashfreeOrderId] = useState<string>('');
+    const [cashfreePaymentUrl, setCashfreePaymentUrl] = useState<string>('');
   const [bookingData, setBookingData] = useState({
     date: '',
     time: '',
@@ -183,9 +184,11 @@ export default function ServiceDetailScreen() {
 
       const orderId = cashfreeOrderResult.data.order_id;
       const sessionId = cashfreeOrderResult.data.payment_session_id;
+       const paymentUrl = cashfreeOrderResult.data.payment_url;
       
       setCashfreeOrderId(orderId);
       setCashfreeSessionId(sessionId);
+      setCashfreePaymentUrl(paymentUrl || '');
       
       console.log('Cashfree order created successfully:', orderId);
 
@@ -657,6 +660,7 @@ export default function ServiceDetailScreen() {
         <CashfreePayment
           visible={showCashfree}
           paymentSessionId={cashfreeSessionId}
+          paymentUrl={cashfreePaymentUrl}
           onSuccess={handlePaymentSuccess}
           onFailure={handlePaymentFailure}
           onCancel={handlePaymentCancel}

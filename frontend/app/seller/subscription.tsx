@@ -90,6 +90,7 @@ export default function SellerSubscription() {
       setOrderData(result.order_data);
       setPaymentSessionId(result.order_data.payment_session_id);
       setPaymentVisible(true);
+         console.log('Payment URL:', result.order_data.payment_url || 'Using fallback URL');
     } catch (error: any) {
       console.error('Subscription error:', error);
       Alert.alert('Error', error.message || 'Failed to initiate subscription');
@@ -348,11 +349,12 @@ export default function SellerSubscription() {
         </View>
       </ScrollView>
 
-      {/* Payment Modal */}
-      {paymentVisible && paymentSessionId && (
+         {/* Payment Modal */}
+      {paymentVisible && paymentSessionId && orderData && (
         <CashfreePayment
           visible={paymentVisible}
           paymentSessionId={paymentSessionId}
+          paymentUrl={orderData.payment_url}
           onSuccess={handlePaymentSuccess}
           onFailure={handlePaymentFailure}
           onCancel={handlePaymentCancel}

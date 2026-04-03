@@ -157,11 +157,17 @@ export class CashfreeService {
 
   /**
    * Get payment session URL for WebView
-   * Using Cashfree Checkout page
+   * Now returns the payment_url from API response directly
    */
-  getPaymentSessionUrl(paymentSessionId: string): string {
-    // Use the payment_session_id directly with Cashfree's checkout URL
-    return `https://payments-test.cashfree.com/order/#${paymentSessionId}`;
+  getPaymentSessionUrl(paymentSessionId: string, paymentUrl?: string): string {
+    // If payment_url is provided from API response, use it directly
+    if (paymentUrl) {
+      return paymentUrl;
+    }
+    
+    // Fallback: Use Cashfree's order pay endpoint
+    // This is the correct format for sandbox environment
+    return `https://sandbox.cashfree.com/pg/orders/pay/${paymentSessionId}`;
   }
 }
 

@@ -8,6 +8,7 @@ import CashfreeService from '../services/cashfreeService';
 interface CashfreePaymentProps {
   visible: boolean;
   paymentSessionId: string;
+  paymentUrl?: string; // Optional: Direct payment URL from API
   onSuccess: (paymentId: string, orderId: string) => void;
   onFailure: (error: string) => void;
   onCancel: () => void;
@@ -16,6 +17,7 @@ interface CashfreePaymentProps {
 export default function CashfreePayment({
   visible,
   paymentSessionId,
+  paymentUrl: providedPaymentUrl,
   onSuccess,
   onFailure,
   onCancel,
@@ -23,7 +25,7 @@ export default function CashfreePayment({
   const webViewRef = useRef<WebView>(null);
   const [loading, setLoading] = React.useState(true);
 
-  const paymentUrl = CashfreeService.getPaymentSessionUrl(paymentSessionId);
+  const paymentUrl = CashfreeService.getPaymentSessionUrl(paymentSessionId, providedPaymentUrl);
 
   const handleWebViewNavigationStateChange = (navState: any) => {
     const { url } = navState;

@@ -96,6 +96,11 @@ serve(async (req) => {
 
     console.log('Cashfree order created successfully:', responseData.order_id);
 
+    // Get the payment URL from order response
+    // Cashfree returns payment_link in the response for direct payment
+    const paymentUrl = responseData.payment_link || 
+                       `https://sandbox.cashfree.com/pg/orders/pay/${responseData.payment_session_id}`;
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -103,7 +108,8 @@ serve(async (req) => {
           order_id: responseData.order_id,
           payment_session_id: responseData.payment_session_id,
           order_token: responseData.order_token,
-          order_status: responseData.order_status
+          order_status: responseData.order_status,
+          payment_url: paymentUrl
         }
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
