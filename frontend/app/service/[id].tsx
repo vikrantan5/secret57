@@ -23,8 +23,8 @@ import { usePaymentStore } from '../../src/store/paymentStore';
 import { useAddressStore } from '../../src/store/addressStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { YouTubePlayerComponent } from '../../src/components/ui/YouTubePlayer';
-// import { RazorpayPayment } from '../../src/components/RazorpayPayment';
-// import { createRazorpayOrder, verifyRazorpayPayment } from '../../src/services/razorpayEdgeFunctions';
+import CashfreePayment from '../../src/components/CashfreePayment';
+import CashfreeService from '../../src/services/cashfreeService';
 
 const { width } = Dimensions.get('window');
 
@@ -41,9 +41,10 @@ export default function ServiceDetailScreen() {
   
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
-    const [showRazorpay, setShowRazorpay] = useState(false);
+  const [showCashfree, setShowCashfree] = useState(false);
   const [currentBookingId, setCurrentBookingId] = useState<string>('');
-  const [razorpayOrderId, setRazorpayOrderId] = useState<string>('');
+  const [cashfreeSessionId, setCashfreeSessionId] = useState<string>('');
+  const [cashfreeOrderId, setCashfreeOrderId] = useState<string>('');
   const [bookingData, setBookingData] = useState({
     date: '',
     time: '',
@@ -155,30 +156,42 @@ export default function ServiceDetailScreen() {
 
       console.log('Booking created, ID:', bookingId);
 
-      // Step 2: Create Razorpay order via Edge Function
+      // Step 2: Create Cashfree order for direct seller payment
       const amount = selectedService?.price || 0;
-      console.log('Creating Razorpay order for booking, amount:', amount);
+      console.log('Creating Cashfree order for booking, amount:', amount);
       
-      const razorpayOrderResult = await createRazorpayOrder({
-        amount: amount,
-        currency: 'INR',
-        receipt: bookingId,
-      });
-
-      console.log('Razorpay order result:', razorpayOrderResult);
-
-      if (!razorpayOrderResult.success || !razorpayOrderResult.order_id) {
-        throw new Error(razorpayOrderResult.error || 'Failed to create Razorpay order');
+      if (!user.email || !user.phone) {
+        throw new Error('Please update your profile with email and phone number');
       }
 
-      const razorpayId = razorpayOrderResult.order_id;
-      setRazorpayOrderId(razorpayId);
-      
-      console.log('Razorpay order created successfully:', razorpayId);
+      const cashfreeOrderResult = await CashfreeService.createOrder({
+        amount: amount,
+        currency: 'INR',
+        order_note: `Service Booking: ${selectedService?.name}`,
+        customer_id: user.id,
+        customer_name: user.name || 'Customer',
+        customer_email: user.email,
+        customer_phone: user.phone,
+        return_url: 'https://yourapp.com/booking-success',
+      });
 
-      // Step 3: Open Razorpay payment gateway
+      console.log('Cashfree order result:', cashfreeOrderResult);
+
+      if (!cashfreeOrderResult.success || !cashfreeOrderResult.data) {
+        throw new Error(cashfreeOrderResult.error || 'Failed to create Cashfree order');
+      }
+
+      const orderId = cashfreeOrderResult.data.order_id;
+      const sessionId = cashfreeOrderResult.data.payment_session_id;
+      
+      setCashfreeOrderId(orderId);
+      setCashfreeSessionId(sessionId);
+      
+      console.log('Cashfree order created successfully:', orderId);
+
+      // Step 3: Open Cashfree payment gateway
       setProcessingPayment(false);
-      setShowRazorpay(true);
+      setShowCashfree(true);
 
     } catch (error: any) {
       console.error('Booking error:', error);
@@ -187,50 +200,39 @@ export default function ServiceDetailScreen() {
     }
   };
 
-   const handlePaymentSuccess = async (response: any) => {
-    console.log('Service payment successful:', response);
-    setShowRazorpay(false);
+   const handlePaymentSuccess = async (paymentId: string, orderId: string) => {
+    console.log('Service payment successful - Payment ID:', paymentId, 'Order ID:', orderId);
+    setShowCashfree(false);
     setProcessingPayment(true);
 
     try {
       const amount = selectedService?.price || 0;
 
-      // Step 1: Verify payment signature via Edge Function
-      console.log('Verifying service booking payment signature...');
-      const verificationResult = await verifyRazorpayPayment({
-        razorpay_order_id: response.razorpay_order_id || razorpayOrderId,
-        razorpay_payment_id: response.razorpay_payment_id,
-        razorpay_signature: response.razorpay_signature || '',
-      });
+      console.log('Payment completed successfully!');
 
-      console.log('Verification result:', verificationResult);
-
-      if (!verificationResult.success || !verificationResult.verified) {
-        throw new Error(verificationResult.error || 'Payment verification failed');
-      }
-
-      console.log('Payment verified successfully!');
-
-      // Step 2: Create payment record
+      // Step 1: Create payment record
       console.log('Creating payment record for booking:', currentBookingId);
       const paymentResult = await createPayment({
         booking_id: currentBookingId,
         amount: amount,
-        payment_method: 'razorpay',
+        payment_method: 'cashfree',
       });
 
       if (paymentResult.success && paymentResult.payment) {
         console.log('Payment record created:', paymentResult.payment.id);
         
-        // Step 3: Update payment status
+        // Step 2: Update payment status with Cashfree details
         await updatePaymentStatus(
           paymentResult.payment.id,
           'success',
-          response
+          {
+            cashfree_payment_id: paymentId,
+            cashfree_order_id: orderId,
+          }
         );
         console.log('Payment status updated to success');
 
-        // Step 4: Auto-confirm booking after successful payment
+        // Step 3: Auto-confirm booking after successful payment
         const { updateBookingStatus } = require('../../src/store/bookingStore').useBookingStore.getState();
         await updateBookingStatus(currentBookingId, 'confirmed');
         console.log('Booking status updated to confirmed');
@@ -260,65 +262,18 @@ export default function ServiceDetailScreen() {
       setProcessingPayment(false);
       Alert.alert(
         'Payment Verification Error',
-        error.message || 'Payment successful but verification failed. Please contact support with your payment ID: ' + response.razorpay_payment_id
+        error.message || 'Payment successful but verification failed. Please contact support with your payment ID: ' + paymentId
       );
     }
   };
-  const handlePaymentFailure = (error: any) => {
+   const handlePaymentFailure = (error: string) => {
     console.error('Service payment failed:', error);
-    setShowRazorpay(false);
+    setShowCashfree(false);
     setProcessingPayment(false);
-    
-    // Show detailed error message with better formatting
-    let errorMessage = 'Payment was not successful. Please try again.';
-    
-    if (error?.description) {
-      errorMessage = error.description;
-    } else if (error?.error) {
-      errorMessage = error.error;
-    } else if (error?.message) {
-      errorMessage = error.message;
-    }
-    
-    // Add specific error codes
-    if (error?.code) {
-      errorMessage += `
-
-Error Code: ${error.code}`;
-    }
-    
-    if (error?.reason) {
-      errorMessage += `
-Reason: ${error.reason}`;
-    }
-    
-    console.log('Formatted error message:', errorMessage);
-    
-//     if (error?.description) {
-//       errorMessage = error.description;
-//     } else if (error?.error) {
-//       errorMessage = error.error;
-//     } else if (error?.message) {
-//       errorMessage = error.message;
-//     }
-    
-//     // Add specific error codes
-//     if (error?.code) {
-//       errorMessage += `
-
-// Error Code: ${error.code}`;
-//     }
-    
-//     if (error?.reason) {
-//       errorMessage += `
-// Reason: ${error.reason}`;
-//     }
-    
-//     console.log('Formatted error message:', errorMessage);
     
     Alert.alert(
       'Payment Failed',
-      errorMessage,
+      error || 'Payment was not successful. Please try again.',
       [
         {
           text: 'Try Again',
@@ -331,10 +286,12 @@ Reason: ${error.reason}`;
       ]
     );
   };
-  const handlePaymentClose = () => {
-    setShowRazorpay(false);
+
+  const handlePaymentCancel = () => {
+    setShowCashfree(false);
     setProcessingPayment(false);
   };
+
 
   if (loading || !selectedService) {
     return (
@@ -695,21 +652,14 @@ Reason: ${error.reason}`;
         </View>
       )}
 
-        {/* Razorpay Payment Modal */}
-      {showRazorpay && (
-        <RazorpayPayment
-          visible={showRazorpay}
-          orderId={razorpayOrderId}
-          amount={selectedService?.price || 0}
+        {/* Cashfree Payment Modal */}
+      {showCashfree && cashfreeSessionId && (
+        <CashfreePayment
+          visible={showCashfree}
+          paymentSessionId={cashfreeSessionId}
           onSuccess={handlePaymentSuccess}
           onFailure={handlePaymentFailure}
-          onClose={handlePaymentClose}
-          customerDetails={{
-            name: user?.name || '',
-            email: user?.email || '',
-            contact: user?.phone || '',
-          }}
-          description={`${selectedService?.name || 'Service'} Booking`}
+          onCancel={handlePaymentCancel}
         />
       )}
     </SafeAreaView>
