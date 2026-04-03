@@ -131,22 +131,20 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
         <div class="info">${description}</div>
         <div class="amount">₹${amount.toFixed(2)}</div>
                <!-- Test Mode Info -->
-        <div style="background: #FEF3C7; padding: 12px; border-radius: 8px; margin: 15px 0; font-size: 13px; color: #92400E; text-align: left;">
-          <strong>📝 Test Mode - Use Indian Test Cards:</strong><br>
-          <div style="font-family: monospace; margin-top: 8px; background: white; padding: 8px; border-radius: 4px;">
-            <strong>Mastercard (Domestic):</strong><br>
-            Card: 5104 0155 5555 5558<br>
-            CVV: Any 3 digits (e.g., 123)<br>
-            Expiry: Any future date (e.g., 12/30)<br>
-            <br>
-            <strong>Visa (Domestic):</strong><br>
-            Card: 4718 6091 0820 4366<br>
-            CVV: Any 3 digits (e.g., 123)<br>
-            Expiry: Any future date (e.g., 12/30)<br>
+        <div style="background: #10B981; padding: 16px; border-radius: 8px; margin: 15px 0; font-size: 14px; color: white; text-align: left;">
+          <strong style="font-size: 16px;">🎯 RAZORPAY TEST MODE - HOW TO TEST:</strong><br>
+          <div style="margin-top: 12px; background: rgba(255,255,255,0.25); padding: 14px; border-radius: 6px; line-height: 1.9;">
+            <strong style="font-size: 15px;">✅ METHOD 1: Using Test Card (Recommended)</strong><br>
+            <strong>1.</strong> Click on <strong>"Cards"</strong> option<br>
+            <strong>2.</strong> Enter: <span style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 3px; font-family: monospace;">4111 1111 1111 1111</span><br>
+            <strong>3.</strong> CVV: <span style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 3px; font-family: monospace;">123</span> | Expiry: <span style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 3px; font-family: monospace;">12/30</span><br>
+            <strong>4.</strong> Click <strong>"Pay"</strong> button<br>
+            <strong>5.</strong> On next page, click <strong>"Success"</strong> button<br>
           </div>
-          <div style="margin-top: 8px; font-size: 12px;">
-            ⚠️ Only Indian domestic test cards work. International cards will be rejected.<br>
-            💡 On the payment page, click "Success" to complete payment.
+          <div style="margin-top: 10px; font-size: 12px; background: rgba(255,255,255,0.15); padding: 10px; border-radius: 6px;">
+            💡 <strong>Note:</strong> If card doesn't work, try:<br>
+            • Card: 5555 5555 5555 4444 (Mastercard)<br>
+            • Or any other payment method available
           </div>
         </div>
         
@@ -293,6 +291,14 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
               rzp.on('payment.failed', function (response) {
                 logDebug('Payment failed: ' + JSON.stringify(response.error));
                 var errorMsg = response.error.description || response.error.reason || 'Payment failed';
+               // Handle specific error cases
+                if (response.error.code === 'BAD_REQUEST_ERROR') {
+                  if (response.error.reason === 'card_number_invalid') {
+                    errorMsg = '⚠️ Card validation failed. In TEST MODE, try using card: 4111 1111 1111 1111 (CVV: 123, Expiry: 12/30). After entering card details, click "Pay" then click "Success" button on the next page.';
+                  } else if (response.error.description && response.error.description.includes('another method')) {
+                    errorMsg = '⚠️ This payment method is not available in test mode. Please try the Cards option: Click "Cards" → Enter 4111 1111 1111 1111 → CVV: 123 → Expiry: 12/30 → Click "Pay" → Click "Success" on next page.';
+                  }
+                }
                 window.ReactNativeWebView.postMessage(JSON.stringify({
                   type: 'failure',
                   data: {
