@@ -18,11 +18,8 @@ import { useOrderStore } from '../src/store/orderStore';
 import { usePaymentStore } from '../src/store/paymentStore';
 import { useAddressStore } from '../src/store/addressStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../src/constants/theme';
-import { RazorpayPayment } from '../src/components/RazorpayPayment';
-import { createRazorpayOrder, verifyRazorpayPayment } from '../src/services/razorpayEdgeFunctions';
-
-// Note: Using Razorpay test credentials
-const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_RVeELbQdxuBBiv';
+import CashfreePayment from '../src/components/CashfreePayment';
+import CashfreeService from '../src/services/cashfreeService';
 
 export default function CheckoutScreen() {
   const router = useRouter();
@@ -33,10 +30,11 @@ export default function CheckoutScreen() {
   const { addresses, getDefaultAddress, fetchUserAddresses } = useAddressStore();
   
   const [loading, setLoading] = useState(false);
-    const [processingPayment, setProcessingPayment] = useState(false);
-  const [showRazorpay, setShowRazorpay] = useState(false);
+  const [processingPayment, setProcessingPayment] = useState(false);
+  const [showCashfree, setShowCashfree] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
-  const [razorpayOrderId, setRazorpayOrderId] = useState<string>('');
+  const [cashfreeSessionId, setCashfreeSessionId] = useState<string>('');
+  const [cashfreeOrderId, setCashfreeOrderId] = useState<string>('');
   const [shippingInfo, setShippingInfo] = useState({
     name: user?.name || '',
     phone: user?.phone || '',
@@ -116,30 +114,37 @@ export default function CheckoutScreen() {
       const orderId = result.order.id;
       setCurrentOrderId(orderId);
 
-   console.log('Order created, ID:', orderId);
+    console.log('Order created, ID:', orderId);
 
-      // Step 2: Create Razorpay order via Edge Function
-      console.log('Creating Razorpay order for amount:', finalTotal);
-      const razorpayOrderResult = await createRazorpayOrder({
+      // Step 2: Create Cashfree order via Service
+      console.log('Creating Cashfree order for amount:', finalTotal);
+      const cashfreeOrderResult = await CashfreeService.createOrder({
         amount: finalTotal,
         currency: 'INR',
-        receipt: orderId,
+        order_note: `Order #${orderId}`,
+        customer_id: user.id,
+        customer_name: shippingInfo.name,
+        customer_email: user.email || '',
+        customer_phone: shippingInfo.phone,
+        return_url: 'https://yourapp.com/payment-success', // Update with your actual URL
       });
 
-      console.log('Razorpay order result:', razorpayOrderResult);
+      console.log('Cashfree order result:', cashfreeOrderResult);
 
-      if (!razorpayOrderResult.success || !razorpayOrderResult.order_id) {
-        throw new Error(razorpayOrderResult.error || 'Failed to create Razorpay order');
+      if (!cashfreeOrderResult.success || !cashfreeOrderResult.data) {
+        throw new Error(cashfreeOrderResult.error || 'Failed to create Cashfree order');
       }
 
-      const razorpayId = razorpayOrderResult.order_id;
-      setRazorpayOrderId(razorpayId);
+      const cfOrderId = cashfreeOrderResult.data.order_id;
+      const cfSessionId = cashfreeOrderResult.data.payment_session_id;
+      setCashfreeOrderId(cfOrderId);
+      setCashfreeSessionId(cfSessionId);
       
-      console.log('Razorpay order created successfully:', razorpayId);
+      console.log('Cashfree order created successfully:', cfOrderId);
 
-      // Step 3: Open Razorpay payment gateway
+      // Step 3: Open Cashfree payment gateway
       setLoading(false);
-      setShowRazorpay(true);
+      setShowCashfree(true);
 
     } catch (error: any) {
       console.error('Checkout error:', error);
@@ -149,24 +154,26 @@ export default function CheckoutScreen() {
     }
   };
 
-  const handlePaymentSuccess = async (response: any) => {
-    console.log('Payment successful:', response);
-    setShowRazorpay(false);
+  const handlePaymentSuccess = async (paymentId: string, orderId: string) => {
+    console.log('Payment successful:', { paymentId, orderId });
+    setShowCashfree(false);
     setLoading(true);
 
     try {
-      // Step 1: Verify payment signature via Edge Function
-      console.log('Verifying payment signature...');
-      const verificationResult = await verifyRazorpayPayment({
-        razorpay_order_id: response.razorpay_order_id || razorpayOrderId,
-        razorpay_payment_id: response.razorpay_payment_id,
-        razorpay_signature: response.razorpay_signature || '',
-      });
+      // Step 1: Verify payment via Cashfree
+      console.log('Verifying payment...');
+      const verificationResult = await CashfreeService.verifyPayment(orderId);
 
       console.log('Verification result:', verificationResult);
 
-      if (!verificationResult.success || !verificationResult.verified) {
+      if (!verificationResult.success || !verificationResult.data) {
         throw new Error(verificationResult.error || 'Payment verification failed');
+      }
+
+      const paymentStatus = verificationResult.data.payment_status || verificationResult.data.order_status;
+      
+      if (paymentStatus !== 'SUCCESS' && paymentStatus !== 'PAID') {
+        throw new Error(`Payment status: ${paymentStatus}`);
       }
 
       console.log('Payment verified successfully!');
@@ -176,36 +183,37 @@ export default function CheckoutScreen() {
       const paymentResult = await createPayment({
         order_id: currentOrderId,
         amount: finalTotal,
-        payment_method: 'razorpay',
+        payment_method: 'cashfree',
       });
 
       if (paymentResult.success && paymentResult.payment) {
         console.log('Payment record created:', paymentResult.payment.id);
         
-        // Step 3: Update payment status with Razorpay details
+        // Step 3: Update payment status with Cashfree details
         await updatePaymentStatusInStore(
           paymentResult.payment.id,
           'success',
-          response
+          {
+            cashfree_order_id: orderId,
+            cashfree_payment_id: paymentId,
+            payment_status: paymentStatus,
+          }
         );
         console.log('Payment status updated to success');
 
         // Step 4: Update order payment status
         const paymentData = {
-          method: 'razorpay',
-          razorpay_order_id: response.razorpay_order_id || razorpayOrderId,
-          razorpay_payment_id: response.razorpay_payment_id,
-          razorpay_signature: response.razorpay_signature,
+          method: 'cashfree',
+          cashfree_order_id: orderId,
+          cashfree_payment_id: paymentId,
         };
         await updatePaymentStatus(currentOrderId, paymentData);
         console.log('Order payment status updated');
 
-        
         // Step 4.5: Update order status to processing
         const { updateOrderStatus: updateStatus } = require('../src/store/orderStore').useOrderStore.getState();
         await updateStatus(currentOrderId, 'processing');
         console.log('Order status updated to processing');
-
 
         // Step 5: Clear cart
         clearCart();
@@ -233,21 +241,28 @@ export default function CheckoutScreen() {
     } catch (error: any) {
       console.error('Payment record error:', error);
       setLoading(false);
-         setProcessingPayment(false);
+      setProcessingPayment(false);
       Alert.alert(
         'Payment Verification Error',
-        error.message || 'Payment successful but verification failed. Please contact support with your payment ID: ' + response.razorpay_payment_id
+        error.message || 'Payment successful but verification failed. Please contact support with your payment ID: ' + paymentId
       );
     }
   };
-
-  const handlePaymentFailure = (error: any) => {
+  const handlePaymentFailure = (error: string) => {
     console.error('Payment failed:', error);
-    setShowRazorpay(false);
+    setShowCashfree(false);
     setLoading(false);
     setProcessingPayment(false);
     
-    // Show detailed error message with better formatting
+    Alert.alert('Payment Failed', error || 'Payment was cancelled or failed');
+  };
+
+  const handlePaymentCancel = () => {
+    console.log('Payment cancelled by user');
+    setShowCashfree(false);
+    setLoading(false);
+    setProcessingPayment(false);
+  };
     let errorMessage = 'Payment was not successful. Please try again.';
     
     if (error?.description) {

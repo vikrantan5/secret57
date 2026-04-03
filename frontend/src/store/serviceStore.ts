@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '../services/supabase';
+import { useSubscriptionStore } from './subscriptionStore';
+import { useBankAccountStore } from './bankAccountStore';
 
 export interface Service {
   id: string;
@@ -125,6 +127,30 @@ export const useServiceStore = create<ServiceState>((set, get) => ({
 
   createService: async (service) => {
     try {
+      // Check active subscription
+      if (service.seller_id) {
+        const hasActiveSubscription = await useSubscriptionStore.getState().hasActiveSubscription(service.seller_id);
+        if (!hasActiveSubscription) {
+          return { 
+            success: false, 
+            error: 'Active subscription required. Please subscribe to a plan to add services.' 
+          };
+        }
+
+        // Check bank account
+        const bankAccounts = useBankAccountStore.getState().accounts;
+        const hasValidBank = bankAccounts.some(
+          acc => acc.seller_id === service.seller_id && acc.verification_status === 'verified'
+        );
+        
+        if (!hasValidBank) {
+          return { 
+            success: false, 
+            error: 'Verified bank account required. Please add and verify your bank details in Payout Settings.' 
+          };
+        }
+      }
+
       const { data, error } = await supabase
         .from('services')
         .insert([{

@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '../services/supabase';
+import { useSubscriptionStore } from './subscriptionStore';
+import { useBankAccountStore } from './bankAccountStore';
 
 export interface Product {
   id: string;
@@ -128,8 +130,32 @@ export const useProductStore = create<ProductState>((set, get) => ({
     }
   },
 
-  createProduct: async (product) => {
+   createProduct: async (product) => {
     try {
+      // Check active subscription
+      if (product.seller_id) {
+        const hasActiveSubscription = await useSubscriptionStore.getState().hasActiveSubscription(product.seller_id);
+        if (!hasActiveSubscription) {
+          return { 
+            success: false, 
+            error: 'Active subscription required. Please subscribe to a plan to add products.' 
+          };
+        }
+
+        // Check bank account
+        const bankAccounts = useBankAccountStore.getState().accounts;
+        const hasValidBank = bankAccounts.some(
+          acc => acc.seller_id === product.seller_id && acc.verification_status === 'verified'
+        );
+        
+        if (!hasValidBank) {
+          return { 
+            success: false, 
+            error: 'Verified bank account required. Please add and verify your bank details in Payout Settings.' 
+          };
+        }
+      }
+
       const { data, error } = await supabase
         .from('products')
         .insert([{
@@ -154,7 +180,6 @@ export const useProductStore = create<ProductState>((set, get) => ({
       return { success: false, error: error.message };
     }
   },
-
   updateProduct: async (id, updates) => {
     try {
       const { error } = await supabase

@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/authStore';
 import { useSellerStore } from '../../src/store/sellerStore';
+import { useSubscriptionStore } from '../../src/store/subscriptionStore';
 import { supabase } from '../../src/services/supabase';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 
@@ -23,6 +24,7 @@ export default function SellerDashboard() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const { seller, fetchSellerProfile } = useSellerStore();
+  const { currentSubscription, fetchSellerSubscriptions } = useSubscriptionStore();
   const [stats, setStats] = useState({
     totalRevenue: 0,
     totalOrders: 0,
@@ -46,6 +48,11 @@ export default function SellerDashboard() {
     if (!user?.id) return;
     
     await fetchSellerProfile(user.id);
+    
+    if (seller?.id) {
+      await fetchSellerSubscriptions(seller.id);
+    }
+    
     fetchSellerStats();
   };
 
@@ -253,6 +260,25 @@ export default function SellerDashboard() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Subscription Warning Banner */}
+        {!currentSubscription && (
+          <View style={[styles.subscriptionWarning, shadows.sm]}>
+            <Ionicons name="warning" size={24} color={colors.warning} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.warningTitle}>No Active Subscription</Text>
+              <Text style={styles.warningText}>
+                Subscribe to a plan to start adding products and services
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => router.push('/seller/subscription' as any)}
+              style={styles.subscribeNowButton}
+            >
+              <Text style={styles.subscribeNowText}>Subscribe</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Revenue Card */}
         <View style={[styles.revenueCard, shadows.md]}>
           <View style={styles.revenueHeader}>
@@ -441,6 +467,21 @@ export default function SellerDashboard() {
             <View style={styles.actionContent}>
               <Text style={styles.actionTitle}>Payout Settings</Text>
               <Text style={styles.actionSubtitle}>Manage bank account details</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+                <TouchableOpacity
+            style={[styles.actionCard, shadows.sm]}
+            onPress={() => router.push('/seller/subscription' as any)}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: colors.primary + '15' }]}>
+              <Ionicons name="card" size={28} color={colors.primary} />
+            </View>
+            <View style={styles.actionContent}>
+              <Text style={styles.actionTitle}>Subscription</Text>
+              <Text style={styles.actionSubtitle}>
+                {currentSubscription ? 'Manage your subscription' : 'Subscribe to start selling'}
+              </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
@@ -654,4 +695,38 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.primary,
   },
+    subscriptionWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.warning + '10',
+    margin: spacing.lg,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.warning,
+  },
+  warningTitle: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '600',
+    marginBottom: spacing.xs / 2,
+  },
+  warningText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  subscribeNowButton: {
+    backgroundColor: colors.warning,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
+  },
+  subscribeNowText: {
+    ...typography.bodySmall,
+    color: colors.white,
+    fontWeight: '600',
+  },
 });
+
+
