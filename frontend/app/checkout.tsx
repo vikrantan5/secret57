@@ -19,7 +19,7 @@ import { usePaymentStore } from '../src/store/paymentStore';
 import { useAddressStore } from '../src/store/addressStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../src/constants/theme';
 import { RazorpayPayment } from '../src/components/RazorpayPayment';
-import { generateOrderId } from '../src/services/razorpay';
+import { createRazorpayOrder, verifyRazorpayPayment } from '../src/services/razorpayEdgeFunctions';
 
 // Note: Using Razorpay test credentials
 const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_RVeELbQdxuBBiv';
@@ -108,9 +108,26 @@ export default function CheckoutScreen() {
       const orderId = result.order.id;
       setCurrentOrderId(orderId);
 
-      // Step 2: Generate Razorpay order ID
-      const razorpayId = generateOrderId('ord');
+   console.log('Order created, ID:', orderId);
+
+      // Step 2: Create Razorpay order via Edge Function
+      console.log('Creating Razorpay order for amount:', finalTotal);
+      const razorpayOrderResult = await createRazorpayOrder({
+        amount: finalTotal,
+        currency: 'INR',
+        receipt: orderId,
+      });
+
+      console.log('Razorpay order result:', razorpayOrderResult);
+
+      if (!razorpayOrderResult.success || !razorpayOrderResult.order_id) {
+        throw new Error(razorpayOrderResult.error || 'Failed to create Razorpay order');
+      }
+
+      const razorpayId = razorpayOrderResult.order_id;
       setRazorpayOrderId(razorpayId);
+      
+      console.log('Razorpay order created successfully:', razorpayId);
 
       // Step 3: Open Razorpay payment gateway
       setLoading(false);
@@ -129,7 +146,23 @@ export default function CheckoutScreen() {
     setLoading(true);
 
     try {
-      // Create payment record
+      // Step 1: Verify payment signature via Edge Function
+      console.log('Verifying payment signature...');
+      const verificationResult = await verifyRazorpayPayment({
+        razorpay_order_id: response.razorpay_order_id || razorpayOrderId,
+        razorpay_payment_id: response.razorpay_payment_id,
+        razorpay_signature: response.razorpay_signature || '',
+      });
+
+      console.log('Verification result:', verificationResult);
+
+      if (!verificationResult.success || !verificationResult.verified) {
+        throw new Error(verificationResult.error || 'Payment verification failed');
+      }
+
+      console.log('Payment verified successfully!');
+
+      // Step 2: Create payment record
       console.log('Creating payment record for order:', currentOrderId);
       const paymentResult = await createPayment({
         order_id: currentOrderId,
@@ -140,7 +173,7 @@ export default function CheckoutScreen() {
       if (paymentResult.success && paymentResult.payment) {
         console.log('Payment record created:', paymentResult.payment.id);
         
-        // Update payment status with Razorpay details
+        // Step 3: Update payment status with Razorpay details
         await updatePaymentStatusInStore(
           paymentResult.payment.id,
           'success',
@@ -148,7 +181,7 @@ export default function CheckoutScreen() {
         );
         console.log('Payment status updated to success');
 
-        // Update order payment status
+        // Step 4: Update order payment status
         const paymentData = {
           method: 'razorpay',
           razorpay_order_id: response.razorpay_order_id || razorpayOrderId,
@@ -158,7 +191,7 @@ export default function CheckoutScreen() {
         await updatePaymentStatus(currentOrderId, paymentData);
         console.log('Order payment status updated');
 
-        // Clear cart
+        // Step 5: Clear cart
         clearCart();
         
         setLoading(false);
@@ -183,7 +216,10 @@ export default function CheckoutScreen() {
     } catch (error: any) {
       console.error('Payment record error:', error);
       setLoading(false);
-      Alert.alert('Error', 'Payment successful but failed to update order. Please contact support.');
+      Alert.alert(
+        'Payment Verification Error',
+        error.message || 'Payment successful but verification failed. Please contact support with your payment ID: ' + response.razorpay_payment_id
+      );
     }
   };
 

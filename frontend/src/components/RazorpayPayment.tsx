@@ -130,6 +130,20 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
         <div class="logo">🛒 ServiceHub</div>
         <div class="info">${description}</div>
         <div class="amount">₹${amount.toFixed(2)}</div>
+          <!-- Test Mode Info -->
+        <div style="background: #FEF3C7; padding: 12px; border-radius: 8px; margin: 15px 0; font-size: 13px; color: #92400E; text-align: left;">
+          <strong>📝 Test Mode - Use Test Card:</strong><br>
+          <div style="font-family: monospace; margin-top: 8px; background: white; padding: 8px; border-radius: 4px;">
+            Card: 4111 1111 1111 1111<br>
+            CVV: 111<br>
+            Expiry: 12/26<br>
+            OTP: 1234 (if asked)
+          </div>
+          <div style="margin-top: 8px; font-size: 12px;">
+            ⚠️ Only Indian test cards work. International cards will be rejected.
+          </div>
+        </div>
+        
         <button class="btn" id="payBtn">Pay Now</button>
         <div class="loading" id="loading" style="display:none;">Loading payment gateway...</div>
         <div class="error" id="error" style="display:none;"></div>

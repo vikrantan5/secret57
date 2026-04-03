@@ -24,7 +24,7 @@ import { useAddressStore } from '../../src/store/addressStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { YouTubePlayerComponent } from '../../src/components/ui/YouTubePlayer';
 import { RazorpayPayment } from '../../src/components/RazorpayPayment';
-import { generateOrderId } from '../../src/services/razorpay';
+import { createRazorpayOrder, verifyRazorpayPayment } from '../../src/services/razorpayEdgeFunctions';
 
 const { width } = Dimensions.get('window');
 
@@ -108,7 +108,7 @@ export default function ServiceDetailScreen() {
     }
   };
 
-   const handleBookService = async () => {
+    const handleBookService = async () => {
     if (!user?.id) {
       Alert.alert('Login Required', 'Please login to book a service');
       router.push('/auth/login');
@@ -153,9 +153,28 @@ export default function ServiceDetailScreen() {
       const bookingId = result.booking.id;
       setCurrentBookingId(bookingId);
 
-      // Step 2: Generate Razorpay order ID
-      const razorpayId = generateOrderId('book');
+      console.log('Booking created, ID:', bookingId);
+
+      // Step 2: Create Razorpay order via Edge Function
+      const amount = selectedService?.price || 0;
+      console.log('Creating Razorpay order for booking, amount:', amount);
+      
+      const razorpayOrderResult = await createRazorpayOrder({
+        amount: amount,
+        currency: 'INR',
+        receipt: bookingId,
+      });
+
+      console.log('Razorpay order result:', razorpayOrderResult);
+
+      if (!razorpayOrderResult.success || !razorpayOrderResult.order_id) {
+        throw new Error(razorpayOrderResult.error || 'Failed to create Razorpay order');
+      }
+
+      const razorpayId = razorpayOrderResult.order_id;
       setRazorpayOrderId(razorpayId);
+      
+      console.log('Razorpay order created successfully:', razorpayId);
 
       // Step 3: Open Razorpay payment gateway
       setProcessingPayment(false);
@@ -168,7 +187,7 @@ export default function ServiceDetailScreen() {
     }
   };
 
-  const handlePaymentSuccess = async (response: any) => {
+   const handlePaymentSuccess = async (response: any) => {
     console.log('Service payment successful:', response);
     setShowRazorpay(false);
     setProcessingPayment(true);
@@ -176,7 +195,23 @@ export default function ServiceDetailScreen() {
     try {
       const amount = selectedService?.price || 0;
 
-      // Create payment record
+      // Step 1: Verify payment signature via Edge Function
+      console.log('Verifying service booking payment signature...');
+      const verificationResult = await verifyRazorpayPayment({
+        razorpay_order_id: response.razorpay_order_id || razorpayOrderId,
+        razorpay_payment_id: response.razorpay_payment_id,
+        razorpay_signature: response.razorpay_signature || '',
+      });
+
+      console.log('Verification result:', verificationResult);
+
+      if (!verificationResult.success || !verificationResult.verified) {
+        throw new Error(verificationResult.error || 'Payment verification failed');
+      }
+
+      console.log('Payment verified successfully!');
+
+      // Step 2: Create payment record
       console.log('Creating payment record for booking:', currentBookingId);
       const paymentResult = await createPayment({
         booking_id: currentBookingId,
@@ -187,7 +222,7 @@ export default function ServiceDetailScreen() {
       if (paymentResult.success && paymentResult.payment) {
         console.log('Payment record created:', paymentResult.payment.id);
         
-        // Update payment status
+        // Step 3: Update payment status
         await updatePaymentStatus(
           paymentResult.payment.id,
           'success',
@@ -195,7 +230,7 @@ export default function ServiceDetailScreen() {
         );
         console.log('Payment status updated to success');
 
-        // Auto-confirm booking after successful payment
+        // Step 4: Auto-confirm booking after successful payment
         const { updateBookingStatus } = require('../../src/store/bookingStore').useBookingStore.getState();
         await updateBookingStatus(currentBookingId, 'confirmed');
         console.log('Booking status updated to confirmed');
@@ -223,10 +258,12 @@ export default function ServiceDetailScreen() {
     } catch (error: any) {
       console.error('Payment record error:', error);
       setProcessingPayment(false);
-      Alert.alert('Error', 'Payment successful but failed to update booking. Please contact support.');
+      Alert.alert(
+        'Payment Verification Error',
+        error.message || 'Payment successful but verification failed. Please contact support with your payment ID: ' + response.razorpay_payment_id
+      );
     }
   };
-
   const handlePaymentFailure = (error: any) => {
     console.error('Service payment failed:', error);
     setShowRazorpay(false);
