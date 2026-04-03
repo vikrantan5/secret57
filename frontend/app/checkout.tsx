@@ -33,6 +33,7 @@ export default function CheckoutScreen() {
   const { addresses, getDefaultAddress, fetchUserAddresses } = useAddressStore();
   
   const [loading, setLoading] = useState(false);
+    const [processingPayment, setProcessingPayment] = useState(false);
   const [showRazorpay, setShowRazorpay] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
   const [razorpayOrderId, setRazorpayOrderId] = useState<string>('');
@@ -80,6 +81,13 @@ export default function CheckoutScreen() {
       router.push('/auth/login');
       return;
     }
+
+      // Prevent duplicate order creation
+    if (loading || processingPayment) {
+      Alert.alert('Please Wait', 'Your order is being processed. Please do not press back or refresh.');
+      return;
+    }
+
 
     setLoading(true);
 
@@ -137,6 +145,7 @@ export default function CheckoutScreen() {
       console.error('Checkout error:', error);
       Alert.alert('Error', error.message || 'Failed to process checkout');
       setLoading(false);
+        setProcessingPayment(false);
     }
   };
 
@@ -191,10 +200,18 @@ export default function CheckoutScreen() {
         await updatePaymentStatus(currentOrderId, paymentData);
         console.log('Order payment status updated');
 
+        
+        // Step 4.5: Update order status to processing
+        const { updateOrderStatus: updateStatus } = require('../src/store/orderStore').useOrderStore.getState();
+        await updateStatus(currentOrderId, 'processing');
+        console.log('Order status updated to processing');
+
+
         // Step 5: Clear cart
         clearCart();
         
         setLoading(false);
+        setProcessingPayment(false);
         
         Alert.alert(
           'Order Placed Successfully!',
@@ -216,6 +233,7 @@ export default function CheckoutScreen() {
     } catch (error: any) {
       console.error('Payment record error:', error);
       setLoading(false);
+         setProcessingPayment(false);
       Alert.alert(
         'Payment Verification Error',
         error.message || 'Payment successful but verification failed. Please contact support with your payment ID: ' + response.razorpay_payment_id
@@ -227,6 +245,7 @@ export default function CheckoutScreen() {
     console.error('Payment failed:', error);
     setShowRazorpay(false);
     setLoading(false);
+    setProcessingPayment(false);
     
     // Show detailed error message with better formatting
     let errorMessage = 'Payment was not successful. Please try again.';
@@ -271,6 +290,7 @@ Reason: ${error.reason}`;
   const handlePaymentClose = () => {
     setShowRazorpay(false);
     setLoading(false);
+    setProcessingPayment(false);
   };
   const simulatePayment = async (orderId: string) => {
     // Simulate payment processing
