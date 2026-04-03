@@ -253,6 +253,26 @@ export const RazorpayPayment: React.FC<RazorpayPaymentProps> = ({
                 currency: "INR",
                 name: "ServiceHub",
                 description: "${description.replace(/"/g, '"')}",
+                  method: "card",
+                allow_retry: true,
+                config: {
+                  display: {
+                    blocks: {
+                      card: {
+                        name: "Pay with Cards",
+                        instruments: [
+                          {
+                            method: "card"
+                          }
+                        ]
+                      }
+                    },
+                    sequence: ["block.card"],
+                    preferences: {
+                      show_default_blocks: true
+                    }
+                  }
+                },
                 prefill: {
                   name: "${customerDetails.name.replace(/"/g, '"')}",
                   email: "${customerDetails.email}",
