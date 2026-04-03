@@ -62,6 +62,9 @@ serve(async (req) => {
         customer_name: seller_name,
         customer_email: seller_email,
         customer_phone: seller_phone
+          },
+      order_meta: {
+        return_url: return_url 
       }
     };
 
