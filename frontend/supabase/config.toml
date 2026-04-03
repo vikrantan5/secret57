@@ -394,3 +394,26 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # declarative_schema_path = "./declarative"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+
+
+
+
+# Edge Functions Configuration - Disable JWT verification for public payment endpoints
+[functions.create-razorpay-order]
+verify_jwt = false
+
+[functions.verify-razorpay-payment]
+verify_jwt = false
+
+[functions.create-razorpay-contact]
+verify_jwt = false
+
+[functions.create-razorpay-fund-account]
+verify_jwt = false
+
+[functions.create-razorpay-payout]
+verify_jwt = false
+
+[functions.get-payout-status]
+verify_jwt = false
