@@ -3,8 +3,8 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
-const CASHFREE_PAYOUT_CLIENT_ID = Deno.env.get('EXPO_PUBLIC_CASHFREE_PAYOUT_CLIENT_ID') ;
-const CASHFREE_PAYOUT_CLIENT_SECRET = Deno.env.get('EXPO_PUBLIC_CASHFREE_PAYOUT_CLIENT_SECRET') ;
+const CASHFREE_PAYOUT_CLIENT_ID = Deno.env.get('CASHFREE_PAYOUT_CLIENT_ID') ;
+const CASHFREE_PAYOUT_CLIENT_SECRET = Deno.env.get('CASHFREE_PAYOUT_CLIENT_SECRET') ;
 const CASHFREE_PAYOUT_API_URL = 'https://payout-gamma.cashfree.com/payout/v1'; // Sandbox
 
 const corsHeaders = {

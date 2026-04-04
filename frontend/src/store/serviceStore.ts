@@ -137,23 +137,29 @@ export const useServiceStore = create<ServiceState>((set, get) => ({
           };
         }
 
-        // Check bank account and get beneficiary ID
-        const bankAccounts = useBankAccountStore.getState().bankAccounts;
-        const verifiedBank = bankAccounts.find(
-          acc => acc.seller_id === service.seller_id && acc.verification_status === 'verified'
-        );
+        // Check bank account and get primary bank account ID
+        // Fetch fresh data from database to ensure we have latest bank accounts
+        const { data: bankAccounts, error: bankError } = await supabase
+          .from('seller_bank_accounts')
+          .select('id, verification_status, is_primary')
+          .eq('seller_id', service.seller_id)
+          .eq('verification_status', 'verified')
+          .eq('is_primary', true)
+          .single();
         
-        if (!verifiedBank) {
+        if (bankError || !bankAccounts) {
           return { 
             success: false, 
             error: 'Verified bank account required. Please add and verify your bank details in Payout Settings.' 
           };
         }
 
-        // Add seller's cashfree beneficiary ID to service
+        // Add seller's bank account ID for direct payment settlements
         const serviceData = {
           ...service,
-          seller_settlement_account_id: verifiedBank.cashfree_bene_id || verifiedBank.cashfree_beneficiary_id,
+          seller_settlement_account_id: bankAccounts.id, // Store bank account ID (UUID)
+          cashfree_enabled: true,
+          requires_subscription: true,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };

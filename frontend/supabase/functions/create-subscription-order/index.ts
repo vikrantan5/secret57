@@ -5,8 +5,8 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
-const CASHFREE_APP_ID = Deno.env.get('EXPO_PUBLIC_CASHFREE_APP_ID');
-const CASHFREE_SECRET_KEY = Deno.env.get('EXPO_PUBLIC_CASHFREE_SECRET_KEY');
+const CASHFREE_APP_ID = Deno.env.get('CASHFREE_APP_ID');
+const CASHFREE_SECRET_KEY = Deno.env.get('CASHFREE_SECRET_KEY');
 const CASHFREE_API_URL = 'https://sandbox.cashfree.com/pg/orders';
 
 const corsHeaders = {
@@ -36,7 +36,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Cashfree credentials not configured. Please set EXPO_PUBLIC_CASHFREE_APP_ID and EXPO_PUBLIC_CASHFREE_SECRET_KEY in Supabase secrets.' 
+          error: 'Cashfree credentials not configured. Please set CASHFREE_APP_ID and CASHFREE_SECRET_KEY in Supabase secrets.' 
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

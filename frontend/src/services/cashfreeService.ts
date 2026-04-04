@@ -22,7 +22,7 @@ export interface CashfreeOrderResponse {
  */
 export class CashfreeService {
   private static instance: CashfreeService;
-  private readonly CASHFREE_APP_ID = process.env.EXPO_PUBLIC_CASHFREE_APP_ID || '';
+  private readonly CASHFREE_APP_ID = process.env.CASHFREE_APP_ID || '';
   private readonly CASHFREE_PAYMENT_URL = 'https://sandbox.cashfree.com/pg/orders'; // Change for production
 
   private constructor() {}
