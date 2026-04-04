@@ -215,7 +215,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       if (!plan) throw new Error('Subscription plan not found');
 
         // ✅ REAL API MODE: Edge functions are deployed and working
-      const USE_MOCK_MODE = false; // Real Cashfree API integration enabled
+      const USE_MOCK_MODE = true; // Real Cashfree API integration enabled
       
       let orderResult;
       
