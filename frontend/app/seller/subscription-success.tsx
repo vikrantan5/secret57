@@ -7,15 +7,55 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, typography } from '../../src/constants/theme';
 import { useAuthStore } from '../../src/store/authStore';
 import { useSubscriptionStore } from '../../src/store/subscriptionStore';
 import { useSellerStore } from '../../src/store/sellerStore';
 import CashfreeService from '../../src/services/cashfreeService';
 import { supabase } from '../../src/services/supabase';
+
+// Define theme locally to avoid import issues
+const colors = {
+  primary: '#4F46E5',
+  secondary: '#6366F1',
+  success: '#10B981',
+  error: '#EF4444',
+  warning: '#F59E0B',
+  background: '#F9FAFB',
+  surface: '#FFFFFF',
+  textPrimary: '#111827',
+  textSecondary: '#6B7280',
+  border: '#E5E7EB',
+};
+
+const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  xxl: 48,
+};
+
+const typography = {
+  sizes: {
+    xs: 12,
+    sm: 14,
+    md: 16,
+    lg: 18,
+    xl: 20,
+    xxl: 28,
+  },
+  weights: {
+    regular: '400',
+    medium: '500',
+    semibold: '600',
+    bold: '700',
+  },
+};
 
 export default function SubscriptionSuccessScreen() {
   const router = useRouter();
@@ -77,7 +117,7 @@ export default function SubscriptionSuccessScreen() {
       // Step 3: Get plan details from database (should be stored when order was created)
       // For now, we'll fetch the active monthly plan
       // TODO: Store plan_id in a subscription_orders table for proper tracking
-      const { data: plans } = await supabase
+      const { data: plans, error: planError } = await supabase
         .from('subscription_plans')
         .select('*')
         .eq('is_active', true)
@@ -85,7 +125,8 @@ export default function SubscriptionSuccessScreen() {
         .limit(1)
         .single();
 
-      if (!plans) {
+      if (planError || !plans) {
+        console.error('Plan fetch error:', planError);
         throw new Error('Subscription plan not found');
       }
 
@@ -175,68 +216,70 @@ export default function SubscriptionSuccessScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.centerContainer}>
-        <View style={styles.iconContainer}>
-          <Ionicons name="checkmark-circle" size={80} color={colors.success} />
-        </View>
-        
-        <Text style={styles.successTitle}>🎉 Subscription Activated!</Text>
-        <Text style={styles.successMessage}>
-          Your subscription has been successfully activated.
-        </Text>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.centerContainer}>
+          <View style={styles.iconContainer}>
+            <Ionicons name="checkmark-circle" size={80} color={colors.success} />
+          </View>
+          
+          <Text style={styles.successTitle}>🎉 Subscription Activated!</Text>
+          <Text style={styles.successMessage}>
+            Your subscription has been successfully activated.
+          </Text>
 
-        {subscriptionDetails && (
-          <View style={styles.detailsCard}>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Plan:</Text>
-              <Text style={styles.detailValue}>
-                {subscriptionDetails.plan?.name || 'Subscription Plan'}
-              </Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Amount Paid:</Text>
-              <Text style={styles.detailValue}>
-                ₹{subscriptionDetails.amount_paid?.toFixed(2)}
-              </Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Valid Until:</Text>
-              <Text style={styles.detailValue}>
-                {new Date(subscriptionDetails.expires_at).toLocaleDateString()}
-              </Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Status:</Text>
-              <View style={styles.statusBadge}>
-                <Text style={styles.statusText}>Active</Text>
+          {subscriptionDetails && (
+            <View style={styles.detailsCard}>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Plan:</Text>
+                <Text style={styles.detailValue}>
+                  {subscriptionDetails.plan?.name || 'Subscription Plan'}
+                </Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Amount Paid:</Text>
+                <Text style={styles.detailValue}>
+                  ₹{subscriptionDetails.amount_paid?.toFixed(2)}
+                </Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Valid Until:</Text>
+                <Text style={styles.detailValue}>
+                  {new Date(subscriptionDetails.expires_at).toLocaleDateString()}
+                </Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Status:</Text>
+                <View style={styles.statusBadge}>
+                  <Text style={styles.statusText}>Active</Text>
+                </View>
               </View>
             </View>
+          )}
+
+          <View style={styles.benefitsCard}>
+            <Text style={styles.benefitsTitle}>✨ What's Next?</Text>
+            <Text style={styles.benefitItem}>✅ Add unlimited products and services</Text>
+            <Text style={styles.benefitItem}>✅ Receive direct payments from customers</Text>
+            <Text style={styles.benefitItem}>✅ Access seller dashboard and analytics</Text>
+            <Text style={styles.benefitItem}>✅ Manage your orders and bookings</Text>
           </View>
-        )}
 
-        <View style={styles.benefitsCard}>
-          <Text style={styles.benefitsTitle}>✨ What's Next?</Text>
-          <Text style={styles.benefitItem}>✅ Add unlimited products and services</Text>
-          <Text style={styles.benefitItem}>✅ Receive direct payments from customers</Text>
-          <Text style={styles.benefitItem}>✅ Access seller dashboard and analytics</Text>
-          <Text style={styles.benefitItem}>✅ Manage your orders and bookings</Text>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => router.replace('/seller/products/add')}
+          >
+            <Text style={styles.primaryButtonText}>Add Your First Product</Text>
+            <Ionicons name="arrow-forward" size={20} color="#fff" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => router.replace('/seller/dashboard')}
+          >
+            <Text style={styles.secondaryButtonText}>Go to Dashboard</Text>
+          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          style={styles.primaryButton}
-          onPress={() => router.replace('/seller/products/add')}
-        >
-          <Text style={styles.primaryButtonText}>Add Your First Product</Text>
-          <Ionicons name="arrow-forward" size={20} color="#fff" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={() => router.replace('/seller/dashboard')}
-        >
-          <Text style={styles.secondaryButtonText}>Go to Dashboard</Text>
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -246,11 +289,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  scrollContent: {
+    flexGrow: 1,
+  },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   loadingText: {
     fontSize: typography.sizes.lg,
@@ -297,7 +344,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   detailsCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: spacing.lg,
     width: '100%',
