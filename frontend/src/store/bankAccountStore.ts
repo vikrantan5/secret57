@@ -151,8 +151,8 @@ export const useBankAccountStore = create<BankAccountState>((set, get) => ({
       // Generate unique beneficiary ID
       const beneId = `SELLER_${data.seller_id.substring(0, 8)}_${Date.now()}`;
 
-      // ⚠️ MOCK MODE: Set to false when edge functions are deployed and working
-      const USE_MOCK_MODE = true; // Enable this for testing without edge functions
+     // ✅ REAL API MODE: Edge functions are deployed and working
+      const USE_MOCK_MODE = false; // Real Cashfree Payout API integration enabled
       
       let cashfree_beneficiary_id;
       let verification_status: 'pending' | 'verified' | 'failed' = 'pending';

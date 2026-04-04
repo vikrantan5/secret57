@@ -353,14 +353,14 @@ export default function SellerSubscription() {
 
          {/* Payment Modal */}
       {paymentVisible && paymentSessionId && orderData && (
-        <CashfreePayment
-          visible={paymentVisible}
-          paymentSessionId={paymentSessionId}
-          paymentUrl={orderData.payment_url}
-          onSuccess={handlePaymentSuccess}
-          onFailure={handlePaymentFailure}
-          onCancel={handlePaymentCancel}
-        />
+       <CashfreePayment
+  visible={paymentVisible}
+  paymentSessionId={orderData.payment_session_id}
+  paymentUrl={orderData.payment_url || `https://sandbox.cashfree.com/pg/orders/pay/${orderData.payment_session_id}`}
+  onSuccess={handlePaymentSuccess}
+  onFailure={handlePaymentFailure}
+  onCancel={handlePaymentCancel}
+/>
       )}
     </SafeAreaView>
   );

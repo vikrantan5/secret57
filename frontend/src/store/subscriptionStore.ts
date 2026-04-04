@@ -214,8 +214,8 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       if (planError) throw planError;
       if (!plan) throw new Error('Subscription plan not found');
 
-      // ⚠️ MOCK MODE: Set to false when edge functions are deployed
-      const USE_MOCK_MODE = true; // Enable this for testing without edge functions
+        // ✅ REAL API MODE: Edge functions are deployed and working
+      const USE_MOCK_MODE = false; // Real Cashfree API integration enabled
       
       let orderResult;
       
@@ -252,7 +252,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
         seller_name: data.seller_name,
         seller_email: data.seller_email,
         seller_phone: data.seller_phone,
-        return_url: 'https://yourapp.com/subscription-success' // Update with actual URL
+          return_url: 'https://hybrid-bazaar.preview.emergentagent.com/seller/subscription-success'
       });
 
       if (!orderResult.success) {

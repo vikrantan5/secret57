@@ -20,6 +20,8 @@ import { useAddressStore } from '../src/store/addressStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../src/constants/theme';
 import CashfreePayment from '../src/components/CashfreePayment';
 import CashfreeService from '../src/services/cashfreeService';
+import CashfreePayoutService from '../src/services/cashfreePayoutService';
+import { supabase } from '../src/services/supabase';
 
 export default function CheckoutScreen() {
   const router = useRouter();
@@ -215,7 +217,141 @@ export default function CheckoutScreen() {
         const { updateOrderStatus: updateStatus } = require('../src/store/orderStore').useOrderStore.getState();
         await updateStatus(currentOrderId, 'processing');
         console.log('Order status updated to processing');
+        
 
+
+           // Step 4.6: Trigger auto-payout to sellers (CRITICAL FIX)
+        console.log('🚀 Initiating auto-payout to sellers...');
+        try {
+          // Get order items with seller bank account info
+          const { data: orderItems, error: itemsError } = await supabase
+            .from('order_items')
+            .select(`
+              *,
+              seller:sellers!inner(
+                id,
+                company_name
+              )
+            `)
+            .eq('order_id', currentOrderId);
+
+          if (itemsError) {
+            console.error('Failed to fetch order items:', itemsError);
+            throw itemsError;
+          }
+
+          if (orderItems && orderItems.length > 0) {
+            // Group items by seller and calculate amounts
+            const sellerPayouts = new Map();
+            
+            for (const item of orderItems) {
+              const sellerId = item.seller_id;
+              const amount = parseFloat(item.total);
+              
+              if (sellerPayouts.has(sellerId)) {
+                sellerPayouts.get(sellerId).amount += amount;
+              } else {
+                sellerPayouts.set(sellerId, {
+                  sellerId,
+                  amount,
+                  companyName: item.seller?.company_name || 'Unknown Seller',
+                  orderItemIds: [item.id]
+                });
+              }
+            }
+            
+            console.log(`Found ${sellerPayouts.size} sellers to pay out`);
+            
+            // Get bank accounts for each seller
+            for (const [sellerId, payoutData] of sellerPayouts) {
+              try {
+                // Get seller's primary verified bank account
+                const { data: bankAccount, error: bankError } = await supabase
+                  .from('seller_bank_accounts')
+                  .select('*')
+                  .eq('seller_id', sellerId)
+                  .eq('is_primary', true)
+                  .eq('verification_status', 'verified')
+                  .single();
+
+                if (bankError || !bankAccount) {
+                  console.error(`No verified bank account found for seller ${sellerId}`);
+                  Alert.alert(
+                    'Payout Pending',
+                    `Order placed successfully. Seller payout pending bank verification.`
+                  );
+                  continue;
+                }
+
+                const beneId = bankAccount.cashfree_bene_id || bankAccount.cashfree_beneficiary_id;
+                
+                if (!beneId) {
+                  console.error(`No Cashfree beneficiary ID for seller ${sellerId}`);
+                  continue;
+                }
+
+                // Create transfer
+                const transferId = `TXN_${currentOrderId.substring(0, 8)}_${sellerId.substring(0, 8)}_${Date.now()}`;
+                
+                console.log(`Creating transfer ${transferId} for ₹${payoutData.amount} to ${payoutData.companyName}`);
+                
+                const transferResult = await CashfreePayoutService.createTransfer({
+                  bene_id: beneId,
+                  amount: payoutData.amount,
+                  transfer_id: transferId,
+                  remarks: `Payment for order ${currentOrderId.substring(0, 13)}`
+                });
+                
+                if (transferResult.success) {
+                  console.log(`✅ Payout SUCCESS: ₹${payoutData.amount} to ${payoutData.companyName}`);
+                  console.log(`   Transfer ID: ${transferId}`);
+                  console.log(`   Reference: ${transferResult.reference_id || 'N/A'}`);
+                  console.log(`   UTR: ${transferResult.utr || 'N/A'}`);
+                  
+                  // Update order items with transfer status
+                  await supabase
+                    .from('order_items')
+                    .update({
+                      direct_transfer_status: 'completed',
+                      cashfree_transfer_id: transferId,
+                      transfer_reference: transferResult.reference_id,
+                      payout_completed_at: new Date().toISOString()
+                    })
+                    .eq('order_id', currentOrderId)
+                    .eq('seller_id', sellerId);
+                    
+                } else {
+                  console.error(`❌ Payout FAILED for ${payoutData.companyName}:`, transferResult.error);
+                  console.warn('   Marking for manual processing...');
+                  
+                  // Mark for manual payout
+                  await supabase
+                    .from('order_items')
+                    .update({
+                      direct_transfer_status: 'failed',
+                      transfer_error: transferResult.error
+                    })
+                    .eq('order_id', currentOrderId)
+                    .eq('seller_id', sellerId);
+                  
+                  // TODO: Add to admin notification queue
+                }
+              } catch (sellerPayoutError: any) {
+                console.error(`Error processing payout for seller ${sellerId}:`, sellerPayoutError);
+                // Continue with other sellers even if one fails
+              }
+            }
+            
+            console.log('✅ Auto-payout process completed');
+          } else {
+            console.warn('No order items found for payout');
+          }
+        } catch (payoutError: any) {
+          console.error('❌ Auto-payout error:', payoutError);
+          console.warn('Order placed successfully but payout failed. Admin will process manually.');
+          // Don't fail the order - it's placed successfully
+          // Payout can be retried manually by admin
+        }
         // Step 5: Clear cart
         clearCart();
         
