@@ -249,6 +249,65 @@ const handleBookService = async () => {
         await updateBookingStatus(currentBookingId, 'confirmed');
         console.log('Booking status updated to confirmed');
 
+
+        
+        // Step 4: Send notifications to admin and seller
+        console.log('📧 Sending notifications...');
+        try {
+          // Get booking details with seller info
+          const { data: bookingDetails, error: bookingError } = await supabase
+            .from('bookings')
+            .select(`
+              *,
+              service:services(name),
+              seller:sellers!inner(
+                id,
+                company_name,
+                user_id
+              )
+            `)
+            .eq('id', currentBookingId)
+            .single();
+
+          if (!bookingError && bookingDetails) {
+            // Notify Admin
+            const { data: adminUsers } = await supabase
+              .from('users')
+              .select('id')
+              .eq('role', 'admin');
+
+            if (adminUsers && adminUsers.length > 0) {
+              for (const admin of adminUsers) {
+                await supabase.from('notifications').insert({
+                  user_id: admin.id,
+                  title: '📅 New Service Booking',
+                  message: `New booking for ${bookingDetails.service?.name || 'service'}. Amount: ₹${amount}. Date: ${bookingDetails.booking_date}`,
+                  type: 'new_booking',
+                  reference_id: currentBookingId,
+                  reference_type: 'booking',
+                  created_at: new Date().toISOString(),
+                });
+              }
+              console.log('✅ Admin notified');
+            }
+
+            // Notify Seller
+            await supabase.from('notifications').insert({
+              user_id: bookingDetails.seller.user_id,
+              title: '🎉 New Booking Received!',
+              message: `You have a new booking for ${bookingDetails.service?.name || 'service'}. Payment received: ₹${amount}`,
+              type: 'new_booking',
+              reference_id: currentBookingId,
+              reference_type: 'booking',
+              created_at: new Date().toISOString(),
+            });
+            console.log('✅ Seller notified');
+          }
+        } catch (notifError: any) {
+          console.error('❌ Notification error:', notifError);
+          // Don't fail the booking
+        }
+
         setProcessingPayment(false);
         setShowBookingForm(false);
 

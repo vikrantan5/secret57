@@ -115,6 +115,19 @@ export default function SellerBookingsScreen() {
                     <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
                     <Text style={styles.infoText}>{booking.customer_name || 'N/A'}</Text>
                   </View>
+                     {/* Payment Status Indicator */}
+                  {booking.payment_method && (
+                    <View style={[styles.infoRow, styles.paymentRow]}>
+                      <Ionicons 
+                        name="checkmark-circle" 
+                        size={16} 
+                        color={colors.success} 
+                      />
+                      <Text style={[styles.infoText, { color: colors.success, fontWeight: '600' }]}>
+                        Payment Received
+                      </Text>
+                    </View>
+                  )}
                 </View>
 
                 <View style={styles.bookingFooter}>
@@ -219,6 +232,12 @@ const styles = StyleSheet.create({
   infoText: {
     ...typography.body,
     color: colors.textSecondary,
+  },
+    paymentRow: {
+    backgroundColor: colors.success + '10',
+    padding: spacing.sm,
+    borderRadius: borderRadius.sm,
+    marginTop: spacing.xs,
   },
   bookingFooter: {
     flexDirection: 'row',

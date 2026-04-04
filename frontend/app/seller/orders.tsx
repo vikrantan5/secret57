@@ -108,10 +108,37 @@ export default function SellerOrdersScreen() {
                   </View>
                 </View>
 
-                <View style={styles.orderBody}>
-                  <Text style={styles.orderItems}>
-                    {order.items?.length || 0} item(s)
-                  </Text>
+                                <View style={styles.orderBody}>
+                  <View style={styles.orderInfo}>
+                    <Text style={styles.orderItems}>
+                      {order.items?.length || 0} item(s)
+                    </Text>
+                    {/* Payment Status Badge */}
+                    <View style={[
+                      styles.paymentBadge,
+                      { 
+                        backgroundColor: order.payment_status === 'paid' 
+                          ? colors.success + '20' 
+                          : colors.warning + '20' 
+                      }
+                    ]}>
+                      <Ionicons 
+                        name={order.payment_status === 'paid' ? 'checkmark-circle' : 'time'} 
+                        size={14} 
+                        color={order.payment_status === 'paid' ? colors.success : colors.warning} 
+                      />
+                      <Text style={[
+                        styles.paymentStatusText,
+                        { 
+                          color: order.payment_status === 'paid' 
+                            ? colors.success 
+                            : colors.warning 
+                        }
+                      ]}>
+                        {order.payment_status === 'paid' ? 'PAID' : order.payment_status?.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
                   <Text style={styles.orderTotal}>₹{order.total_amount}</Text>
                 </View>
 
@@ -211,9 +238,26 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: colors.border,
   },
+  orderInfo: {
+    flexDirection: 'column',
+    gap: spacing.xs,
+  },
   orderItems: {
     ...typography.body,
     color: colors.textSecondary,
+  },
+  paymentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs / 2,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: borderRadius.sm,
+  },
+  paymentStatusText: {
+    ...typography.caption,
+    fontWeight: '600',
+    fontSize: 11,
   },
   orderTotal: {
     ...typography.h4,
