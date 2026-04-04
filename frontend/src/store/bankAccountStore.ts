@@ -152,7 +152,7 @@ export const useBankAccountStore = create<BankAccountState>((set, get) => ({
       const beneId = `SELLER_${data.seller_id.substring(0, 8)}_${Date.now()}`;
 
      // ✅ REAL API MODE: Edge functions are deployed and working
-      const USE_MOCK_MODE = true; // Real Cashfree Payout API integration enabled
+      const USE_MOCK_MODE = false; // Real Cashfree Payout API integration enabled
       
       let cashfree_beneficiary_id;
       let verification_status: 'pending' | 'verified' | 'failed' = 'pending';
