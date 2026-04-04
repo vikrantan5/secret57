@@ -7,8 +7,7 @@ import CashfreeService from '../services/cashfreeService';
 
 interface CashfreePaymentProps {
   visible: boolean;
-  paymentSessionId: string;
-  paymentUrl?: string; // Optional: Direct payment URL from API
+  paymentUrl: string; // Direct payment URL from Cashfree API
   onSuccess: (paymentId: string, orderId: string) => void;
   onFailure: (error: string) => void;
   onCancel: () => void;
@@ -16,20 +15,15 @@ interface CashfreePaymentProps {
 
 export default function CashfreePayment({
   visible,
-  paymentSessionId,
-  paymentUrl: providedPaymentUrl,
+  paymentUrl,
   onSuccess,
   onFailure,
   onCancel,
 }: CashfreePaymentProps) {
   const webViewRef = useRef<WebView>(null);
   const [loading, setLoading] = React.useState(true);
-
-  // Always construct URL from session ID to avoid any malformed URLs from API
-  // Ignore providedPaymentUrl for now until edge function is properly deployed
-  const paymentUrl = `https://sandbox.cashfree.com/pg/orders/pay/${paymentSessionId}`;
   
-  console.log('Constructed Payment URL:', paymentUrl);
+  console.log('Payment URL from API:', paymentUrl);
 
   const handleWebViewNavigationStateChange = (navState: any) => {
     const { url } = navState;

@@ -43,9 +43,8 @@ export default function ServiceDetailScreen() {
   const [processingPayment, setProcessingPayment] = useState(false);
   const [showCashfree, setShowCashfree] = useState(false);
   const [currentBookingId, setCurrentBookingId] = useState<string>('');
-  const [cashfreeSessionId, setCashfreeSessionId] = useState<string>('');
+  const [cashfreePaymentUrl, setCashfreePaymentUrl] = useState<string>('');
   const [cashfreeOrderId, setCashfreeOrderId] = useState<string>('');
-    const [cashfreePaymentUrl, setCashfreePaymentUrl] = useState<string>('');
   const [bookingData, setBookingData] = useState({
     date: '',
     time: '',
@@ -183,14 +182,17 @@ export default function ServiceDetailScreen() {
       }
 
       const orderId = cashfreeOrderResult.data.order_id;
-      const sessionId = cashfreeOrderResult.data.payment_session_id;
-       const paymentUrl = cashfreeOrderResult.data.payment_url;
+      const paymentUrl = cashfreeOrderResult.data.payment_url;
+      
+      if (!paymentUrl) {
+        throw new Error('Payment URL not received from Cashfree');
+      }
       
       setCashfreeOrderId(orderId);
-      setCashfreeSessionId(sessionId);
-      setCashfreePaymentUrl(paymentUrl || '');
+      setCashfreePaymentUrl(paymentUrl);
       
       console.log('Cashfree order created successfully:', orderId);
+      console.log('Payment URL:', paymentUrl);
 
       // Step 3: Open Cashfree payment gateway
       setProcessingPayment(false);
@@ -654,12 +656,10 @@ export default function ServiceDetailScreen() {
           </TouchableOpacity>
         </View>
       )}
-
         {/* Cashfree Payment Modal */}
-      {showCashfree && cashfreeSessionId && (
+      {showCashfree && cashfreePaymentUrl && (
         <CashfreePayment
           visible={showCashfree}
-          paymentSessionId={cashfreeSessionId}
           paymentUrl={cashfreePaymentUrl}
           onSuccess={handlePaymentSuccess}
           onFailure={handlePaymentFailure}

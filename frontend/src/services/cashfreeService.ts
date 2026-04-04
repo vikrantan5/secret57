@@ -13,9 +13,8 @@ export interface CashfreeOrderOptions {
 
 export interface CashfreeOrderResponse {
   order_id: string;
-  payment_session_id: string;
-  order_token: string;
   order_status: string;
+  payment_url: string;
 }
 
 /**
@@ -155,21 +154,7 @@ export class CashfreeService {
     return !!this.CASHFREE_APP_ID;
   }
 
-  /**
-   * Get payment session URL for WebView
-   * Now returns the payment_url from API response directly
-   */
-  getPaymentSessionUrl(paymentSessionId: string, paymentUrl?: string): string {
-    // If payment_url is provided from API response and is valid, use it directly
-    if (paymentUrl && paymentUrl.startsWith('http')) {
-      // Make sure the URL doesn't have duplicated path segments
-      return paymentUrl;
-    }
-    
-    // Fallback: Use Cashfree's order pay endpoint
-    // This is the correct format for sandbox environment
-    return `https://sandbox.cashfree.com/pg/orders/pay/${paymentSessionId}`;
-  }
+
 }
 
 export default CashfreeService.getInstance();

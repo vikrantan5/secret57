@@ -35,7 +35,7 @@ export default function CheckoutScreen() {
   const [processingPayment, setProcessingPayment] = useState(false);
   const [showCashfree, setShowCashfree] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
-  const [cashfreeSessionId, setCashfreeSessionId] = useState<string>('');
+  const [cashfreePaymentUrl, setCashfreePaymentUrl] = useState<string>('');
   const [cashfreeOrderId, setCashfreeOrderId] = useState<string>('');
   const [shippingInfo, setShippingInfo] = useState({
     name: user?.name || '',
@@ -139,11 +139,17 @@ export default function CheckoutScreen() {
       }
 
       const cfOrderId = cashfreeOrderResult.data.order_id;
-      const cfSessionId = cashfreeOrderResult.data.payment_session_id;
+      const cfPaymentUrl = cashfreeOrderResult.data.payment_url;
+      
+      if (!cfPaymentUrl) {
+        throw new Error('Payment URL not received from Cashfree');
+      }
+      
       setCashfreeOrderId(cfOrderId);
-      setCashfreeSessionId(cfSessionId);
+      setCashfreePaymentUrl(cfPaymentUrl);
       
       console.log('Cashfree order created successfully:', cfOrderId);
+      console.log('Payment URL:', cfPaymentUrl);
 
       // Step 3: Open Cashfree payment gateway
       setLoading(false);
@@ -595,12 +601,11 @@ export default function CheckoutScreen() {
           )}
         </TouchableOpacity>
       </View>
-
       {/* Cashfree Payment Modal */}
-      {showCashfree && cashfreeSessionId && (
+      {showCashfree && cashfreePaymentUrl && (
         <CashfreePayment
           visible={showCashfree}
-          paymentSessionId={cashfreeSessionId}
+          paymentUrl={cashfreePaymentUrl}
           onSuccess={handlePaymentSuccess}
           onFailure={handlePaymentFailure}
           onCancel={handlePaymentCancel}

@@ -34,7 +34,7 @@ export default function SellerSubscription() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [paymentVisible, setPaymentVisible] = useState(false);
-  const [paymentSessionId, setPaymentSessionId] = useState('');
+  const [paymentUrl, setPaymentUrl] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
   const [orderData, setOrderData] = useState<any>(null);
 
@@ -88,11 +88,16 @@ export default function SellerSubscription() {
 
       // Open payment modal
       console.log('Order result from edge function:', JSON.stringify(result.order_data, null, 2));
+      
+      if (!result.order_data.payment_url) {
+        Alert.alert('Error', 'Payment URL not received from server');
+        return;
+      }
+      
       setOrderData(result.order_data);
-      setPaymentSessionId(result.order_data.payment_session_id);
+      setPaymentUrl(result.order_data.payment_url);
       setPaymentVisible(true);
-      console.log('Payment Session ID:', result.order_data.payment_session_id);
-      console.log('Payment URL from API:', result.order_data.payment_url || 'Not provided');
+      console.log('Payment URL:', result.order_data.payment_url);
     } catch (error: any) {
       console.error('Subscription error:', error);
       Alert.alert('Error', error.message || 'Failed to initiate subscription');
@@ -352,11 +357,10 @@ export default function SellerSubscription() {
       </ScrollView>
 
          {/* Payment Modal */}
-      {paymentVisible && paymentSessionId && orderData && (
+      {paymentVisible && paymentUrl && orderData && (
        <CashfreePayment
   visible={paymentVisible}
-  paymentSessionId={orderData.payment_session_id}
-  paymentUrl={orderData.payment_url || `https://sandbox.cashfree.com/pg/orders/pay/${orderData.payment_session_id}`}
+  paymentUrl={paymentUrl}
   onSuccess={handlePaymentSuccess}
   onFailure={handlePaymentFailure}
   onCancel={handlePaymentCancel}
