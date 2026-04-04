@@ -5,7 +5,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
-const CASHFREE_APP_ID = Deno.env.get('EXPO_PUBLIC_CASHFREE_APP_ID') ;
+const CASHFREE_APP_ID = Deno.env.get('EXPO_PUBLIC_CASHFREE_APP_ID');
 const CASHFREE_SECRET_KEY = Deno.env.get('EXPO_PUBLIC_CASHFREE_SECRET_KEY');
 const CASHFREE_API_URL = 'https://sandbox.cashfree.com/pg/orders';
 
@@ -30,6 +30,18 @@ serve(async (req) => {
   }
 
   try {
+    // Validate environment variables
+    if (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY) {
+      console.error('Missing Cashfree credentials in environment');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Cashfree credentials not configured. Please set EXPO_PUBLIC_CASHFREE_APP_ID and EXPO_PUBLIC_CASHFREE_SECRET_KEY in Supabase secrets.' 
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const {
       subscription_amount,
       plan_name,
@@ -40,9 +52,19 @@ serve(async (req) => {
       return_url
     }: SubscriptionOrderRequest = await req.json();
 
+  
+
+    console.log('Received subscription order request:', {
+      subscription_amount,
+      plan_name,
+      seller_id,
+      seller_email
+    });
+
     if (!subscription_amount || !seller_id || !seller_email || !seller_phone) {
+      console.error('Missing required fields in request');
       return new Response(
-        JSON.stringify({ success: false, error: 'Missing required fields' }),
+        JSON.stringify({ success: false, error: 'Missing required fields: subscription_amount, seller_id, seller_email, seller_phone' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -50,7 +72,7 @@ serve(async (req) => {
     // Generate unique order ID for subscription
     const order_id = `sub_${seller_id}_${Date.now()}`;
 
-    console.log('Creating subscription order:', order_id);
+    console.log('Creating subscription order with ID:', order_id);
 
       // Create Cashfree order (payment goes to admin/platform account)
     const orderPayload = {
@@ -68,12 +90,15 @@ serve(async (req) => {
       }
     };
 
+    console.log('Sending request to Cashfree API:', CASHFREE_API_URL);
+    console.log('Order payload:', JSON.stringify(orderPayload, null, 2));
+
     const response = await fetch(CASHFREE_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-client-id': CASHFREE_APP_ID,
-        'x-client-secret': CASHFREE_SECRET_KEY,
+        'x-client-id': CASHFREE_APP_ID!,
+        'x-client-secret': CASHFREE_SECRET_KEY!,
         'x-api-version': '2023-08-01'
       },
       body: JSON.stringify(orderPayload)
@@ -81,12 +106,16 @@ serve(async (req) => {
 
     const responseData = await response.json();
 
+    console.log('Cashfree API response status:', response.status);
+    console.log('Cashfree API response:', JSON.stringify(responseData, null, 2));
+
     if (!response.ok) {
-      console.error('Failed to create subscription order:', responseData);
+      console.error('Cashfree API error:', responseData);
       return new Response(
         JSON.stringify({
           success: false,
-          error: responseData.message || 'Failed to create subscription order'
+          error: responseData.message || `Cashfree API error: ${response.status}`,
+          details: responseData
         }),
         { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

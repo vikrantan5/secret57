@@ -115,19 +115,35 @@ export class CashfreeService {
   }): Promise<{ success: boolean; data?: CashfreeOrderResponse; error?: string }> {
     try {
       console.log('Creating subscription order via Edge Function');
+      console.log('Request data:', JSON.stringify(data, null, 2));
 
       const { data: response, error } = await supabase.functions.invoke(
         'create-subscription-order',
         { body: data }
       );
 
+      console.log('Edge Function Response:', JSON.stringify(response, null, 2));
+      
       if (error) {
-        console.error('Edge Function Error:', error);
-        throw error;
+        console.error('Edge Function Error Details:', {
+          message: error.message,
+          name: error.name,
+          context: error.context,
+          details: error
+        });
+        
+        // Return more detailed error message
+        const errorMsg = error.context?.body 
+          ? JSON.stringify(error.context.body) 
+          : error.message || 'Edge Function failed';
+        
+        return { success: false, error: errorMsg };
       }
 
       if (!response?.success) {
-        return { success: false, error: response?.error || 'Failed to create subscription order' };
+        const errorMsg = response?.error || 'Failed to create subscription order';
+        console.error('Response Error:', errorMsg);
+        return { success: false, error: errorMsg };
       }
 
       return { success: true, data: response.data };
