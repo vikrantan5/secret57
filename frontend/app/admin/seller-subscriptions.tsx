@@ -21,7 +21,7 @@ interface SellerSubscription {
   id: string;
   seller_id: string;
   plan_id: string;
-  amount: number | null;  // Allow null
+ amount_paid: number | null;  // Fixed: Changed from 'amount' to 'amount_paid' to match database schema
   payment_status: 'pending' | 'completed' | 'failed';
   cashfree_order_id: string;
   payment_date: string;
@@ -111,7 +111,8 @@ export default function SellerSubscriptionsScreen() {
     const failed = data.filter(s => s.payment_status === 'failed').length;
     const totalRevenue = data
       .filter(s => s.payment_status === 'completed')
-      .reduce((sum, s) => sum + (s.amount || 0), 0); // FIX: Handle null/undefined amount
+    .reduce((sum, s) => sum + (s.amount_paid || 0), 0); // FIXED: Use amount_paid instead of amount
+
 
     setStats({ total, completed, pending, failed, totalRevenue });
   };
@@ -388,7 +389,7 @@ export default function SellerSubscriptionsScreen() {
                   <View style={styles.detailItem}>
                     <Text style={styles.detailLabel}>Amount</Text>
                     <Text style={[styles.detailValue, { color: colors.primary }]}>
-                      {formatAmount(subscription.amount)} {/* FIX: Use safe formatter */}
+                       {formatAmount(subscription.amount_paid)} {/* FIXED: Use amount_paid instead of amount */}
                     </Text>
                   </View>
 

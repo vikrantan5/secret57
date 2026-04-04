@@ -46,6 +46,10 @@ export default function ServiceDetailScreen() {
   const [currentBookingId, setCurrentBookingId] = useState<string>('');
   const [cashfreePaymentUrl, setCashfreePaymentUrl] = useState<string>('');
   const [cashfreeOrderId, setCashfreeOrderId] = useState<string>('');
+
+const [cashfreePaymentSessionId, setCashfreePaymentSessionId] = useState<string>('');
+
+  
   const [bookingData, setBookingData] = useState({
     date: '',
     time: '',
@@ -110,101 +114,103 @@ export default function ServiceDetailScreen() {
     }
   };
 
-    const handleBookService = async () => {
-    if (!user?.id) {
-      Alert.alert('Login Required', 'Please login to book a service');
-      router.push('/auth/login');
+ // Update the handleBookService function
+const handleBookService = async () => {
+  if (!user?.id) {
+    Alert.alert('Login Required', 'Please login to book a service');
+    router.push('/auth/login');
+    return;
+  }
+
+  if (!bookingData.date || !bookingData.time) {
+    Alert.alert('Error', 'Please select date and time');
+    return;
+  }
+
+  if (bookingData.locationType === 'visit_customer') {
+    if (!bookingData.address || !bookingData.city || !bookingData.state || !bookingData.pincode) {
+      Alert.alert('Error', 'Please provide complete address');
       return;
     }
+  }
 
-    if (!bookingData.date || !bookingData.time) {
-      Alert.alert('Error', 'Please select date and time');
-      return;
+  setProcessingPayment(true);
+
+  try {
+    // Step 1: Create booking
+    const result = await createBooking({
+      customer_id: user.id,
+      seller_id: selectedService?.seller_id,
+      service_id: serviceId,
+      booking_date: bookingData.date,
+      booking_time: bookingData.time,
+      location_type: bookingData.locationType,
+      address: bookingData.locationType === 'visit_customer' ? bookingData.address : null,
+      city: bookingData.locationType === 'visit_customer' ? bookingData.city : null,
+      state: bookingData.locationType === 'visit_customer' ? bookingData.state : null,
+      pincode: bookingData.locationType === 'visit_customer' ? bookingData.pincode : null,
+      notes: bookingData.notes || null,
+      total_amount: selectedService?.price || 0,
+    });
+
+    if (!result.success || !result.booking) {
+      throw new Error(result.error || 'Failed to create booking');
     }
 
-    if (bookingData.locationType === 'visit_customer') {
-      if (!bookingData.address || !bookingData.city || !bookingData.state || !bookingData.pincode) {
-        Alert.alert('Error', 'Please provide complete address');
-        return;
-      }
+    const bookingId = result.booking.id;
+    setCurrentBookingId(bookingId);
+
+    console.log('Booking created, ID:', bookingId);
+
+    // Step 2: Create Cashfree order
+    const amount = selectedService?.price || 0;
+    console.log('Creating Cashfree order for booking, amount:', amount);
+    
+    if (!user.email || !user.phone) {
+      throw new Error('Please update your profile with email and phone number');
     }
 
-    setProcessingPayment(true);
+    const cashfreeOrderResult = await CashfreeService.createOrder({
+      amount: amount,
+      currency: 'INR',
+      order_note: `Service Booking: ${selectedService?.name}`,
+      customer_id: user.id,
+      customer_name: user.name || 'Customer',
+      customer_email: user.email,
+      customer_phone: user.phone,
+      return_url: 'https://hybrid-bazaar.preview.emergentagent.com/booking-success',
+    });
 
-    try {
-      // Step 1: Create booking
-      const result = await createBooking({
-        customer_id: user.id,
-        seller_id: selectedService?.seller_id,
-        service_id: serviceId,
-        booking_date: bookingData.date,
-        booking_time: bookingData.time,
-        location_type: bookingData.locationType,
-        address: bookingData.locationType === 'visit_customer' ? bookingData.address : null,
-        city: bookingData.locationType === 'visit_customer' ? bookingData.city : null,
-        state: bookingData.locationType === 'visit_customer' ? bookingData.state : null,
-        pincode: bookingData.locationType === 'visit_customer' ? bookingData.pincode : null,
-        notes: bookingData.notes || null,
-        total_amount: selectedService?.price || 0,
-      });
+    console.log('Cashfree order result:', cashfreeOrderResult);
 
-      if (!result.success || !result.booking) {
-        throw new Error(result.error || 'Failed to create booking');
-      }
-
-      const bookingId = result.booking.id;
-      setCurrentBookingId(bookingId);
-
-      console.log('Booking created, ID:', bookingId);
-
-      // Step 2: Create Cashfree order for direct seller payment
-      const amount = selectedService?.price || 0;
-      console.log('Creating Cashfree order for booking, amount:', amount);
-      
-      if (!user.email || !user.phone) {
-        throw new Error('Please update your profile with email and phone number');
-      }
-
-      const cashfreeOrderResult = await CashfreeService.createOrder({
-        amount: amount,
-        currency: 'INR',
-        order_note: `Service Booking: ${selectedService?.name}`,
-        customer_id: user.id,
-        customer_name: user.name || 'Customer',
-        customer_email: user.email,
-        customer_phone: user.phone,
-        return_url: 'https://yourapp.com/booking-success',
-      });
-
-      console.log('Cashfree order result:', cashfreeOrderResult);
-
-      if (!cashfreeOrderResult.success || !cashfreeOrderResult.data) {
-        throw new Error(cashfreeOrderResult.error || 'Failed to create Cashfree order');
-      }
-
-      const orderId = cashfreeOrderResult.data.order_id;
-      const paymentUrl = cashfreeOrderResult.data.payment_url;
-      
-      if (!paymentUrl) {
-        throw new Error('Payment URL not received from Cashfree');
-      }
-      
-      setCashfreeOrderId(orderId);
-      setCashfreePaymentUrl(paymentUrl);
-      
-      console.log('Cashfree order created successfully:', orderId);
-      console.log('Payment URL:', paymentUrl);
-
-      // Step 3: Open Cashfree payment gateway
-      setProcessingPayment(false);
-      setShowCashfree(true);
-
-    } catch (error: any) {
-      console.error('Booking error:', error);
-      setProcessingPayment(false);
-      Alert.alert('Error', error.message || 'Failed to create booking');
+    if (!cashfreeOrderResult.success || !cashfreeOrderResult.data) {
+      throw new Error(cashfreeOrderResult.error || 'Failed to create Cashfree order');
     }
-  };
+
+    const orderId = cashfreeOrderResult.data.order_id;
+    const paymentSessionId = cashfreeOrderResult.data.payment_session_id; // Get session ID
+    const paymentUrl = cashfreeOrderResult.data.payment_url;
+    
+    if (!paymentSessionId) {
+      throw new Error('Payment session ID not received from Cashfree');
+    }
+    
+    setCashfreeOrderId(orderId);
+    setCashfreePaymentSessionId(paymentSessionId); // Store session ID, not URL
+    
+    console.log('Cashfree order created successfully:', orderId);
+    console.log('Payment Session ID:', paymentSessionId);
+
+    // Step 3: Open Cashfree payment gateway
+    setProcessingPayment(false);
+    setShowCashfree(true);
+
+  } catch (error: any) {
+    console.error('Booking error:', error);
+    setProcessingPayment(false);
+    Alert.alert('Error', error.message || 'Failed to create booking');
+  }
+};
 
    const handlePaymentSuccess = async (paymentId: string, orderId: string) => {
     console.log('Service payment successful - Payment ID:', paymentId, 'Order ID:', orderId);
@@ -709,15 +715,16 @@ export default function ServiceDetailScreen() {
         </View>
       )}
         {/* Cashfree Payment Modal */}
-      {showCashfree && cashfreePaymentUrl && (
-        <CashfreePayment
-          visible={showCashfree}
-          paymentUrl={cashfreePaymentUrl}
-          onSuccess={handlePaymentSuccess}
-          onFailure={handlePaymentFailure}
-          onCancel={handlePaymentCancel}
-        />
-      )}
+      {showCashfree && cashfreePaymentSessionId && (
+  <CashfreePayment
+    visible={showCashfree}
+    paymentSessionId={cashfreePaymentSessionId}  // Pass session ID, not URL
+    orderId={cashfreeOrderId}
+    onSuccess={handlePaymentSuccess}
+    onFailure={handlePaymentFailure}
+    onCancel={handlePaymentCancel}
+  />
+)}
     </SafeAreaView>
   );
 }

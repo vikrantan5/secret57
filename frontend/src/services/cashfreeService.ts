@@ -14,7 +14,18 @@ export interface CashfreeOrderOptions {
 export interface CashfreeOrderResponse {
   order_id: string;
   order_status: string;
+  payment_session_id: string;  // Add this
   payment_url: string;
+}
+
+export interface CashfreeSubscriptionResponse {
+  order_id: string;
+  order_status: string;
+  payment_session_id: string;  // Add this
+  payment_url: string;
+  amount?: number;
+  duration_days?: number;
+  plan_id?: string;
 }
 
 /**
@@ -65,7 +76,15 @@ export class CashfreeService {
         return { success: false, error: data?.error || 'Failed to create order' };
       }
 
-      return { success: true, data: data.data };
+      // Make sure the response includes payment_session_id
+      const responseData: CashfreeOrderResponse = {
+        order_id: data.data.order_id,
+        order_status: data.data.order_status,
+        payment_session_id: data.data.payment_session_id, // Add this
+        payment_url: data.data.payment_url
+      };
+
+      return { success: true, data: responseData };
     } catch (error: any) {
       console.error('Create Order Error:', error);
       return { success: false, error: error.message || 'Failed to create order' };
@@ -112,7 +131,7 @@ export class CashfreeService {
     seller_email: string;
     seller_phone: string;
     return_url: string;
-  }): Promise<{ success: boolean; data?: CashfreeOrderResponse; error?: string }> {
+  }): Promise<{ success: boolean; data?: CashfreeSubscriptionResponse; error?: string }> {
     try {
       console.log('Creating subscription order via Edge Function');
       console.log('Request data:', JSON.stringify(data, null, 2));
@@ -146,7 +165,18 @@ export class CashfreeService {
         return { success: false, error: errorMsg };
       }
 
-      return { success: true, data: response.data };
+      // Make sure the response includes payment_session_id
+      const responseData: CashfreeSubscriptionResponse = {
+        order_id: response.data.order_id,
+        order_status: response.data.order_status,
+        payment_session_id: response.data.payment_session_id, // Add this
+        payment_url: response.data.payment_url,
+        amount: response.data.amount,
+        duration_days: response.data.duration_days,
+        plan_id: response.data.plan_id
+      };
+
+      return { success: true, data: responseData };
     } catch (error: any) {
       console.error('Create Subscription Order Error:', error);
       return { success: false, error: error.message || 'Failed to create subscription order' };
@@ -169,8 +199,6 @@ export class CashfreeService {
   isConfigured(): boolean {
     return !!this.CASHFREE_APP_ID;
   }
-
-
 }
 
 export default CashfreeService.getInstance();

@@ -137,14 +137,7 @@ export default function AdminDashboardScreen() {
   ];
 
     const financialMenuItems = [
-    {
-      id: 'payments',
-      title: 'Payment Dashboard',
-      subtitle: 'View all transactions and analytics',
-      icon: 'bar-chart' as const,
-      color: colors.primary,
-      route: '/admin/payments-dashboard',
-    },
+   
     {
       id: 'subscriptions',
       title: 'Seller Subscriptions',
