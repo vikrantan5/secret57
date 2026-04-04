@@ -214,8 +214,38 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       if (planError) throw planError;
       if (!plan) throw new Error('Subscription plan not found');
 
-      // Create Cashfree order via service
-      const orderResult = await CashfreeService.createSubscriptionOrder({
+      // ⚠️ MOCK MODE: Set to false when edge functions are deployed
+      const USE_MOCK_MODE = true; // Enable this for testing without edge functions
+      
+      let orderResult;
+      
+      if (USE_MOCK_MODE) {
+        // 🧪 TEST MODE: Create mock order for testing
+        console.log('🧪 MOCK MODE: Creating mock subscription order for testing');
+        console.log('   Set USE_MOCK_MODE = false in subscriptionStore.ts when edge functions are ready');
+        
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Create mock order data
+        const mockOrderId = `sub_${data.seller_id}_${Date.now()}`;
+        orderResult = {
+          success: true,
+          data: {
+            order_id: mockOrderId,
+            payment_session_id: `session_${Date.now()}`,
+            order_token: `token_${Date.now()}`,
+            order_status: 'ACTIVE',
+            payment_url: `https://sandbox.cashfree.com/pg/orders/pay/session_${Date.now()}`
+          }
+        };
+        
+        console.log('✅ Mock subscription order created:', mockOrderId);
+      } else {
+        // 🚀 PRODUCTION MODE: Call real Cashfree API via edge function
+        console.log('🚀 Calling Cashfree API to create subscription order...');
+        
+        orderResult = await CashfreeService.createSubscriptionOrder({
         subscription_amount: plan.price,
         plan_name: plan.name,
         seller_id: data.seller_id,
@@ -227,6 +257,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
 
       if (!orderResult.success) {
         return { success: false, error: orderResult.error };
+      }
       }
 
       return {

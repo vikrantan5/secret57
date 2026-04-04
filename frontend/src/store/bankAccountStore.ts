@@ -151,30 +151,49 @@ export const useBankAccountStore = create<BankAccountState>((set, get) => ({
       // Generate unique beneficiary ID
       const beneId = `SELLER_${data.seller_id.substring(0, 8)}_${Date.now()}`;
 
-      // Add beneficiary to Cashfree
-      const beneficiaryResult = await CashfreePayoutService.addBeneficiary({
-        bene_id: beneId,
-        name: data.account_holder_name,
-        email: seller.users?.email || '',
-        phone: seller.users?.phone || '',
-        bank_account: data.account_number,
-        ifsc: data.ifsc_code.toUpperCase(),
-        address1: seller.address || 'Address',
-        city: seller.city || 'City',
-        state: seller.state || 'State',
-        pincode: seller.pincode || '000000'
-      });
-
+      // ⚠️ MOCK MODE: Set to false when edge functions are deployed and working
+      const USE_MOCK_MODE = true; // Enable this for testing without edge functions
+      
       let cashfree_beneficiary_id;
       let verification_status: 'pending' | 'verified' | 'failed' = 'pending';
 
-      if (beneficiaryResult.success) {
-        cashfree_beneficiary_id = beneficiaryResult.bene_id;
+      if (USE_MOCK_MODE) {
+        // 🧪 TEST MODE: Auto-approve beneficiary without calling Cashfree API
+        console.log('🧪 MOCK MODE: Auto-approving beneficiary for testing');
+        console.log('   Set USE_MOCK_MODE = false in bankAccountStore.ts when edge functions are ready');
+        cashfree_beneficiary_id = beneId;
         verification_status = 'verified';
-        console.log('Cashfree beneficiary created successfully:', cashfree_beneficiary_id);
+        
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
       } else {
-        console.warn('Cashfree beneficiary creation failed:', beneficiaryResult.error);
-        // Continue anyway - account can be verified later
+        // 🚀 PRODUCTION MODE: Call real Cashfree API via edge function
+        console.log('🚀 Calling Cashfree API to add beneficiary...');
+        
+        const beneficiaryResult = await CashfreePayoutService.addBeneficiary({
+          bene_id: beneId,
+          name: data.account_holder_name,
+          email: seller.users?.email || '',
+          phone: seller.users?.phone || '',
+          bank_account: data.account_number,
+          ifsc: data.ifsc_code.toUpperCase(),
+          address1: seller.address || 'Address',
+          city: seller.city || 'City',
+          state: seller.state || 'State',
+          pincode: seller.pincode || '000000'
+        });
+
+        if (beneficiaryResult.success) {
+          cashfree_beneficiary_id = beneficiaryResult.bene_id;
+          verification_status = 'verified';
+          console.log('✅ Cashfree beneficiary created successfully:', cashfree_beneficiary_id);
+        } else {
+          console.error('❌ Cashfree beneficiary creation failed:', beneficiaryResult.error);
+          console.warn('⚠️  Continuing with pending status - you can verify later');
+          // Continue anyway - account can be verified later
+          cashfree_beneficiary_id = beneId; // Use generated ID
+          verification_status = 'pending'; // Mark as pending
+        }
       }
 
       // Save bank account to Supabase
