@@ -94,20 +94,25 @@ serve(async (req) => {
       );
     }
 
-    console.log('Cashfree order created successfully:', responseData.order_id);
-    console.log('Payment link from Cashfree:', responseData.payment_link);
+     console.log('Cashfree order created successfully:', responseData.order_id);
+    console.log('Payment session ID from Cashfree:', responseData.payment_session_id);
 
-    // IMPORTANT: Use ONLY payment_link from Cashfree API response
-    // Do NOT construct URLs manually - causes 404 errors
-    const paymentUrl = responseData.payment_link;
-
-    if (!paymentUrl) {
-      console.error('No payment_link in Cashfree response:', responseData);
+    // Cashfree API returns payment_session_id, construct the payment URL
+    // For sandbox: https://sandbox.cashfree.com/pg/view/order/{payment_session_id}
+    // For production: https://payments.cashfree.com/order/{payment_session_id}
+    const paymentSessionId = responseData.payment_session_id;
+    
+    if (!paymentSessionId) {
+      console.error('No payment_session_id in Cashfree response:', responseData);
       return new Response(
-        JSON.stringify({ success: false, error: 'Payment link not received from Cashfree' }),
+        JSON.stringify({ success: false, error: 'Payment session not received from Cashfree' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // Construct payment URL based on environment (sandbox)
+    const paymentUrl = `https://sandbox.cashfree.com/pg/view/order/${paymentSessionId}`;
+    console.log('Constructed payment URL:', paymentUrl);
 
     return new Response(
       JSON.stringify({

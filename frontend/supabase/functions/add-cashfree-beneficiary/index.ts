@@ -82,8 +82,26 @@ serve(async (req) => {
 
     if (!authResponse.ok || authData.status !== 'SUCCESS') {
       console.error('Failed to authorize:', authData);
+      
+      // Check if it's IP whitelist error
+      const errorMsg = authData.message || '';
+      if (errorMsg.includes('IP not whitelisted') || errorMsg.includes('ip is')) {
+        const ipMatch = errorMsg.match(/ip is (\d+\.\d+\.\d+\.\d+)/i);
+        const currentIp = ipMatch ? ipMatch[1] : 'unknown';
+        
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: `IP Whitelist Required: Please whitelist IP ${currentIp} in Cashfree Payout Dashboard (Settings → IP Whitelist)`,
+            error_type: 'ip_whitelist_required',
+            current_ip: currentIp
+          }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
       return new Response(
-        JSON.stringify({ success: false, error: 'Authorization failed' }),
+        JSON.stringify({ success: false, error: authData.message || 'Authorization failed' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
