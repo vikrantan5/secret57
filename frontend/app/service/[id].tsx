@@ -25,6 +25,7 @@ import { colors, spacing, typography, borderRadius, shadows } from '../../src/co
 import { YouTubePlayerComponent } from '../../src/components/ui/YouTubePlayer';
 import CashfreePayment from '../../src/components/CashfreePayment';
 import CashfreeService from '../../src/services/cashfreeService';
+import { supabase } from '../../src/services/supabase';
 
 const { width } = Dimensions.get('window');
 
@@ -276,6 +277,11 @@ export default function ServiceDetailScreen() {
     setShowCashfree(false);
     setProcessingPayment(false);
     
+    // Notify seller about payment cancellation
+    if (currentBookingId) {
+      notifySellerOfBookingCancellation(currentBookingId);
+    }
+    
     Alert.alert(
       'Payment Failed',
       error || 'Payment was not successful. Please try again.',
@@ -295,6 +301,52 @@ export default function ServiceDetailScreen() {
   const handlePaymentCancel = () => {
     setShowCashfree(false);
     setProcessingPayment(false);
+    
+    // Notify seller about payment cancellation
+    if (currentBookingId) {
+      notifySellerOfBookingCancellation(currentBookingId);
+    }
+  };
+
+  const notifySellerOfBookingCancellation = async (bookingId: string) => {
+    try {
+      // Get booking details and seller info
+      const { data: booking, error } = await supabase
+        .from('bookings')
+        .select(`
+          id,
+          seller_id,
+          service_id,
+          seller:sellers!inner(
+            id,
+            company_name,
+            user_id
+          ),
+          service:services(name)
+        `)
+        .eq('id', bookingId)
+        .single();
+
+      if (error || !booking) {
+        console.error('Failed to fetch booking for notification:', error);
+        return;
+      }
+
+      // Create notification for seller
+      await supabase.from('notifications').insert({
+        user_id: booking.seller.user_id,
+        title: 'Booking Payment Cancelled',
+        message: `Customer cancelled payment for ${booking.service?.name || 'service'} booking. The booking is still pending.`,
+        type: 'payment_cancelled',
+        reference_id: bookingId,
+        reference_type: 'booking',
+        created_at: new Date().toISOString(),
+      });
+
+      console.log('Sent booking cancellation notification to seller');
+    } catch (error) {
+      console.error('Error sending booking cancellation notification:', error);
+    }
   };
 
 

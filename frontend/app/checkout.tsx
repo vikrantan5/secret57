@@ -397,6 +397,11 @@ export default function CheckoutScreen() {
     setShowCashfree(false);
     setLoading(false);
     setProcessingPayment(false);
+     
+    // Notify seller about payment cancellation
+    if (currentOrderId) {
+      notifySellerOfCancellation(currentOrderId, 'order');
+    }
     
     Alert.alert(
       'Payment Failed', 
@@ -422,6 +427,11 @@ export default function CheckoutScreen() {
     setShowCashfree(false);
     setLoading(false);
     setProcessingPayment(false);
+     
+    // Notify seller about payment cancellation
+    if (currentOrderId) {
+      notifySellerOfCancellation(currentOrderId, 'order');
+    }
     
     Alert.alert(
       'Payment Cancelled',
@@ -438,6 +448,51 @@ export default function CheckoutScreen() {
         },
       ]
     );
+  };
+
+
+  const notifySellerOfCancellation = async (orderId: string, type: 'order' | 'booking') => {
+    try {
+      // Get order/booking details and seller info
+      const { data: orderItems, error } = await supabase
+        .from('order_items')
+        .select(`
+          seller_id,
+          seller:sellers!inner(
+            id,
+            company_name,
+            user_id
+          )
+        `)
+        .eq('order_id', orderId);
+
+      if (error || !orderItems || orderItems.length === 0) {
+        console.error('Failed to fetch order items for notification:', error);
+        return;
+      }
+
+      // Get unique sellers
+      const uniqueSellers = Array.from(
+        new Map(orderItems.map(item => [item.seller_id, item.seller])).values()
+      );
+
+      // Create notification for each seller
+      for (const seller of uniqueSellers) {
+        await supabase.from('notifications').insert({
+          user_id: seller.user_id,
+          title: 'Payment Cancelled',
+          message: `Customer cancelled payment for order #${orderId.substring(0, 8)}. The order is still pending.`,
+          type: 'payment_cancelled',
+          reference_id: orderId,
+          reference_type: type,
+          created_at: new Date().toISOString(),
+        });
+      }
+
+      console.log(`Sent cancellation notifications to ${uniqueSellers.length} seller(s)`);
+    } catch (error) {
+      console.error('Error sending cancellation notification:', error);
+    }
   };
 
   return (

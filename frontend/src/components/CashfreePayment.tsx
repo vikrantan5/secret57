@@ -6,8 +6,9 @@ import { colors, spacing, typography } from '../constants/theme';
 
 interface CashfreePaymentProps {
   visible: boolean;
-  paymentSessionId: string;
-  orderId: string;
+  paymentSessionId?: string;
+  paymentUrl?: string;
+  orderId?: string;
   onSuccess: (paymentId: string, orderId: string) => void;
   onFailure: (error: string) => void;
   onCancel: () => void;
@@ -16,6 +17,7 @@ interface CashfreePaymentProps {
 export default function CashfreePayment({
   visible,
   paymentSessionId,
+  paymentUrl,
   orderId,
   onSuccess,
   onFailure,
@@ -23,6 +25,9 @@ export default function CashfreePayment({
 }: CashfreePaymentProps) {
   const webViewRef = useRef<WebView>(null);
   const [loading, setLoading] = useState(true);
+
+  // Determine if we should use direct URL or embed Cashfree SDK
+  const useDirectUrl = !!paymentUrl && !paymentSessionId;
 
   const getHtmlContent = () => {
     // Use the raw payment_session_id as-is
@@ -100,13 +105,27 @@ export default function CashfreePayment({
     }
   };
 
-  const handleNavigationStateChange = (navState: any) => {
+   const handleNavigationStateChange = (navState: any) => {
     const { url } = navState;
     console.log('Navigation URL:', url);
     
-    if (url && url.includes('subscription-success')) {
+    // Handle success redirects
+    if (url && (url.includes('subscription-success') || url.includes('payment-success') || url.includes('booking-success'))) {
       // Payment completed via redirect
-      onSuccess('', orderId);
+      onSuccess('', orderId || '');
+    }
+    
+    // Handle Cashfree payment status from URL
+    if (url && url.includes('order_status=')) {
+      const urlParams = new URLSearchParams(url.split('?')[1]);
+      const orderStatus = urlParams.get('order_status');
+      const orderIdFromUrl = urlParams.get('order_id') || orderId || '';
+      
+      if (orderStatus === 'PAID' || orderStatus === 'SUCCESS') {
+        onSuccess('', orderIdFromUrl);
+      } else if (orderStatus === 'FAILED' || orderStatus === 'CANCELLED') {
+        onFailure(orderStatus === 'CANCELLED' ? 'Payment cancelled' : 'Payment failed');
+      }
     }
   };
 
@@ -134,7 +153,7 @@ export default function CashfreePayment({
 
         <WebView
           ref={webViewRef}
-          source={{ html: getHtmlContent() }}
+          source={useDirectUrl ? { uri: paymentUrl! } : { html: getHtmlContent() }}
           onLoadStart={() => setLoading(true)}
           onLoadEnd={() => setLoading(false)}
           onNavigationStateChange={handleNavigationStateChange}

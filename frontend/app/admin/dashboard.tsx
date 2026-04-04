@@ -136,7 +136,7 @@ export default function AdminDashboardScreen() {
     },
   ];
 
-  const financialMenuItems = [
+    const financialMenuItems = [
     {
       id: 'payments',
       title: 'Payment Dashboard',
@@ -146,28 +146,12 @@ export default function AdminDashboardScreen() {
       route: '/admin/payments-dashboard',
     },
     {
-      id: 'payouts',
-      title: 'Seller Payouts',
-      subtitle: 'Manage and process payouts to sellers',
-      icon: 'cash' as const,
+      id: 'subscriptions',
+      title: 'Seller Subscriptions',
+      subtitle: 'View subscription payments from sellers',
+      icon: 'card' as const,
       color: colors.success,
-      route: '/admin/payouts',
-    },
-    {
-      id: 'refunds',
-      title: 'Refund Requests',
-      subtitle: 'Review and process customer refunds',
-      icon: 'return-down-back' as const,
-      color: colors.error,
-      route: '/admin/refunds',
-    },
-    {
-      id: 'complaints',
-      title: 'Complaints Management',
-      subtitle: 'Handle customer complaints and reports',
-      icon: 'flag' as const,
-      color: colors.warning,
-      route: '/admin/complaints',
+      route: '/admin/seller-subscriptions',
     },
   ];
 
