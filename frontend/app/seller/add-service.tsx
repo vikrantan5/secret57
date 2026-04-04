@@ -141,30 +141,32 @@ export default function AddServiceScreen() {
     }
   };
 
-  const validate = () => {
-    const newErrors: any = {};
+const validate = () => {
+  const newErrors: any = {};
 
-    if (!name.trim()) newErrors.name = 'Service name is required';
-    if (!description.trim()) newErrors.description = 'Description is required';
-    if (!basePrice || parseFloat(basePrice) <= 0) newErrors.basePrice = 'Valid price is required';
-   // Validate location (only if not already exists)
-    if (!hasExistingLocation) {
-      if (!address.trim()) newErrors.address = 'Service address is required';
-      if (!city.trim()) newErrors.city = 'City is required';
-      if (!pincode.trim()) newErrors.pincode = 'Pincode is required';
-      if (pincode.trim() && !/^d{6}$/.test(pincode.trim())) {
-        newErrors.pincode = 'Invalid pincode (6 digits required)';
-      }
+  if (!name.trim()) newErrors.name = 'Service name is required';
+  if (!description.trim()) newErrors.description = 'Description is required';
+  if (!basePrice || parseFloat(basePrice) <= 0) newErrors.basePrice = 'Valid price is required';
+  
+  // Validate location (only if not already exists)
+  if (!hasExistingLocation) {
+    if (!address.trim()) newErrors.address = 'Service address is required';
+    if (!city.trim()) newErrors.city = 'City is required';
+    if (!pincode.trim()) newErrors.pincode = 'Pincode is required';
+    // FIXED: Changed 'd' to '\d' for digit matching
+    if (pincode.trim() && !/^\d{6}$/.test(pincode.trim())) {
+      newErrors.pincode = 'Invalid pincode (6 digits required)';
     }
+  }
 
-      // Validate YouTube URL if provided
-    if (videoUrl.trim() && !isValidYouTubeUrl(videoUrl.trim())) {
-      newErrors.videoUrl = 'Please enter a valid YouTube URL';
-    }
-  // Category is auto-assigned from seller, no validation needed
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  // Validate YouTube URL if provided
+  if (videoUrl.trim() && !isValidYouTubeUrl(videoUrl.trim())) {
+    newErrors.videoUrl = 'Please enter a valid YouTube URL';
+  }
+  
+  setErrors(newErrors);
+  return Object.keys(newErrors).length === 0;
+};
 
   const handleSubmit = async () => {
     if (!validate()) {

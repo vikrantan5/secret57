@@ -66,9 +66,9 @@ serve(async (req) => {
         customer_email,
         customer_phone
           },
-      order_meta: {
-        return_url: return_url
-      }
+   order_meta: {
+  return_url: return_url || `yourapp://payment-callback?booking_id={order_id}&order_status={order_status}`
+}
     };
 
     console.log('Creating Cashfree order:', order_id);
@@ -98,8 +98,10 @@ serve(async (req) => {
     console.log('Payment session ID from Cashfree:', responseData.payment_session_id);
 
     // Cashfree API returns payment_session_id, construct the payment URL
-    // For sandbox: https://sandbox.cashfree.com/pg/view/order/{payment_session_id}
-    // For production: https://payments.cashfree.com/order/{payment_session_id}
+   // Cashfree API returns payment_session_id, construct the checkout URL
+    // Official Cashfree checkout URL format (ONLY working method):
+    // For sandbox: https://sandbox.cashfree.com/pg/checkout?payment_session_id=SESSION_ID
+    // For production: https://payments.cashfree.com/order/checkout?payment_session_id=SESSION_ID
     const paymentSessionId = responseData.payment_session_id;
     
     if (!paymentSessionId) {
@@ -110,8 +112,8 @@ serve(async (req) => {
       );
     }
 
-    // Construct payment URL based on environment (sandbox)
-    const paymentUrl = `https://sandbox.cashfree.com/pg/view/order/${paymentSessionId}`;
+       // Construct checkout URL with query parameter (Official Cashfree method)
+    const paymentUrl = `https://sandbox.cashfree.com/pg/checkout?payment_session_id=${paymentSessionId}`;
     console.log('Constructed payment URL:', paymentUrl);
 
     return new Response(

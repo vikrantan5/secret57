@@ -34,7 +34,6 @@ export default function SellerSubscription() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [paymentVisible, setPaymentVisible] = useState(false);
-  const [paymentUrl, setPaymentUrl] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
   const [orderData, setOrderData] = useState<any>(null);
 
@@ -72,7 +71,7 @@ export default function SellerSubscription() {
 
     setSelectedPlan(plan);
 
- try {
+    try {
       const result = await createSubscriptionOrder({
         seller_id: seller.id,
         plan_id: plan.id,
@@ -89,15 +88,15 @@ export default function SellerSubscription() {
       // Open payment modal
       console.log('Order result from edge function:', JSON.stringify(result.order_data, null, 2));
       
-      if (!result.order_data.payment_url) {
-        Alert.alert('Error', 'Payment URL not received from server');
+      // Check if we have payment_session_id
+      if (!result.order_data.payment_session_id) {
+        Alert.alert('Error', 'Payment session ID not received from server');
         return;
       }
       
       setOrderData(result.order_data);
-      setPaymentUrl(result.order_data.payment_url);
       setPaymentVisible(true);
-      console.log('Payment URL:', result.order_data.payment_url);
+      console.log('Payment Session ID:', result.order_data.payment_session_id);
     } catch (error: any) {
       console.error('Subscription error:', error);
       Alert.alert('Error', error.message || 'Failed to initiate subscription');
@@ -356,15 +355,16 @@ export default function SellerSubscription() {
         </View>
       </ScrollView>
 
-         {/* Payment Modal */}
-      {paymentVisible && paymentUrl && orderData && (
-       <CashfreePayment
-  visible={paymentVisible}
-  paymentUrl={paymentUrl}
-  onSuccess={handlePaymentSuccess}
-  onFailure={handlePaymentFailure}
-  onCancel={handlePaymentCancel}
-/>
+      {/* Payment Modal - UPDATED */}
+      {paymentVisible && orderData && (
+        <CashfreePayment
+          visible={paymentVisible}
+          paymentSessionId={orderData.payment_session_id}  // Pass the raw session ID
+          orderId={orderData.order_id}
+          onSuccess={handlePaymentSuccess}
+          onFailure={handlePaymentFailure}
+          onCancel={handlePaymentCancel}
+        />
       )}
     </SafeAreaView>
   );

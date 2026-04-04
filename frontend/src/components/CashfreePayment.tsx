@@ -1,13 +1,13 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Modal, StyleSheet, ActivityIndicator, Text, TouchableOpacity, Platform } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../constants/theme';
-import CashfreeService from '../services/cashfreeService';
 
 interface CashfreePaymentProps {
   visible: boolean;
-  paymentUrl: string; // Direct payment URL from Cashfree API
+  paymentSessionId: string;
+  orderId: string;
   onSuccess: (paymentId: string, orderId: string) => void;
   onFailure: (error: string) => void;
   onCancel: () => void;
@@ -15,56 +15,98 @@ interface CashfreePaymentProps {
 
 export default function CashfreePayment({
   visible,
-  paymentUrl,
+  paymentSessionId,
+  orderId,
   onSuccess,
   onFailure,
   onCancel,
 }: CashfreePaymentProps) {
   const webViewRef = useRef<WebView>(null);
-  const [loading, setLoading] = React.useState(true);
-  
-  console.log('Payment URL from API:', paymentUrl);
+  const [loading, setLoading] = useState(true);
 
-  const handleWebViewNavigationStateChange = (navState: any) => {
-    const { url } = navState;
-    console.log('Navigation URL:', url);
+  const getHtmlContent = () => {
+    // Use the raw payment_session_id as-is
+    const sessionId = paymentSessionId;
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
+        <style>
+          body { margin: 0; padding: 0; }
+          #payment-form { width: 100%; height: 100vh; }
+          .loader { text-align: center; padding: 50px; font-family: sans-serif; }
+        </style>
+      </head>
+      <body>
+        <div id="payment-form">
+          <div class="loader">Loading payment gateway...</div>
+        </div>
+        
+        <script>
+          // Initialize Cashfree checkout
+          const cashfree = new Cashfree({
+            mode: "sandbox" // Change to "production" for live
+          });
+          
+          let checkoutOptions = {
+            paymentSessionId: "${sessionId}",
+            returnUrl: "https://hybrid-bazaar.preview.emergentagent.com/seller/subscription-success",
+            redirectTarget: "_self"
+          };
+          
+          cashfree.checkout(checkoutOptions).then(function(result) {
+            if(result.error) {
+              console.log("Payment error:", result.error);
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'error',
+                message: result.error.message || 'Payment failed'
+              }));
+            } else {
+              console.log("Payment success:", result);
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'success',
+                paymentId: result.paymentDetails?.paymentId || '',
+                orderId: result.paymentDetails?.orderId || '${orderId}'
+              }));
+            }
+          }).catch(function(error) {
+            console.log("Checkout error:", error);
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'error',
+              message: error.message || 'Failed to initialize payment'
+            }));
+          });
+        </script>
+      </body>
+      </html>
+    `;
+  };
 
-    // Check if payment is complete (return URL)
-    if (url.includes('subscription-success') || url.includes('payment-success')) {
-      // Extract order_id from URL
-      const urlParams = new URLSearchParams(url.split('?')[1]);
-      const orderId = urlParams.get('order_id');
+  const handleMessage = (event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      console.log('Payment message:', data);
       
-      if (orderId) {
-        // Verify payment
-        verifyPayment(orderId);
+      if (data.type === 'success') {
+        onSuccess(data.paymentId, data.orderId);
+      } else if (data.type === 'error') {
+        onFailure(data.message);
       }
-    }
-
-    // Check for failure
-    if (url.includes('payment-failure') || url.includes('payment-cancel')) {
-      onFailure('Payment was cancelled or failed');
+    } catch (error) {
+      console.error('Message parse error:', error);
     }
   };
 
-  const verifyPayment = async (orderId: string) => {
-    try {
-      const result = await CashfreeService.verifyPayment(orderId);
-      
-      if (result.success && result.data) {
-        const { payment_status, order_id, cf_payment_id } = result.data;
-        
-        if (payment_status === 'SUCCESS' || payment_status === 'PAID') {
-          onSuccess(cf_payment_id || order_id, order_id);
-        } else {
-          onFailure(`Payment ${payment_status.toLowerCase()}`);
-        }
-      } else {
-        onFailure(result.error || 'Payment verification failed');
-      }
-    } catch (error: any) {
-      console.error('Payment verification error:', error);
-      onFailure(error.message || 'Payment verification failed');
+  const handleNavigationStateChange = (navState: any) => {
+    const { url } = navState;
+    console.log('Navigation URL:', url);
+    
+    if (url && url.includes('subscription-success')) {
+      // Payment completed via redirect
+      onSuccess('', orderId);
     }
   };
 
@@ -76,7 +118,6 @@ export default function CashfreePayment({
       presentationStyle="pageSheet"
     >
       <View style={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Complete Payment</Text>
           <TouchableOpacity onPress={onCancel} style={styles.closeButton}>
@@ -84,7 +125,6 @@ export default function CashfreePayment({
           </TouchableOpacity>
         </View>
 
-        {/* Loading Indicator */}
         {loading && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
@@ -92,33 +132,23 @@ export default function CashfreePayment({
           </View>
         )}
 
-        {/* WebView */}
         <WebView
           ref={webViewRef}
-          source={{ uri: paymentUrl }}
+          source={{ html: getHtmlContent() }}
           onLoadStart={() => setLoading(true)}
           onLoadEnd={() => setLoading(false)}
-          onNavigationStateChange={handleWebViewNavigationStateChange}
+          onNavigationStateChange={handleNavigationStateChange}
+          onMessage={handleMessage}
           javaScriptEnabled={true}
           domStorageEnabled={true}
           startInLoadingState={true}
-          scalesPageToFit={true}
           style={styles.webView}
-          onError={(syntheticEvent) => {
-            const { nativeEvent } = syntheticEvent;
-            console.error('WebView error:', nativeEvent);
+          onError={(error) => {
+            console.error('WebView error:', error);
             onFailure('Failed to load payment page');
-          }}
-          onHttpError={(syntheticEvent) => {
-            const { nativeEvent } = syntheticEvent;
-            console.error('HTTP error:', nativeEvent);
-            if (nativeEvent.statusCode >= 400) {
-              onFailure('Payment gateway error');
-            }
           }}
         />
 
-        {/* Info Footer */}
         <View style={styles.footer}>
           <Ionicons name="shield-checkmark" size={16} color={colors.success} />
           <Text style={styles.footerText}>Secure payment powered by Cashfree</Text>

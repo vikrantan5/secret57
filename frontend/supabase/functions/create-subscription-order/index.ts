@@ -52,8 +52,6 @@ serve(async (req) => {
       return_url
     }: SubscriptionOrderRequest = await req.json();
 
-  
-
     console.log('Received subscription order request:', {
       subscription_amount,
       plan_name,
@@ -74,7 +72,7 @@ serve(async (req) => {
 
     console.log('Creating subscription order with ID:', order_id);
 
-      // Create Cashfree order (payment goes to admin/platform account)
+    // Create Cashfree order (payment goes to admin/platform account)
     const orderPayload = {
       order_id,
       order_amount: parseFloat(subscription_amount.toString()),
@@ -84,7 +82,7 @@ serve(async (req) => {
         customer_name: seller_name,
         customer_email: seller_email,
         customer_phone: seller_phone
-          },
+      },
       order_meta: {
         return_url: return_url 
       }
@@ -122,13 +120,10 @@ serve(async (req) => {
     }
 
     console.log('Subscription order created successfully:', responseData.order_id);
-    console.log('Payment session ID from Cashfree:', responseData.payment_session_id);
-
-    // Cashfree API returns payment_session_id, construct the payment URL
-    // For sandbox: https://sandbox.cashfree.com/pg/view/order/{payment_session_id}
-    // For production: https://payments.cashfree.com/order/{payment_session_id}
-    const paymentSessionId = responseData.payment_session_id;
     
+    // Get the payment session ID from Cashfree response
+    let paymentSessionId = responseData.payment_session_id;
+
     if (!paymentSessionId) {
       console.error('No payment_session_id in Cashfree response:', responseData);
       return new Response(
@@ -137,21 +132,31 @@ serve(async (req) => {
       );
     }
 
-    // Construct payment URL based on environment (sandbox)
-    const paymentUrl = `https://sandbox.cashfree.com/pg/view/order/${paymentSessionId}`;
+    console.log('Raw payment_session_id from Cashfree:', paymentSessionId);
+
+    // IMPORTANT: Cashfree's payment_session_id already includes "payment" at the end
+    // Do NOT remove it - it's part of the valid session ID
+    // Just construct the URL directly
+    
+    // Construct checkout URL with query parameter (Official Cashfree method)
+    const paymentUrl = `https://sandbox.cashfree.com/pg/checkout?payment_session_id=${paymentSessionId}`;
     console.log('Constructed payment URL:', paymentUrl);
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        data: {
-          order_id: responseData.order_id,
-          order_status: responseData.order_status,
-          payment_url: paymentUrl
-        }
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    // At the end of your edge function, just return the raw payment_session_id
+return new Response(
+  JSON.stringify({
+    success: true,
+    data: {
+      order_id: responseData.order_id,
+      order_status: responseData.order_status,
+      payment_session_id: responseData.payment_session_id, // Return RAW value
+      amount: subscription_amount,
+      duration_days: 30,
+      plan_id: "your-plan-id" // You'll need to get this from your database
+    }
+  }),
+  { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+);
   } catch (error: any) {
     console.error('Error in create-subscription-order:', error);
     return new Response(
