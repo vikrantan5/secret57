@@ -25,7 +25,11 @@ export default function CashfreePayment({
   const webViewRef = useRef<WebView>(null);
   const [loading, setLoading] = React.useState(true);
 
-  const paymentUrl = CashfreeService.getPaymentSessionUrl(paymentSessionId, providedPaymentUrl);
+  // Always construct URL from session ID to avoid any malformed URLs from API
+  // Ignore providedPaymentUrl for now until edge function is properly deployed
+  const paymentUrl = `https://sandbox.cashfree.com/pg/orders/pay/${paymentSessionId}`;
+  
+  console.log('Constructed Payment URL:', paymentUrl);
 
   const handleWebViewNavigationStateChange = (navState: any) => {
     const { url } = navState;

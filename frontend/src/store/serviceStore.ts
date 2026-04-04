@@ -125,7 +125,7 @@ export const useServiceStore = create<ServiceState>((set, get) => ({
     }
   },
 
-  createService: async (service) => {
+   createService: async (service) => {
     try {
       // Check active subscription
       if (service.seller_id) {
@@ -137,39 +137,45 @@ export const useServiceStore = create<ServiceState>((set, get) => ({
           };
         }
 
-        // Check bank account
-        const bankAccounts = useBankAccountStore.getState().accounts;
-        const hasValidBank = bankAccounts.some(
+        // Check bank account and get beneficiary ID
+        const bankAccounts = useBankAccountStore.getState().bankAccounts;
+        const verifiedBank = bankAccounts.find(
           acc => acc.seller_id === service.seller_id && acc.verification_status === 'verified'
         );
         
-        if (!hasValidBank) {
+        if (!verifiedBank) {
           return { 
             success: false, 
             error: 'Verified bank account required. Please add and verify your bank details in Payout Settings.' 
           };
         }
-      }
 
-      const { data, error } = await supabase
-        .from('services')
-        .insert([{
+        // Add seller's cashfree beneficiary ID to service
+        const serviceData = {
           ...service,
+          seller_settlement_account_id: verifiedBank.cashfree_bene_id || verifiedBank.cashfree_beneficiary_id,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        }])
-        .select()
-        .single();
+        };
 
-      if (error) {
-        console.error('Error creating service:', error);
-        return { success: false, error: error.message };
+        const { data, error } = await supabase
+          .from('services')
+          .insert([serviceData])
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error creating service:', error);
+          return { success: false, error: error.message };
+        }
+
+        // Add to local state
+        set(state => ({ services: [data, ...state.services] }));
+        
+        return { success: true, service: data };
       }
 
-      // Add to local state
-      set(state => ({ services: [data, ...state.services] }));
-      
-      return { success: true, service: data };
+      return { success: false, error: 'Seller ID is required' };
     } catch (error: any) {
       console.error('Error in createService:', error);
       return { success: false, error: error.message };

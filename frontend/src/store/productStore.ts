@@ -130,6 +130,16 @@ export const useProductStore = create<ProductState>((set, get) => ({
     }
   },
 
+
+
+
+
+
+
+
+
+
+
    createProduct: async (product) => {
     try {
       // Check active subscription
@@ -142,44 +152,61 @@ export const useProductStore = create<ProductState>((set, get) => ({
           };
         }
 
-        // Check bank account
-        const bankAccounts = useBankAccountStore.getState().accounts;
-        const hasValidBank = bankAccounts.some(
+        // Check bank account and get beneficiary ID
+        const bankAccounts = useBankAccountStore.getState().bankAccounts;
+        const verifiedBank = bankAccounts.find(
           acc => acc.seller_id === product.seller_id && acc.verification_status === 'verified'
         );
         
-        if (!hasValidBank) {
+        if (!verifiedBank) {
           return { 
             success: false, 
             error: 'Verified bank account required. Please add and verify your bank details in Payout Settings.' 
           };
         }
-      }
 
-      const { data, error } = await supabase
-        .from('products')
-        .insert([{
+        // Add seller's cashfree beneficiary ID to product
+        const productData = {
           ...product,
+          seller_settlement_account_id: verifiedBank.cashfree_bene_id || verifiedBank.cashfree_beneficiary_id,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        }])
-        .select()
-        .single();
+        };
 
-      if (error) {
-        console.error('Error creating product:', error);
-        return { success: false, error: error.message };
+        const { data, error } = await supabase
+          .from('products')
+          .insert([productData])
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error creating product:', error);
+          return { success: false, error: error.message };
+        }
+
+        // Add to local state
+        set(state => ({ products: [data, ...state.products] }));
+        
+        return { success: true, product: data };
       }
 
-      // Add to local state
-      set(state => ({ products: [data, ...state.products] }));
-      
-      return { success: true, product: data };
+      return { success: false, error: 'Seller ID is required' };
     } catch (error: any) {
       console.error('Error in createProduct:', error);
       return { success: false, error: error.message };
     }
   },
+
+
+
+
+
+
+
+
+
+
+  
   updateProduct: async (id, updates) => {
     try {
       const { error } = await supabase

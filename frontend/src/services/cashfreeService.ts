@@ -160,8 +160,9 @@ export class CashfreeService {
    * Now returns the payment_url from API response directly
    */
   getPaymentSessionUrl(paymentSessionId: string, paymentUrl?: string): string {
-    // If payment_url is provided from API response, use it directly
-    if (paymentUrl) {
+    // If payment_url is provided from API response and is valid, use it directly
+    if (paymentUrl && paymentUrl.startsWith('http')) {
+      // Make sure the URL doesn't have duplicated path segments
       return paymentUrl;
     }
     

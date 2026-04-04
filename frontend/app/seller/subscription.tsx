@@ -87,10 +87,12 @@ export default function SellerSubscription() {
       }
 
       // Open payment modal
+      console.log('Order result from edge function:', JSON.stringify(result.order_data, null, 2));
       setOrderData(result.order_data);
       setPaymentSessionId(result.order_data.payment_session_id);
       setPaymentVisible(true);
-         console.log('Payment URL:', result.order_data.payment_url || 'Using fallback URL');
+      console.log('Payment Session ID:', result.order_data.payment_session_id);
+      console.log('Payment URL from API:', result.order_data.payment_url || 'Not provided');
     } catch (error: any) {
       console.error('Subscription error:', error);
       Alert.alert('Error', error.message || 'Failed to initiate subscription');
