@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
+    Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -140,6 +141,80 @@ export default function BookingDetailScreen() {
             </View>
           )}
         </View>
+
+
+          {/* Contact Seller - Show after payment */}
+        {booking.payment_method && (booking.status === 'pending' || booking.status === 'confirmed' || booking.status === 'in_progress') && (
+          <View style={[styles.card, shadows.sm, styles.contactCard]}>
+            <View style={styles.contactHeader}>
+              <Ionicons name="chatbubbles" size={24} color={colors.primary} />
+              <Text style={styles.cardTitle}>Contact Service Provider</Text>
+            </View>
+            <Text style={styles.contactDescription}>
+              Reach out to the service provider for any queries or coordination
+            </Text>
+            {booking.seller?.user?.phone && (
+              <TouchableOpacity 
+                style={styles.contactButton}
+                onPress={() => {
+                  // Open phone dialer
+                  const phoneUrl = `tel:${booking.seller.user.phone}`;
+                  Alert.alert(
+                    'Call Seller',
+                    `Do you want to call ${booking.seller.user.phone}?`,
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Call', onPress: () => {
+                        if (Platform.OS === 'web') {
+                          window.open(phoneUrl);
+                        } else {
+                          require('react-native').Linking.openURL(phoneUrl);
+                        }
+                      }}
+                    ]
+                  );
+                }}
+                data-testid="contact-seller-phone-button"
+              >
+                <Ionicons name="call" size={20} color={colors.primary} />
+                <View style={styles.contactButtonContent}>
+                  <Text style={styles.contactButtonLabel}>Phone</Text>
+                  <Text style={styles.contactButtonValue}>{booking.seller.user.phone}</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+            {booking.seller?.user?.email && (
+              <TouchableOpacity 
+                style={styles.contactButton}
+                onPress={() => {
+                  // Open email client
+                  const emailUrl = `mailto:${booking.seller.user.email}?subject=Regarding Booking ${booking.id.slice(0, 8)}`;
+                  Alert.alert(
+                    'Email Seller',
+                    `Do you want to send email to ${booking.seller.user.email}?`,
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Email', onPress: () => {
+                        if (Platform.OS === 'web') {
+                          window.open(emailUrl);
+                        } else {
+                          require('react-native').Linking.openURL(emailUrl);
+                        }
+                      }}
+                    ]
+                  );
+                }}
+                data-testid="contact-seller-email-button"
+              >
+                <Ionicons name="mail" size={20} color={colors.primary} />
+                <View style={styles.contactButtonContent}>
+                  <Text style={styles.contactButtonLabel}>Email</Text>
+                  <Text style={styles.contactButtonValue}>{booking.seller.user.email}</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         {/* Booking Details */}
         <View style={[styles.card, shadows.sm]}>
@@ -473,6 +548,47 @@ const styles = StyleSheet.create({
   refundButtonText: {
     ...typography.body,
     color: colors.surface,
+    fontWeight: '600',
+  },
+   contactCard: {
+    backgroundColor: colors.primary + '08',
+    borderWidth: 1,
+    borderColor: colors.primary + '20',
+  },
+  contactHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  contactDescription: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
+    lineHeight: 20,
+  },
+  contactButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  contactButtonContent: {
+    flex: 1,
+  },
+  contactButtonLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs / 2,
+  },
+  contactButtonValue: {
+    ...typography.body,
+    color: colors.text,
     fontWeight: '600',
   },
 });

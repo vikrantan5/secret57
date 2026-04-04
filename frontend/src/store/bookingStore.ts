@@ -102,7 +102,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
             *,
             user:users(name, email, phone, avatar_url)
           ),
-          customer:users(name, email, phone)
+         customer:users!bookings_customer_id_fkey(id, name, email, phone, avatar_url)
         `)
         .eq('id', id)
         .single();
@@ -151,7 +151,15 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         return;
       }
 
-      set({ bookings: data || [], loading: false });
+     // Map customer data to add customer_name field
+      const bookingsWithCustomer = data?.map(booking => ({
+        ...booking,
+        customer_name: booking.customer?.name || 'N/A',
+        customer_email: booking.customer?.email || '',
+        customer_phone: booking.customer?.phone || '',
+      })) || [];
+
+      set({ bookings: bookingsWithCustomer, loading: false });
     } catch (error: any) {
       console.error('Error in fetchSellerBookings:', error);
       set({ error: error.message, loading: false });
