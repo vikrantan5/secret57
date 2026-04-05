@@ -242,7 +242,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
     }
   },
 
-  updatePaymentStatus: async (orderId, paymentData) => {
+   updatePaymentStatus: async (orderId, paymentData) => {
     try {
       // ✅ Support both Razorpay and Cashfree payment methods
       const updateData: any = {
@@ -263,12 +263,12 @@ export const useOrderStore = create<OrderState>((set, get) => ({
         updateData.razorpay_signature = paymentData.razorpay_signature;
       }
 
-      // Add Cashfree fields if present
+      // ✅ FIX: Add Cashfree fields to proper columns
       if (paymentData.cashfree_order_id) {
-        updateData.razorpay_order_id = paymentData.cashfree_order_id; // Reusing razorpay_order_id column for Cashfree
+        updateData.cashfree_order_id = paymentData.cashfree_order_id;
       }
       if (paymentData.cashfree_payment_id) {
-        updateData.razorpay_payment_id = paymentData.cashfree_payment_id; // Reusing razorpay_payment_id column for Cashfree
+        updateData.cashfree_payment_id = paymentData.cashfree_payment_id;
       }
 
       const { error } = await supabase

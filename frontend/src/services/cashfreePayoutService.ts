@@ -1,190 +1,358 @@
+/**
+ * Cashfree Payout Service
+ * Handles beneficiary creation and payout transfers
+ */
+
 import { supabase } from './supabase';
 
-export interface BeneficiaryDetails {
-  bene_id: string;
-  name: string;
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://hybrid-bazaar.preview.emergentagent.com';
+
+export interface BeneficiaryData {
+  seller_id: string;
+  user_id: string;
+  account_holder_name: string;
+  account_number: string;
+  ifsc_code: string;
+  bank_name: string;
   email: string;
   phone: string;
-  bank_account: string;
-  ifsc: string;
-  address1?: string;
-  city?: string;
-  state?: string;
-  pincode?: string;
+  address?: string;
 }
 
-export interface TransferDetails {
-  bene_id: string;
+export interface PayoutData {
+  seller_id: string;
+  beneficiary_id: string;
   amount: number;
-  transfer_id: string;
+  order_id?: string;
+  booking_id?: string;
   remarks?: string;
 }
 
 class CashfreePayoutService {
-  private static instance: CashfreePayoutService;
-
-  private constructor() {}
-
-  static getInstance(): CashfreePayoutService {
-    if (!CashfreePayoutService.instance) {
-      CashfreePayoutService.instance = new CashfreePayoutService();
-    }
-    return CashfreePayoutService.instance;
-  }
-
   /**
-   * Add beneficiary via Edge Function
+   * Create a beneficiary in Cashfree
    */
-  async addBeneficiary(details: BeneficiaryDetails): Promise<{ success: boolean; bene_id?: string; error?: string }> {
+  async createBeneficiary(data: BeneficiaryData): Promise<{
+    success: boolean;
+    data?: any;
+    error?: string;
+  }> {
     try {
-      console.log('Adding beneficiary via Edge Function:', details.bene_id);
+      console.log('Creating Cashfree beneficiary for seller:', data.seller_id);
 
-      const { data, error } = await supabase.functions.invoke('add-cashfree-beneficiary', {
-        body: {
-          bene_id: details.bene_id,
-          name: details.name,
-          email: details.email,
-          phone: details.phone,
-          bank_account: details.bank_account,
-          ifsc: details.ifsc,
-          address1: details.address1,
-          city: details.city,
-          state: details.state,
-          pincode: details.pincode
+      const { data: response, error } = await supabase.functions.invoke(
+        'create-cashfree-beneficiary',
+        {
+          body: data,
         }
-      });
+      );
 
       if (error) {
-        console.error('Edge Function Error:', error);
+        console.error('Error creating beneficiary:', error);
         return { success: false, error: error.message };
       }
 
-      if (!data?.success) {
-        console.error('Add beneficiary failed:', data?.error);
-        return { success: false, error: data?.error || 'Failed to add beneficiary' };
-      }
-
-      console.log('Beneficiary added successfully:', data.data?.bene_id);
-      return { success: true, bene_id: data.data?.bene_id };
+      console.log('Beneficiary creation response:', response);
+      return response;
     } catch (error: any) {
-      console.error('Add Beneficiary Error:', error);
-      return { success: false, error: error.message || 'Failed to add beneficiary' };
+      console.error('Error in createBeneficiary:', error);
+      return { success: false, error: error.message || 'Failed to create beneficiary' };
     }
   }
 
   /**
-   * Verify beneficiary via Edge Function
+   * Get beneficiary details
    */
-  async verifyBeneficiary(beneId: string): Promise<{ success: boolean; data?: any; error?: string }> {
+  async getBeneficiary(sellerId: string): Promise<{
+    success: boolean;
+    data?: any;
+    error?: string;
+  }> {
     try {
-      console.log('Verifying beneficiary via Edge Function:', beneId);
-
-      const { data, error } = await supabase.functions.invoke('verify-cashfree-beneficiary', {
-        body: { bene_id: beneId }
-      });
+      const { data, error } = await supabase
+        .from('seller_beneficiaries')
+        .select('*')
+        .eq('seller_id', sellerId)
+        .eq('status', 'ACTIVE')
+        .single();
 
       if (error) {
-        console.error('Edge Function Error:', error);
+        if (error.code === 'PGRST116') {
+          return { success: false, error: 'No beneficiary found' };
+        }
+        console.error('Error fetching beneficiary:', error);
         return { success: false, error: error.message };
       }
 
-      if (!data?.success) {
-        return { success: false, error: data?.error || 'Failed to verify beneficiary' };
-      }
-
-      return { success: true, data: data.data };
+      return { success: true, data };
     } catch (error: any) {
-      console.error('Verify Beneficiary Error:', error);
+      console.error('Error in getBeneficiary:', error);
       return { success: false, error: error.message };
     }
   }
 
   /**
-   * Create transfer via Edge Function
+   * Create a payout transfer
    */
-  async createTransfer(details: TransferDetails): Promise<{ success: boolean; reference_id?: string; utr?: string; error?: string }> {
+  async createPayout(data: PayoutData): Promise<{
+    success: boolean;
+    data?: any;
+    error?: string;
+  }> {
     try {
-      console.log('Creating transfer via Edge Function:', details.transfer_id);
+      console.log('Creating payout for seller:', data.seller_id);
 
-      const { data, error } = await supabase.functions.invoke('create-cashfree-transfer', {
-        body: {
-          bene_id: details.bene_id,
-          amount: details.amount,
-          transfer_id: details.transfer_id,
-          remarks: details.remarks
+      // First check if beneficiary exists
+      const beneficiaryResult = await this.getBeneficiary(data.seller_id);
+      
+      if (!beneficiaryResult.success) {
+        return { 
+          success: false, 
+          error: 'Beneficiary not found. Please add bank account first.' 
+        };
+      }
+
+      const { data: response, error } = await supabase.functions.invoke(
+        'create-cashfree-payout',
+        {
+          body: {
+            ...data,
+            beneficiary_id: beneficiaryResult.data.beneficiary_id,
+          },
         }
-      });
+      );
 
       if (error) {
-        console.error('Edge Function Error:', error);
+        console.error('Error creating payout:', error);
         return { success: false, error: error.message };
       }
 
-      if (!data?.success) {
-        return { success: false, error: data?.error || 'Failed to create transfer' };
+      console.log('Payout creation response:', response);
+      return response;
+    } catch (error: any) {
+      console.error('Error in createPayout:', error);
+      return { success: false, error: error.message || 'Failed to create payout' };
+    }
+  }
+
+  /**
+   * Get payout status from Cashfree
+   */
+  async getPayoutStatus(transferId: string): Promise<{
+    success: boolean;
+    data?: any;
+    error?: string;
+  }> {
+    try {
+      const { data: response, error } = await supabase.functions.invoke(
+        'get-cashfree-payout-status',
+        {
+          body: { transfer_id: transferId },
+        }
+      );
+
+      if (error) {
+        console.error('Error fetching payout status:', error);
+        return { success: false, error: error.message };
       }
 
-      return { 
-        success: true, 
-        reference_id: data.data?.reference_id,
-        utr: data.data?.utr
-      };
+      return response;
     } catch (error: any) {
-      console.error('Create Transfer Error:', error);
+      console.error('Error in getPayoutStatus:', error);
       return { success: false, error: error.message };
     }
   }
 
   /**
-   * Validate IFSC code
+   * Get seller earnings summary
    */
-  validateIFSC(ifsc: string): boolean {
-    const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
-    return ifscRegex.test(ifsc.toUpperCase());
-  }
-
-  /**
-   * Validate account number
-   */
-  validateAccountNumber(accountNumber: string): boolean {
-    const accountRegex = /^[0-9]{9,18}$/;
-    return accountRegex.test(accountNumber);
-  }
-
-  /**
-   * Validate PAN number
-   */
-  validatePAN(pan: string): boolean {
-    const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-    return panRegex.test(pan.toUpperCase());
-  }
-
-  /**
-   * Get transfer status via Edge Function
-   */
-  async getTransferStatus(referenceId: string): Promise<{ success: boolean; data?: any; error?: string }> {
+  async getSellerEarnings(sellerId: string): Promise<{
+    success: boolean;
+    data?: any;
+    error?: string;
+  }> {
     try {
-      console.log('Getting transfer status:', referenceId);
-
-      const { data, error } = await supabase.functions.invoke('get-cashfree-transfer-status', {
-        body: { reference_id: referenceId }
-      });
+      const { data, error } = await supabase
+        .from('seller_earnings')
+        .select('*')
+        .eq('seller_id', sellerId)
+        .single();
 
       if (error) {
-        console.error('Edge Function Error:', error);
+        if (error.code === 'PGRST116') {
+          // No earnings record yet, return zeros
+          return {
+            success: true,
+            data: {
+              total_earnings: 0,
+              total_platform_fees: 0,
+              total_payouts: 0,
+              pending_amount: 0,
+              available_balance: 0,
+            },
+          };
+        }
+        console.error('Error fetching seller earnings:', error);
         return { success: false, error: error.message };
       }
 
-      if (!data?.success) {
-        return { success: false, error: data?.error || 'Failed to get transfer status' };
+      return { success: true, data };
+    } catch (error: any) {
+      console.error('Error in getSellerEarnings:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get seller payout history
+   */
+  async getSellerPayouts(sellerId: string): Promise<{
+    success: boolean;
+    data?: any[];
+    error?: string;
+  }> {
+    try {
+      const { data, error } = await supabase
+        .from('seller_payouts')
+        .select(`
+          *,
+          order:orders(order_number, total_amount),
+          booking:bookings(booking_date, total_amount)
+        `)
+        .eq('seller_id', sellerId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching seller payouts:', error);
+        return { success: false, error: error.message };
       }
 
-      return { success: true, data: data.data };
+      return { success: true, data: data || [] };
     } catch (error: any) {
-      console.error('Get Transfer Status Error:', error);
+      console.error('Error in getSellerPayouts:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Request payout withdrawal
+   */
+  async requestPayout(sellerId: string, userId: string, amount: number): Promise<{
+    success: boolean;
+    data?: any;
+    error?: string;
+  }> {
+    try {
+      // Check available balance
+      const earningsResult = await this.getSellerEarnings(sellerId);
+      
+      if (!earningsResult.success || !earningsResult.data) {
+        return { success: false, error: 'Unable to fetch earnings' };
+      }
+
+      const availableBalance = earningsResult.data.available_balance || 0;
+
+      if (amount > availableBalance) {
+        return { 
+          success: false, 
+          error: `Insufficient balance. Available: ₹${availableBalance}` 
+        };
+      }
+
+      // Create payout request
+      const { data, error } = await supabase
+        .from('payout_requests')
+        .insert({
+          seller_id: sellerId,
+          user_id: userId,
+          requested_amount: amount,
+          available_balance: availableBalance,
+          status: 'PENDING',
+          created_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating payout request:', error);
+        return { success: false, error: error.message };
+      }
+
+      // Notify admin about new payout request
+      const { data: adminUsers } = await supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'admin');
+
+      if (adminUsers && adminUsers.length > 0) {
+        for (const admin of adminUsers) {
+          await supabase.from('notifications').insert({
+            user_id: admin.id,
+            title: '💰 New Payout Request',
+            message: `Seller requested payout of ₹${amount}`,
+            type: 'payout_request',
+            reference_id: data.id,
+            reference_type: 'payout_request',
+            created_at: new Date().toISOString(),
+          });
+        }
+      }
+
+      return { success: true, data };
+    } catch (error: any) {
+      console.error('Error in requestPayout:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Save bank account details
+   */
+  async saveBankAccount(data: BeneficiaryData): Promise<{
+    success: boolean;
+    data?: any;
+    error?: string;
+  }> {
+    try {
+      // Save bank account
+      const { data: bankAccount, error: bankError } = await supabase
+        .from('seller_bank_accounts')
+        .upsert({
+          seller_id: data.seller_id,
+          user_id: data.user_id,
+          account_holder_name: data.account_holder_name,
+          account_number: data.account_number,
+          ifsc_code: data.ifsc_code,
+          bank_name: data.bank_name,
+          is_primary: true,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'seller_id,account_number',
+        })
+        .select()
+        .single();
+
+      if (bankError) {
+        console.error('Error saving bank account:', bankError);
+        return { success: false, error: bankError.message };
+      }
+
+      // Now create beneficiary in Cashfree
+      const beneficiaryResult = await this.createBeneficiary({
+        ...data,
+        bank_account_id: bankAccount.id,
+      });
+
+      if (!beneficiaryResult.success) {
+        return beneficiaryResult;
+      }
+
+      return { success: true, data: { bankAccount, beneficiary: beneficiaryResult.data } };
+    } catch (error: any) {
+      console.error('Error in saveBankAccount:', error);
       return { success: false, error: error.message };
     }
   }
 }
 
-export default CashfreePayoutService.getInstance();
+export default new CashfreePayoutService();

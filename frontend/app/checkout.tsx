@@ -299,28 +299,34 @@ const handlePaymentSuccess = async (paymentId: string, orderId: string) => {
 
             // Fetch seller details for each unique seller
             for (const sellerId of sellerIds) {
-              const { data: seller, error: sellerError } = await supabase
+              const { data: sellers, error: sellerError } = await supabase
                 .from('sellers')
                 .select('id, user_id, company_name')
                 .eq('id', sellerId)
-                .single();
+                .limit(1);
 
-              if (!sellerError && seller && seller.user_id) {
-                await supabase.from('notifications').insert({
-                  user_id: seller.user_id,
-                  title: '🎉 New Order Received!',
-                  message: `You have a new order #${currentOrderId.substring(0, 8)}. Payment received: ₹${finalTotal}`,
-                  type: 'new_order',
-                  reference_id: currentOrderId,
-                  reference_type: 'order',
-                  created_at: new Date().toISOString(),
-                });
-                console.log(`✅ Seller ${seller.company_name} notified (user_id: ${seller.user_id})`);
+              // ✅ FIX: Check if seller exists before accessing
+              if (!sellerError && sellers && sellers.length > 0) {
+                const seller = sellers[0];
+                if (seller.user_id) {
+                  await supabase.from('notifications').insert({
+                    user_id: seller.user_id,
+                    title: '🎉 New Order Received!',
+                    message: `You have a new order #${currentOrderId.substring(0, 8)}. Payment received: ₹${finalTotal}`,
+                    type: 'new_order',
+                    reference_id: currentOrderId,
+                    reference_type: 'order',
+                    created_at: new Date().toISOString(),
+                  });
+                  console.log(`✅ Seller ${seller.company_name} notified (user_id: ${seller.user_id})`);
+                } else {
+                  console.warn(`⚠️ Seller ${sellerId} has no user_id`);
+                }
               } else {
-                console.error(`❌ Failed to notify seller ${sellerId}:`, sellerError);
+                console.error(`❌ Seller ${sellerId} not found:`, sellerError);
               }
             }
-            console.log(`✅ ${sellerIds.length} seller(s) notified`);
+            console.log(`✅ ${sellerIds.length} seller(s) processed`);
           } else {
             console.warn('⚠️ No order items found for order:', currentOrderId);
           }
