@@ -87,7 +87,7 @@ export const useReportStore = create<ReportStore>((set, get) => ({
         .from('reports')
         .select(`
           *,
-          seller:sellers(id, company_name, user:users(name, email)),
+         seller:sellers(id, company_name, user:users!sellers_user_id_fkey(name, email)),
           order:orders(id, order_number),
           booking:bookings(id, booking_date)
         `)
@@ -112,7 +112,7 @@ export const useReportStore = create<ReportStore>((set, get) => ({
         .select(`
           *,
           customer:users!reports_customer_id_fkey(id, name, email, phone),
-          seller:sellers(id, company_name, user:users(name, email, phone)),
+          seller:sellers(id, company_name, user:users!sellers_user_id_fkey(name, email, phone)),
           order:orders(id, order_number),
           booking:bookings(id, booking_date),
           reviewed_by_user:users!reports_reviewed_by_fkey(name, email)
@@ -178,7 +178,7 @@ export const useReportStore = create<ReportStore>((set, get) => ({
         .select(`
           *,
           customer:users!reports_customer_id_fkey(id, name, email, phone),
-          seller:sellers(id, company_name, user:users(name, email, phone)),
+           seller:sellers(id, company_name, user:users!sellers_user_id_fkey(name, email, phone)),
           order:orders(id, order_number, total_amount),
           booking:bookings(id, booking_date, total_amount),
           reviewed_by_user:users!reports_reviewed_by_fkey(name, email)

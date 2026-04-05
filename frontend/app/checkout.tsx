@@ -182,12 +182,14 @@ const handlePaymentSuccess = async (paymentId: string, orderId: string) => {
 
     const paymentStatus = verificationResult.data.payment_status || verificationResult.data.order_status;
     
-    // ✅ FIX: Accept 'SUCCESS', 'PAID', and 'ACTIVE' as successful
+    // ✅ FIX: Accept 'SUCCESS', 'PAID', 'ACTIVE', and 'success' as successful
     // Cashfree sandbox/test mode returns 'ACTIVE' for successful test payments
     // Production returns 'PAID' for actual successful payments
-    const isSuccess = paymentStatus === 'SUCCESS' || 
-                      paymentStatus === 'PAID' || 
-                      paymentStatus === 'ACTIVE';
+    // Some responses return lowercase 'success'
+    const paymentStatusUpper = paymentStatus?.toUpperCase();
+    const isSuccess = paymentStatusUpper === 'SUCCESS' || 
+                      paymentStatusUpper === 'PAID' || 
+                      paymentStatusUpper === 'ACTIVE';
     
     if (!isSuccess) {
       console.warn(`Payment status not successful: ${paymentStatus}`);

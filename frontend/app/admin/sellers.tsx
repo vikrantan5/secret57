@@ -40,7 +40,7 @@ export default function AllSellersScreen() {
         .from('sellers')
         .select(`
           *,
-          user:users(*),
+          user:users!sellers_user_id_fkey(*),
           category:categories(id, name, slug, type, icon)
         `)
         .order('created_at', { ascending: false });

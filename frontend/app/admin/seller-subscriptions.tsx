@@ -82,7 +82,7 @@ export default function SellerSubscriptionsScreen() {
           *,
           seller:sellers!inner(
             company_name,
-            user:users!inner(name, email, phone)
+            user:users!sellers_user_id_fkey(name, email, phone)
           ),
           subscription_plan:subscription_plans(name, duration_days)
         `)

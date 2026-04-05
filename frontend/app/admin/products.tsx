@@ -39,7 +39,7 @@ export default function AllProductsScreen() {
         .from('products')
         .select(`
           *,
-          seller:sellers(id, company_name, user:users(name))
+         seller:sellers(id, company_name, user:users!sellers_user_id_fkey(name))
         `)
         .order('created_at', { ascending: false });
 

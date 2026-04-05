@@ -74,7 +74,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
           service:services(*),
           seller:sellers(
             *,
-            user:users(name, email, phone)
+            user:users!sellers_user_id_fkey(name, email, phone)
           )
         `)
         .eq('customer_id', userId)
@@ -104,7 +104,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
           service:services(*),
           seller:sellers(
             *,
-            user:users(name, email, phone, avatar_url)
+             user:users!sellers_user_id_fkey(name, email, phone, avatar_url)
           ),
           customer:users!bookings_customer_id_fkey(id, name, email, phone, avatar_url)
         `)
