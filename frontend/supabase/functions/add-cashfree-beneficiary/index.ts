@@ -1,11 +1,10 @@
-// Cashfree Payout API v2 - Add Beneficiary
-// Fixed: Using Web Crypto API for HMAC-SHA256 signature
+// Cashfree Payout API v1 - Add Beneficiary (Fixed: Using Bearer Token with RSA Signature)
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const CASHFREE_PAYOUT_CLIENT_ID = Deno.env.get('CASHFREE_PAYOUT_CLIENT_ID');
 const CASHFREE_PAYOUT_CLIENT_SECRET = Deno.env.get('CASHFREE_PAYOUT_CLIENT_SECRET');
+const CASHFREE_PUBLIC_KEY = Deno.env.get('CASHFREE_PUBLIC_KEY');
 const CASHFREE_PAYOUT_API_URL = 'https://payout-gamma.cashfree.com/payout/v1';
-const API_VERSION = '2024-01-01';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,41 +12,102 @@ const corsHeaders = {
 };
 
 /**
- * Generate HMAC-SHA256 signature using Web Crypto API
- * Format: HMAC-SHA256(client_id.timestamp, client_secret)
+ * Generate RSA signature for Cashfree authentication
+ * Format: RSA-OAEP encrypt(client_id.timestamp, public_key) → base64
  */
-async function generateSignature(clientId: string, clientSecret: string): Promise<string> {
+async function generateRSASignature(clientId: string, publicKeyPem: string): Promise<string> {
   try {
     const timestamp = Math.floor(Date.now() / 1000);
     const message = `${clientId}.${timestamp}`;
     
-    console.log('🔐 Generating HMAC-SHA256 signature for:', message);
-    
-    // Encode the secret key and message
-    const encoder = new TextEncoder();
-    const keyData = encoder.encode(clientSecret);
-    const messageData = encoder.encode(message);
-    
-    // Import the key for HMAC
-    const key = await crypto.subtle.importKey(
-      'raw',
-      keyData,
-      { name: 'HMAC', hash: 'SHA-256' },
+    console.log('🔐 Generating RSA signature for:', message);
+
+    // Remove PEM headers/footers and whitespace
+    const pemContents = publicKeyPem
+      .replace(/-----BEGIN PUBLIC KEY-----/g, '')
+      .replace(/-----END PUBLIC KEY-----/g, '')
+      .replace(/\s/g, '');
+
+    // Decode base64 to binary
+    const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+
+    // Import the RSA public key (using SHA-1 for OAEP, matching Cashfree's PHP implementation)
+    const publicKey = await crypto.subtle.importKey(
+      'spki',
+      binaryDer,
+      {
+        name: 'RSA-OAEP',
+        hash: 'SHA-1'  // Cashfree uses SHA-1, not SHA-256
+      },
       false,
-      ['sign']
+      ['encrypt']
     );
-    
-    // Sign the message
-    const signature = await crypto.subtle.sign('HMAC', key, messageData);
-    
+
+    // Encode message to Uint8Array
+    const encoder = new TextEncoder();
+    const messageData = encoder.encode(message);
+
+    // Encrypt with RSA-OAEP
+    const encryptedData = await crypto.subtle.encrypt(
+      {
+        name: 'RSA-OAEP'
+      },
+      publicKey,
+      messageData
+    );
+
     // Convert to base64
-    const base64Signature = btoa(String.fromCharCode(...new Uint8Array(signature)));
+    const base64Signature = btoa(String.fromCharCode(...new Uint8Array(encryptedData)));
     
-    console.log('✅ Signature generated successfully');
+    console.log('✅ RSA signature generated successfully');
     return base64Signature;
   } catch (error: any) {
-    console.error('❌ Signature generation failed:', error.message);
-    throw new Error(`Failed to generate signature: ${error.message}`);
+    console.error('❌ RSA signature generation failed:', error.message);
+    throw new Error(`Failed to generate RSA signature: ${error.message}`);
+  }
+}
+
+/**
+ * Get Bearer Token from Cashfree Authorize API with RSA Signature
+ */
+async function getBearerToken(): Promise<{ success: boolean; token?: string; error?: string }> {
+  try {
+    if (!CASHFREE_PAYOUT_CLIENT_ID || !CASHFREE_PAYOUT_CLIENT_SECRET) {
+      return { success: false, error: 'Cashfree credentials not configured' };
+    }
+
+    if (!CASHFREE_PUBLIC_KEY) {
+      return { success: false, error: 'Cashfree public key not configured' };
+    }
+
+    console.log('🔑 Getting Bearer token from Cashfree...');
+
+    // Generate RSA signature
+    const signature = await generateRSASignature(CASHFREE_PAYOUT_CLIENT_ID, CASHFREE_PUBLIC_KEY);
+
+    const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/authorize`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Client-Id': CASHFREE_PAYOUT_CLIENT_ID,
+        'X-Client-Secret': CASHFREE_PAYOUT_CLIENT_SECRET,
+        'X-Cf-Signature': signature
+      }
+    });
+
+    const data = await response.json();
+    console.log('📥 Authorize Response:', JSON.stringify(data, null, 2));
+
+    if (response.ok && data.status === 'SUCCESS' && data.data?.token) {
+      console.log('✅ Bearer token obtained successfully');
+      return { success: true, token: data.data.token };
+    }
+
+    console.error('❌ Failed to get Bearer token:', data);
+    return { success: false, error: data.message || 'Failed to get authorization token' };
+  } catch (error: any) {
+    console.error('❌ Exception in getBearerToken:', error.message);
+    return { success: false, error: error.message };
   }
 }
 
@@ -71,7 +131,7 @@ serve(async (req) => {
       pincode
     } = await req.json();
 
-    console.log('=== Cashfree v2 Add Beneficiary (HMAC-SHA256) ===');
+    console.log('=== Cashfree Add Beneficiary (Bearer Token Auth) ===');
     console.log('Beneficiary ID:', bene_id);
     console.log('Name:', name);
     console.log('Bank Account:', bank_account);
@@ -88,34 +148,27 @@ serve(async (req) => {
       );
     }
 
-    // Validate credentials
-    if (!CASHFREE_PAYOUT_CLIENT_ID || !CASHFREE_PAYOUT_CLIENT_SECRET) {
-      console.error('ERROR: Cashfree credentials not configured');
+    // Get Bearer Token
+    const authResult = await getBearerToken();
+    if (!authResult.success || !authResult.token) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Cashfree credentials not configured. Please add CASHFREE_PAYOUT_CLIENT_ID and CASHFREE_PAYOUT_CLIENT_SECRET to Supabase secrets.' 
+          error: authResult.error || 'Failed to authenticate with Cashfree' 
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Generate HMAC-SHA256 signature
-    console.log('🔐 Generating HMAC-SHA256 signature...');
-    const signature = await generateSignature(CASHFREE_PAYOUT_CLIENT_ID, CASHFREE_PAYOUT_CLIENT_SECRET);
-
-    // Prepare headers for Cashfree Payout API v2
-    const headers: any = {
+    // Prepare headers with Bearer token
+    const headers = {
       'Content-Type': 'application/json',
-      'x-api-version': API_VERSION,
-      'x-client-id': CASHFREE_PAYOUT_CLIENT_ID,
-      'x-client-secret': CASHFREE_PAYOUT_CLIENT_SECRET,
-      'x-cf-signature': signature,
+      'Authorization': `Bearer ${authResult.token}`
     };
 
-    console.log('✅ Request signature added to headers');
+    console.log('✅ Using Bearer token for authentication');
 
-    // Cashfree Payout v2 API - Create Beneficiary
+    // Cashfree Payout v1 API - Add Beneficiary Payload
     const beneficiaryPayload = {
       beneId: bene_id,
       name: name,
@@ -131,6 +184,7 @@ serve(async (req) => {
 
     console.log('📤 Payload:', JSON.stringify(beneficiaryPayload, null, 2));
 
+    // Call addBeneficiary endpoint
     const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/addBeneficiary`, {
       method: 'POST',
       headers,
@@ -142,14 +196,14 @@ serve(async (req) => {
     console.log('📥 Response Data:', JSON.stringify(responseData, null, 2));
 
     // Handle success
-    if (response.ok || response.status === 200) {
+    if (response.ok && responseData.status === 'SUCCESS') {
       console.log('✅ Beneficiary created successfully:', bene_id);
       return new Response(
         JSON.stringify({ 
           success: true, 
           data: { 
             bene_id: responseData.data?.beneId || bene_id,
-            status: responseData.data?.status || responseData.status || 'VERIFIED',
+            status: responseData.data?.status || 'VERIFIED',
             message: responseData.message || 'Beneficiary added successfully' 
           } 
         }),
@@ -173,25 +227,12 @@ serve(async (req) => {
       );
     }
 
-    // Handle authentication errors
-    if (response.status === 401 || response.status === 403) {
-      console.error('❌ Authentication failed:', responseData);
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'Authentication failed. Please check your Cashfree credentials.',
-          details: responseData.message || responseData.error
-        }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Handle other errors
+    // Handle errors
     console.error('❌ Failed to add beneficiary:', responseData);
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: responseData.message || responseData.error || 'Failed to add beneficiary',
+        error: responseData.message || 'Failed to add beneficiary',
         details: responseData
       }),
       { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

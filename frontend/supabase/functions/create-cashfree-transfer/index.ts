@@ -1,11 +1,10 @@
-// Cashfree Payout API v2 - Create Transfer
-// Using Web Crypto API for HMAC-SHA256
+// Cashfree Payout API v1 - Create Transfer (Fixed: Bearer Token with RSA Signature)
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const CASHFREE_PAYOUT_CLIENT_ID = Deno.env.get('CASHFREE_PAYOUT_CLIENT_ID');
 const CASHFREE_PAYOUT_CLIENT_SECRET = Deno.env.get('CASHFREE_PAYOUT_CLIENT_SECRET');
+const CASHFREE_PUBLIC_KEY = Deno.env.get('CASHFREE_PUBLIC_KEY');
 const CASHFREE_PAYOUT_API_URL = 'https://payout-gamma.cashfree.com/payout/v1';
-const API_VERSION = '2024-01-01';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,26 +19,70 @@ interface TransferRequest {
 }
 
 /**
- * Generate HMAC-SHA256 signature using Web Crypto API
+ * Generate RSA signature for Cashfree authentication
  */
-async function generateSignature(clientId: string, clientSecret: string): Promise<string> {
+async function generateRSASignature(clientId: string, publicKeyPem: string): Promise<string> {
   const timestamp = Math.floor(Date.now() / 1000);
   const message = `${clientId}.${timestamp}`;
   
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(clientSecret);
-  const messageData = encoder.encode(message);
-  
-  const key = await crypto.subtle.importKey(
-    'raw',
-    keyData,
-    { name: 'HMAC', hash: 'SHA-256' },
+  const pemContents = publicKeyPem
+    .replace(/-----BEGIN PUBLIC KEY-----/g, '')
+    .replace(/-----END PUBLIC KEY-----/g, '')
+    .replace(/\s/g, '');
+
+  const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+
+  const publicKey = await crypto.subtle.importKey(
+    'spki',
+    binaryDer,
+    { name: 'RSA-OAEP', hash: 'SHA-256' },
     false,
-    ['sign']
+    ['encrypt']
   );
-  
-  const signature = await crypto.subtle.sign('HMAC', key, messageData);
-  return btoa(String.fromCharCode(...new Uint8Array(signature)));
+
+  const encoder = new TextEncoder();
+  const messageData = encoder.encode(message);
+
+  const encryptedData = await crypto.subtle.encrypt(
+    { name: 'RSA-OAEP' },
+    publicKey,
+    messageData
+  );
+
+  return btoa(String.fromCharCode(...new Uint8Array(encryptedData)));
+}
+
+/**
+ * Get Bearer Token from Cashfree Authorize API
+ */
+async function getBearerToken(): Promise<{ success: boolean; token?: string; error?: string }> {
+  try {
+    if (!CASHFREE_PAYOUT_CLIENT_ID || !CASHFREE_PAYOUT_CLIENT_SECRET || !CASHFREE_PUBLIC_KEY) {
+      return { success: false, error: 'Cashfree credentials not configured' };
+    }
+
+    const signature = await generateRSASignature(CASHFREE_PAYOUT_CLIENT_ID, CASHFREE_PUBLIC_KEY);
+
+    const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/authorize`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Client-Id': CASHFREE_PAYOUT_CLIENT_ID,
+        'X-Client-Secret': CASHFREE_PAYOUT_CLIENT_SECRET,
+        'X-Cf-Signature': signature
+      }
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.status === 'SUCCESS' && data.data?.token) {
+      return { success: true, token: data.data.token };
+    }
+
+    return { success: false, error: data.message || 'Failed to get authorization token' };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
 }
 
 serve(async (req) => {
@@ -51,7 +94,7 @@ serve(async (req) => {
   try {
     const { bene_id, amount, transfer_id, remarks }: TransferRequest = await req.json();
 
-    console.log('=== Cashfree v2 Create Transfer ===');
+    console.log('=== Cashfree Create Transfer (Bearer Token Auth) ===');
     console.log('Transfer ID:', transfer_id);
     console.log('Beneficiary ID:', bene_id);
     console.log('Amount:', amount);
@@ -78,22 +121,21 @@ serve(async (req) => {
       );
     }
 
-    // Validate credentials
-    if (!CASHFREE_PAYOUT_CLIENT_ID || !CASHFREE_PAYOUT_CLIENT_SECRET) {
-      console.error('ERROR: Cashfree credentials not configured');
+    // Get Bearer Token
+    const authResult = await getBearerToken();
+    if (!authResult.success || !authResult.token) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Cashfree credentials not configured' 
+          error: authResult.error || 'Failed to authenticate with Cashfree' 
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Generate signature
-    const signature = await generateSignature(CASHFREE_PAYOUT_CLIENT_ID, CASHFREE_PAYOUT_CLIENT_SECRET);
+    console.log('✅ Using Bearer token for authentication');
 
-    // Cashfree Payout v2 API - Request Transfer
+    // Cashfree Payout v1 API - Request Transfer Payload
     const transferPayload = {
       beneId: bene_id,
       amount: amount.toString(),
@@ -104,14 +146,12 @@ serve(async (req) => {
 
     console.log('📤 Payload:', JSON.stringify(transferPayload, null, 2));
 
+    // Call requestTransfer endpoint
     const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/requestTransfer`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-version': API_VERSION,
-        'x-client-id': CASHFREE_PAYOUT_CLIENT_ID,
-        'x-client-secret': CASHFREE_PAYOUT_CLIENT_SECRET,
-        'x-cf-signature': signature
+        'Authorization': `Bearer ${authResult.token}`
       },
       body: JSON.stringify(transferPayload)
     });
@@ -121,7 +161,7 @@ serve(async (req) => {
     console.log('📥 Response Data:', JSON.stringify(responseData, null, 2));
 
     // Handle success
-    if (response.ok || response.status === 200) {
+    if (response.ok && responseData.status === 'SUCCESS') {
       console.log('✅ Transfer created successfully:', transfer_id);
       return new Response(
         JSON.stringify({
@@ -130,7 +170,7 @@ serve(async (req) => {
             transfer_id: responseData.data?.transferId || transfer_id,
             reference_id: responseData.data?.referenceId,
             utr: responseData.data?.utr,
-            status: responseData.data?.status || responseData.status || 'PENDING',
+            status: responseData.data?.status || 'PENDING',
             message: responseData.message || 'Transfer initiated successfully'
           }
         }),
@@ -182,7 +222,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: responseData.message || responseData.error || 'Failed to create transfer',
+        error: responseData.message || 'Failed to create transfer',
         error_code: responseData.subCode,
         details: responseData
       }),

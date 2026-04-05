@@ -7,6 +7,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const CASHFREE_PAYOUT_CLIENT_ID = Deno.env.get('CASHFREE_PAYOUT_CLIENT_ID');
 const CASHFREE_PAYOUT_CLIENT_SECRET = Deno.env.get('CASHFREE_PAYOUT_CLIENT_SECRET');
+const CASHFREE_PUBLIC_KEY = Deno.env.get('CASHFREE_PUBLIC_KEY');
 const CASHFREE_PAYOUT_API_URL = 'https://payout-gamma.cashfree.com/payout/v1';
 
 const corsHeaders = {
@@ -22,39 +23,79 @@ const PLATFORM_COMMISSION_RATE = 0.10; // 10%
 const HOLD_PERIOD_DAYS = 7;
 
 /**
- * Generate HMAC-SHA256 signature using Web Crypto API (Native to Deno)
+ * Generate RSA signature for Cashfree authentication
  */
-async function generateSignature(clientId: string, clientSecret: string): Promise<string> {
+async function generateRSASignature(clientId: string, publicKeyPem: string): Promise<string> {
   const timestamp = Math.floor(Date.now() / 1000);
   const message = `${clientId}.${timestamp}`;
   
-  console.log(`🔐 Generating HMAC-SHA256 signature for: ${message}`);
-  
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(clientSecret);
-  const messageData = encoder.encode(message);
-  
-  // Import the key for HMAC
-  const key = await crypto.subtle.importKey(
-    'raw',
-    keyData,
-    { name: 'HMAC', hash: 'SHA-256' },
+  const pemContents = publicKeyPem
+    .replace(/-----BEGIN PUBLIC KEY-----/g, '')
+    .replace(/-----END PUBLIC KEY-----/g, '')
+    .replace(/\s/g, '');
+
+  const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+
+  const publicKey = await crypto.subtle.importKey(
+    'spki',
+    binaryDer,
+    { name: 'RSA-OAEP', hash: 'SHA-256' },
     false,
-    ['sign']
+    ['encrypt']
   );
-  
-  // Sign the message
-  const signatureBuffer = await crypto.subtle.sign('HMAC', key, messageData);
-  
-  // Convert to base64
-  const signature = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)));
-  
-  console.log('✅ Signature generated successfully');
-  return signature;
+
+  const encoder = new TextEncoder();
+  const messageData = encoder.encode(message);
+
+  const encryptedData = await crypto.subtle.encrypt(
+    { name: 'RSA-OAEP' },
+    publicKey,
+    messageData
+  );
+
+  return btoa(String.fromCharCode(...new Uint8Array(encryptedData)));
 }
 
 /**
- * Create Cashfree transfer
+ * Get Bearer Token from Cashfree Authorize API
+ */
+async function getBearerToken(): Promise<{ success: boolean; token?: string; error?: string }> {
+  try {
+    if (!CASHFREE_PAYOUT_CLIENT_ID || !CASHFREE_PAYOUT_CLIENT_SECRET || !CASHFREE_PUBLIC_KEY) {
+      return { success: false, error: 'Cashfree credentials not configured' };
+    }
+
+    console.log('🔑 Getting Bearer token from Cashfree...');
+
+    const signature = await generateRSASignature(CASHFREE_PAYOUT_CLIENT_ID, CASHFREE_PUBLIC_KEY);
+
+    const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/authorize`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Client-Id': CASHFREE_PAYOUT_CLIENT_ID,
+        'X-Client-Secret': CASHFREE_PAYOUT_CLIENT_SECRET,
+        'X-Cf-Signature': signature
+      }
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.status === 'SUCCESS' && data.data?.token) {
+      console.log('✅ Bearer token obtained successfully');
+      return { success: true, token: data.data.token };
+    }
+
+    console.error('❌ Failed to get Bearer token:', data);
+    return { success: false, error: data.message || 'Failed to get authorization token' };
+  } catch (error: any) {
+    console.error('❌ Exception in getBearerToken:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Create Cashfree transfer (Bearer Token Auth)
  */
 async function createCashfreeTransfer(
   beneId: string,
@@ -67,7 +108,13 @@ async function createCashfreeTransfer(
       return { success: false, error: 'Cashfree credentials not configured' };
     }
 
-    const signature = await generateSignature(CASHFREE_PAYOUT_CLIENT_ID, CASHFREE_PAYOUT_CLIENT_SECRET);
+    // Get Bearer Token
+    const authResult = await getBearerToken();
+    if (!authResult.success || !authResult.token) {
+      return { success: false, error: authResult.error || 'Failed to get authorization token' };
+    }
+
+    console.log('✅ Using Bearer token for transfer authentication');
 
     const transferPayload = {
       beneId: beneId,
@@ -81,17 +128,14 @@ async function createCashfreeTransfer(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-version': '2024-01-01',
-        'x-client-id': CASHFREE_PAYOUT_CLIENT_ID,
-        'x-client-secret': CASHFREE_PAYOUT_CLIENT_SECRET,
-        'x-cf-signature': signature
+        'Authorization': `Bearer ${authResult.token}`
       },
       body: JSON.stringify(transferPayload)
     });
 
     const responseData = await response.json();
 
-    if (response.ok) {
+    if (response.ok && responseData.status === 'SUCCESS') {
       return {
         success: true,
         data: {
