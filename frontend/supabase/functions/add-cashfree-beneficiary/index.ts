@@ -1,73 +1,54 @@
-// Cashfree Payout API v2 - Add Beneficiary with Signature Authentication
-// Updated for 2025 - Uses v2 standard mode with RSA signature
+// Cashfree Payout API v2 - Add Beneficiary
+// Fixed: Using Web Crypto API for HMAC-SHA256 signature
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const CASHFREE_PAYOUT_CLIENT_ID = Deno.env.get('CASHFREE_PAYOUT_CLIENT_ID');
 const CASHFREE_PAYOUT_CLIENT_SECRET = Deno.env.get('CASHFREE_PAYOUT_CLIENT_SECRET');
-const CASHFREE_PUBLIC_KEY = Deno.env.get('CASHFREE_PUBLIC_KEY'); // RSA Public Key
-const CASHFREE_PAYOUT_API_URL = 'https://sandbox.cashfree.com/payout'; // v2 sandbox
-const API_VERSION = '2025-01-01';
+const CASHFREE_PAYOUT_API_URL = 'https://payout-gamma.cashfree.com/payout/v1';
+const API_VERSION = '2024-01-01';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Generate RSA signature for Cashfree authentication
-async function generateSignature(clientId: string, publicKeyPem: string): Promise<string> {
+/**
+ * Generate HMAC-SHA256 signature using Web Crypto API
+ * Format: HMAC-SHA256(client_id.timestamp, client_secret)
+ */
+async function generateSignature(clientId: string, clientSecret: string): Promise<string> {
   try {
-    // Get current Unix timestamp
     const timestamp = Math.floor(Date.now() / 1000);
-    const dataToEncrypt = `${clientId}.${timestamp}`;
+    const message = `${clientId}.${timestamp}`;
     
-    console.log('Generating signature for:', dataToEncrypt);
+    console.log('🔐 Generating HMAC-SHA256 signature for:', message);
     
-    // Import the public key
-    const publicKey = await crypto.subtle.importKey(
-      'spki',
-      pemToArrayBuffer(publicKeyPem),
-      {
-        name: 'RSA-OAEP',
-        hash: 'SHA-256',
-      },
-      false,
-      ['encrypt']
-    );
-    
-    // Encrypt the data
+    // Encode the secret key and message
     const encoder = new TextEncoder();
-    const data = encoder.encode(dataToEncrypt);
-    const encrypted = await crypto.subtle.encrypt(
-      { name: 'RSA-OAEP' },
-      publicKey,
-      data
+    const keyData = encoder.encode(clientSecret);
+    const messageData = encoder.encode(message);
+    
+    // Import the key for HMAC
+    const key = await crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
     );
+    
+    // Sign the message
+    const signature = await crypto.subtle.sign('HMAC', key, messageData);
     
     // Convert to base64
-    const signature = btoa(String.fromCharCode(...new Uint8Array(encrypted)));
+    const base64Signature = btoa(String.fromCharCode(...new Uint8Array(signature)));
+    
     console.log('✅ Signature generated successfully');
-    return signature;
+    return base64Signature;
   } catch (error: any) {
     console.error('❌ Signature generation failed:', error.message);
     throw new Error(`Failed to generate signature: ${error.message}`);
   }
-}
-
-// Convert PEM format to ArrayBuffer
-function pemToArrayBuffer(pem: string): ArrayBuffer {
-  // Remove PEM header/footer and whitespace
-  const pemContents = pem
-    .replace(/-----BEGIN PUBLIC KEY-----/, '')
-    .replace(/-----END PUBLIC KEY-----/, '')
-    .replace(/\s/g, '');
-  
-  // Decode base64
-  const binaryString = atob(pemContents);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes.buffer;
 }
 
 serve(async (req) => {
@@ -90,7 +71,7 @@ serve(async (req) => {
       pincode
     } = await req.json();
 
-    console.log('=== Cashfree v2 Add Beneficiary (with Signature) ===');
+    console.log('=== Cashfree v2 Add Beneficiary (HMAC-SHA256) ===');
     console.log('Beneficiary ID:', bene_id);
     console.log('Name:', name);
     console.log('Bank Account:', bank_account);
@@ -119,72 +100,57 @@ serve(async (req) => {
       );
     }
 
-    // Check if public key is available for signature generation
-    let signature = '';
-    if (CASHFREE_PUBLIC_KEY) {
-      console.log('🔐 Generating request signature...');
-      try {
-        signature = await generateSignature(CASHFREE_PAYOUT_CLIENT_ID, CASHFREE_PUBLIC_KEY);
-      } catch (error: any) {
-        console.error('⚠️  Signature generation failed, continuing without signature');
-        console.error('Error:', error.message);
-        // Continue without signature - will work if IP is whitelisted
-      }
-    } else {
-      console.log('⚠️  No public key found - IP must be whitelisted or add CASHFREE_PUBLIC_KEY to secrets');
-    }
+    // Generate HMAC-SHA256 signature
+    console.log('🔐 Generating HMAC-SHA256 signature...');
+    const signature = await generateSignature(CASHFREE_PAYOUT_CLIENT_ID, CASHFREE_PAYOUT_CLIENT_SECRET);
 
-    // Prepare headers
+    // Prepare headers for Cashfree Payout API v2
     const headers: any = {
       'Content-Type': 'application/json',
       'x-api-version': API_VERSION,
       'x-client-id': CASHFREE_PAYOUT_CLIENT_ID,
       'x-client-secret': CASHFREE_PAYOUT_CLIENT_SECRET,
+      'x-cf-signature': signature,
     };
 
-    // Add signature if generated
-    if (signature) {
-      headers['x-cf-signature'] = signature;
-      console.log('✅ Request signature added to headers');
-    }
+    console.log('✅ Request signature added to headers');
 
     // Cashfree Payout v2 API - Create Beneficiary
     const beneficiaryPayload = {
-      beneficiary_id: bene_id,
-      beneficiary_name: name,
-      beneficiary_instrument_details: {
-        bank_account_number: bank_account,
-        bank_ifsc: ifsc.toUpperCase()
-      },
-      beneficiary_contact_details: {
-        beneficiary_email: email || 'noreply@example.com',
-        beneficiary_phone: phone || '9999999999',
-        beneficiary_country_code: '+91'
-      }
+      beneId: bene_id,
+      name: name,
+      email: email || 'noreply@example.com',
+      phone: phone || '9999999999',
+      bankAccount: bank_account,
+      ifsc: ifsc.toUpperCase(),
+      address1: address1 || 'Address',
+      city: city || 'City',
+      state: state || 'State',
+      pincode: pincode || '000000'
     };
 
-    console.log('Payload:', JSON.stringify(beneficiaryPayload, null, 2));
+    console.log('📤 Payload:', JSON.stringify(beneficiaryPayload, null, 2));
 
-    const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/beneficiary`, {
+    const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/addBeneficiary`, {
       method: 'POST',
       headers,
       body: JSON.stringify(beneficiaryPayload)
     });
 
     const responseData = await response.json();
-    console.log('Response Status:', response.status);
-    console.log('Response Data:', JSON.stringify(responseData, null, 2));
+    console.log('📥 Response Status:', response.status);
+    console.log('📥 Response Data:', JSON.stringify(responseData, null, 2));
 
     // Handle success
-    if (response.ok) {
+    if (response.ok || response.status === 200) {
       console.log('✅ Beneficiary created successfully:', bene_id);
       return new Response(
         JSON.stringify({ 
           success: true, 
           data: { 
-            bene_id: responseData.beneficiary_id || bene_id,
-            status: responseData.beneficiary_status || 'VERIFIED',
-            message: 'Beneficiary added successfully' 
+            bene_id: responseData.data?.beneId || bene_id,
+            status: responseData.data?.status || responseData.status || 'VERIFIED',
+            message: responseData.message || 'Beneficiary added successfully' 
           } 
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -192,7 +158,7 @@ serve(async (req) => {
     }
 
     // Handle already exists error
-    if (response.status === 409 || responseData.message?.includes('already exists')) {
+    if (response.status === 409 || responseData.message?.toLowerCase().includes('already exists')) {
       console.log('⚠️  Beneficiary already exists:', bene_id);
       return new Response(
         JSON.stringify({
@@ -207,16 +173,16 @@ serve(async (req) => {
       );
     }
 
-    // Handle signature errors
-    if (response.status === 400 && responseData.message?.includes('Signature missing')) {
-      console.error('❌ Signature required but missing or invalid');
+    // Handle authentication errors
+    if (response.status === 401 || response.status === 403) {
+      console.error('❌ Authentication failed:', responseData);
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'Authentication failed: Signature required. Please whitelist your IP in Cashfree Dashboard or add CASHFREE_PUBLIC_KEY to Supabase secrets.',
-          details: 'Go to Cashfree Dashboard → Settings → IP Whitelist and add your Supabase edge function IP'
+          error: 'Authentication failed. Please check your Cashfree credentials.',
+          details: responseData.message || responseData.error
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 

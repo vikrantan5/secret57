@@ -1,16 +1,39 @@
 // Cashfree Payout API v2 - Get/Verify Beneficiary
-// Updated for 2025 - Uses v2 standard mode
+// Using Web Crypto API for HMAC-SHA256
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const CASHFREE_PAYOUT_CLIENT_ID = Deno.env.get('CASHFREE_PAYOUT_CLIENT_ID');
 const CASHFREE_PAYOUT_CLIENT_SECRET = Deno.env.get('CASHFREE_PAYOUT_CLIENT_SECRET');
-const CASHFREE_PAYOUT_API_URL = 'https://sandbox.cashfree.com/payout'; // v2 sandbox
-const API_VERSION = '2025-01-01';
+const CASHFREE_PAYOUT_API_URL = 'https://payout-gamma.cashfree.com/payout/v1';
+const API_VERSION = '2024-01-01';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+/**
+ * Generate HMAC-SHA256 signature using Web Crypto API
+ */
+async function generateSignature(clientId: string, clientSecret: string): Promise<string> {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const message = `${clientId}.${timestamp}`;
+  
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(clientSecret);
+  const messageData = encoder.encode(message);
+  
+  const key = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  const signature = await crypto.subtle.sign('HMAC', key, messageData);
+  return btoa(String.fromCharCode(...new Uint8Array(signature)));
+}
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -46,14 +69,18 @@ serve(async (req) => {
       );
     }
 
+    // Generate signature
+    const signature = await generateSignature(CASHFREE_PAYOUT_CLIENT_ID, CASHFREE_PAYOUT_CLIENT_SECRET);
+
     // Cashfree Payout v2 API - Get Beneficiary
-    const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/beneficiary/${bene_id}`, {
+    const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/getBeneficiary/${bene_id}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
         'x-api-version': API_VERSION,
         'x-client-id': CASHFREE_PAYOUT_CLIENT_ID,
-        'x-client-secret': CASHFREE_PAYOUT_CLIENT_SECRET
+        'x-client-secret': CASHFREE_PAYOUT_CLIENT_SECRET,
+        'x-cf-signature': signature
       }
     });
 
@@ -67,11 +94,11 @@ serve(async (req) => {
         JSON.stringify({
           success: true,
           data: {
-            bene_id: responseData.beneficiary_id,
-            name: responseData.beneficiary_name,
-            status: responseData.beneficiary_status,
-            bank_account: responseData.beneficiary_instrument_details?.bank_account_number,
-            ifsc: responseData.beneficiary_instrument_details?.bank_ifsc
+            bene_id: responseData.data?.beneId || bene_id,
+            name: responseData.data?.name,
+            status: responseData.data?.status,
+            bank_account: responseData.data?.bankAccount,
+            ifsc: responseData.data?.ifsc
           }
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

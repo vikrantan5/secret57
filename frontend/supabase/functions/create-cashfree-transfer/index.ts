@@ -1,11 +1,11 @@
 // Cashfree Payout API v2 - Create Transfer
-// Updated for 2025 - Uses v2 standard mode (async transfers)
+// Using Web Crypto API for HMAC-SHA256
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const CASHFREE_PAYOUT_CLIENT_ID = Deno.env.get('CASHFREE_PAYOUT_CLIENT_ID');
 const CASHFREE_PAYOUT_CLIENT_SECRET = Deno.env.get('CASHFREE_PAYOUT_CLIENT_SECRET');
-const CASHFREE_PAYOUT_API_URL = 'https://sandbox.cashfree.com/payout'; // v2 sandbox
-const API_VERSION = '2025-01-01';
+const CASHFREE_PAYOUT_API_URL = 'https://payout-gamma.cashfree.com/payout/v1';
+const API_VERSION = '2024-01-01';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,6 +17,29 @@ interface TransferRequest {
   amount: number;
   transfer_id: string;
   remarks?: string;
+}
+
+/**
+ * Generate HMAC-SHA256 signature using Web Crypto API
+ */
+async function generateSignature(clientId: string, clientSecret: string): Promise<string> {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const message = `${clientId}.${timestamp}`;
+  
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(clientSecret);
+  const messageData = encoder.encode(message);
+  
+  const key = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  const signature = await crypto.subtle.sign('HMAC', key, messageData);
+  return btoa(String.fromCharCode(...new Uint8Array(signature)));
 }
 
 serve(async (req) => {
@@ -67,44 +90,48 @@ serve(async (req) => {
       );
     }
 
-    // Cashfree Payout v2 API - Create Transfer (Async)
+    // Generate signature
+    const signature = await generateSignature(CASHFREE_PAYOUT_CLIENT_ID, CASHFREE_PAYOUT_CLIENT_SECRET);
+
+    // Cashfree Payout v2 API - Request Transfer
     const transferPayload = {
-      transfer_id: transfer_id,
-      transfer_amount: amount,
-      beneficiary_details: {
-        beneficiary_id: bene_id
-      },
-      transfer_remarks: remarks || 'Seller payout'
+      beneId: bene_id,
+      amount: amount.toString(),
+      transferId: transfer_id,
+      transferMode: 'banktransfer',
+      remarks: remarks || 'Seller payout'
     };
 
-    console.log('Payload:', JSON.stringify(transferPayload, null, 2));
+    console.log('📤 Payload:', JSON.stringify(transferPayload, null, 2));
 
-    const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/transfers`, {
+    const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/requestTransfer`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-version': API_VERSION,
         'x-client-id': CASHFREE_PAYOUT_CLIENT_ID,
-        'x-client-secret': CASHFREE_PAYOUT_CLIENT_SECRET
+        'x-client-secret': CASHFREE_PAYOUT_CLIENT_SECRET,
+        'x-cf-signature': signature
       },
       body: JSON.stringify(transferPayload)
     });
 
     const responseData = await response.json();
-    console.log('Response Status:', response.status);
-    console.log('Response Data:', JSON.stringify(responseData, null, 2));
+    console.log('📥 Response Status:', response.status);
+    console.log('📥 Response Data:', JSON.stringify(responseData, null, 2));
 
     // Handle success
-    if (response.ok) {
+    if (response.ok || response.status === 200) {
       console.log('✅ Transfer created successfully:', transfer_id);
       return new Response(
         JSON.stringify({
           success: true,
           data: {
-            transfer_id: responseData.transfer_id || transfer_id,
-            cf_transfer_id: responseData.cf_transfer_id,
-            status: responseData.status || 'RECEIVED',
-            message: 'Transfer initiated successfully'
+            transfer_id: responseData.data?.transferId || transfer_id,
+            reference_id: responseData.data?.referenceId,
+            utr: responseData.data?.utr,
+            status: responseData.data?.status || responseData.status || 'PENDING',
+            message: responseData.message || 'Transfer initiated successfully'
           }
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -112,7 +139,7 @@ serve(async (req) => {
     }
 
     // Handle beneficiary not found
-    if (response.status === 404 || responseData.error_code === 'BENE_NOT_EXIST') {
+    if (response.status === 404 || responseData.subCode === 'BENE_NOT_EXIST') {
       console.error('❌ Beneficiary not found:', bene_id);
       return new Response(
         JSON.stringify({
@@ -125,7 +152,7 @@ serve(async (req) => {
     }
 
     // Handle duplicate transfer
-    if (response.status === 409 || responseData.error_code === 'DUPLICATE_TRANSFER') {
+    if (response.status === 409 || responseData.subCode === 'DUPLICATE_TRANSFER') {
       console.log('⚠️  Duplicate transfer:', transfer_id);
       return new Response(
         JSON.stringify({
@@ -138,7 +165,7 @@ serve(async (req) => {
     }
 
     // Handle insufficient balance
-    if (responseData.error_code === 'INSUFFICIENT_BALANCE') {
+    if (responseData.subCode === 'INSUFFICIENT_BALANCE') {
       console.error('❌ Insufficient balance in Cashfree account');
       return new Response(
         JSON.stringify({
@@ -156,7 +183,7 @@ serve(async (req) => {
       JSON.stringify({
         success: false,
         error: responseData.message || responseData.error || 'Failed to create transfer',
-        error_code: responseData.error_code,
+        error_code: responseData.subCode,
         details: responseData
       }),
       { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
