@@ -1,14 +1,11 @@
-//cashfree
-
-
-// Create Cashfree Direct Transfer to Seller
-// Deno Edge Function
-
+// Cashfree Payout API v2 - Create Transfer
+// Updated for 2025 - Uses v2 standard mode (async transfers)
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const CASHFREE_PAYOUT_CLIENT_ID = Deno.env.get('CASHFREE_PAYOUT_CLIENT_ID');
-const CASHFREE_PAYOUT_CLIENT_SECRET = Deno.env.get('CASHFREE_PAYOUT_CLIENT_SECRET') ;
-const CASHFREE_PAYOUT_API_URL = 'https://payout-gamma.cashfree.com/payout/v1';
+const CASHFREE_PAYOUT_CLIENT_SECRET = Deno.env.get('CASHFREE_PAYOUT_CLIENT_SECRET');
+const CASHFREE_PAYOUT_API_URL = 'https://sandbox.cashfree.com/payout'; // v2 sandbox
+const API_VERSION = '2025-01-01';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,11 +15,12 @@ const corsHeaders = {
 interface TransferRequest {
   bene_id: string;
   amount: number;
-  transfer_id: string; // Unique transfer ID
+  transfer_id: string;
   remarks?: string;
 }
 
 serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -30,86 +28,148 @@ serve(async (req) => {
   try {
     const { bene_id, amount, transfer_id, remarks }: TransferRequest = await req.json();
 
+    console.log('=== Cashfree v2 Create Transfer ===');
+    console.log('Transfer ID:', transfer_id);
+    console.log('Beneficiary ID:', bene_id);
+    console.log('Amount:', amount);
+
+    // Validate required fields
     if (!bene_id || !amount || !transfer_id) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Missing required fields' }),
+        JSON.stringify({ 
+          success: false, 
+          error: 'Missing required fields: bene_id, amount, transfer_id' 
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Creating transfer:', transfer_id, 'to beneficiary:', bene_id);
-
-    // Get authorization token
-    const authResponse = await fetch(`${CASHFREE_PAYOUT_API_URL}/authorize`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Client-Id': CASHFREE_PAYOUT_CLIENT_ID,
-        'X-Client-Secret': CASHFREE_PAYOUT_CLIENT_SECRET
-      }
-    });
-
-    const authData = await authResponse.json();
-
-    if (!authResponse.ok || authData.status !== 'SUCCESS') {
+    // Validate amount
+    if (amount < 1) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Authorization failed' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ 
+          success: false, 
+          error: 'Amount must be at least ₹1' 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const token = authData.data.token;
+    // Validate credentials
+    if (!CASHFREE_PAYOUT_CLIENT_ID || !CASHFREE_PAYOUT_CLIENT_SECRET) {
+      console.error('ERROR: Cashfree credentials not configured');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Cashfree credentials not configured' 
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    // Create transfer payload
+    // Cashfree Payout v2 API - Create Transfer (Async)
     const transferPayload = {
-      beneId: bene_id,
-      amount: amount.toString(),
-      transferId: transfer_id,
-      transferMode: 'banktransfer',
-      remarks: remarks || 'Payment for order'
+      transfer_id: transfer_id,
+      transfer_amount: amount,
+      beneficiary_details: {
+        beneficiary_id: bene_id
+      },
+      transfer_remarks: remarks || 'Seller payout'
     };
 
-    // Request transfer
-    const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/requestTransfer`, {
+    console.log('Payload:', JSON.stringify(transferPayload, null, 2));
+
+    const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/transfers`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        'x-api-version': API_VERSION,
+        'x-client-id': CASHFREE_PAYOUT_CLIENT_ID,
+        'x-client-secret': CASHFREE_PAYOUT_CLIENT_SECRET
       },
       body: JSON.stringify(transferPayload)
     });
 
     const responseData = await response.json();
+    console.log('Response Status:', response.status);
+    console.log('Response Data:', JSON.stringify(responseData, null, 2));
 
-    if (!response.ok || responseData.status !== 'SUCCESS') {
-      console.error('Transfer request failed:', responseData);
+    // Handle success
+    if (response.ok) {
+      console.log('✅ Transfer created successfully:', transfer_id);
       return new Response(
         JSON.stringify({
-          success: false,
-          error: responseData.message || 'Failed to create transfer'
+          success: true,
+          data: {
+            transfer_id: responseData.transfer_id || transfer_id,
+            cf_transfer_id: responseData.cf_transfer_id,
+            status: responseData.status || 'RECEIVED',
+            message: 'Transfer initiated successfully'
+          }
         }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Transfer created successfully:', transfer_id);
+    // Handle beneficiary not found
+    if (response.status === 404 || responseData.error_code === 'BENE_NOT_EXIST') {
+      console.error('❌ Beneficiary not found:', bene_id);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Beneficiary not found. Please add bank account first.',
+          error_code: 'BENE_NOT_EXIST'
+        }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
+    // Handle duplicate transfer
+    if (response.status === 409 || responseData.error_code === 'DUPLICATE_TRANSFER') {
+      console.log('⚠️  Duplicate transfer:', transfer_id);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Transfer with this ID already exists',
+          error_code: 'DUPLICATE_TRANSFER'
+        }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Handle insufficient balance
+    if (responseData.error_code === 'INSUFFICIENT_BALANCE') {
+      console.error('❌ Insufficient balance in Cashfree account');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Insufficient balance in payout account',
+          error_code: 'INSUFFICIENT_BALANCE'
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Handle other errors
+    console.error('❌ Failed to create transfer:', responseData);
     return new Response(
       JSON.stringify({
-        success: true,
-        data: {
-          transfer_id: responseData.data.transferId,
-          reference_id: responseData.data.referenceId,
-          utr: responseData.data.utr,
-          status: responseData.data.status
-        }
+        success: false,
+        error: responseData.message || responseData.error || 'Failed to create transfer',
+        error_code: responseData.error_code,
+        details: responseData
       }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
+
   } catch (error: any) {
-    console.error('Error in create-cashfree-transfer:', error);
+    console.error('❌ Exception in create-cashfree-transfer:', error.message);
+    console.error('Stack:', error.stack);
     return new Response(
-      JSON.stringify({ success: false, error: error.message || 'Internal server error' }),
+      JSON.stringify({ 
+        success: false, 
+        error: error.message || 'Internal server error' 
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
