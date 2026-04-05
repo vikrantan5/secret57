@@ -11,11 +11,16 @@ import {
   Alert,
   TextInput,
   Modal,
+  Dimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { useBookingStore } from '../../../src/store/bookingStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../../src/constants/theme';
+
+const { width } = Dimensions.get('window');
 
 export default function SellerBookingDetailScreen() {
   const router = useRouter();
@@ -59,16 +64,31 @@ export default function SellerBookingDetailScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending':
-        return colors.warning;
+        return '#f59e0b';
       case 'confirmed':
-        return colors.primary;
+        return '#6366f1';
       case 'completed':
-        return colors.success;
+        return '#10b981';
       case 'cancelled':
       case 'rejected':
-        return colors.error;
+        return '#ef4444';
       default:
-        return colors.textSecondary;
+        return '#6b7280';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'time-outline';
+      case 'confirmed':
+        return 'checkmark-circle-outline';
+      case 'completed':
+        return 'checkmark-done-circle-outline';
+      case 'cancelled':
+        return 'close-circle-outline';
+      default:
+        return 'ellipse-outline';
     }
   };
 
@@ -92,294 +112,502 @@ export default function SellerBookingDetailScreen() {
 
   if (loading || !selectedBooking) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      </SafeAreaView>
+      <LinearGradient
+        colors={['#0a0a0a', '#1a1a1a']}
+        style={styles.container}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#6366f1" />
+            <Text style={styles.loadingText}>Loading booking details...</Text>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   const booking = selectedBooking;
   const canComplete = booking.status === 'confirmed' && !booking.otp_verified;
+  const statusColor = getStatusColor(booking.status);
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Booking Details</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <LinearGradient
+      colors={['#0a0a0a', '#1a1a1a']}
+      style={styles.container}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+    >
+      <SafeAreaView style={styles.safeArea}>
+        {/* Header */}
+        <BlurView intensity={80} tint="dark" style={styles.headerBlur}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.7}>
+              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Booking Details</Text>
+            <View style={{ width: 40 }} />
+          </View>
+        </BlurView>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Status Banner */}
-        <View style={[styles.statusBanner, { backgroundColor: getStatusColor(booking.status) }]}>
-          <Text style={styles.statusBannerText}>
-            {booking.status.toUpperCase().replace('_', ' ')}
-          </Text>
-        </View>
-
-        {/* Customer Info */}
-        <View style={[styles.card, shadows.sm]}>
-          <Text style={styles.cardTitle}>Customer Information</Text>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Name:</Text>
-            <Text style={styles.value}>{booking.customer_name || booking.customer?.name || 'N/A'}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Phone:</Text>
-            <Text style={styles.value}>{booking.customer_phone || booking.customer?.phone || 'N/A'}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Email:</Text>
-            <Text style={styles.value}>{booking.customer_email || booking.customer?.email || 'N/A'}</Text>
-          </View>
-        </View>
-
-        {/* Service Info */}
-        <View style={[styles.card, shadows.sm]}>
-          <Text style={styles.cardTitle}>Service Details</Text>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Service:</Text>
-            <Text style={styles.value}>{booking.service?.name}</Text>
-          </View>
-          {booking.service?.duration && (
-            <View style={styles.infoRow}>
-              <Text style={styles.label}>Duration:</Text>
-              <Text style={styles.value}>{booking.service.duration} minutes</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Booking Details */}
-        <View style={[styles.card, shadows.sm]}>
-          <Text style={styles.cardTitle}>Booking Details</Text>
-          <View style={styles.detailRow}>
-            <Ionicons name="calendar" size={20} color={colors.primary} />
-            <View style={styles.detailContent}>
-              <Text style={styles.detailLabel}>Date</Text>
-              <Text style={styles.detailValue}>{formatDate(booking.booking_date)}</Text>
-            </View>
-          </View>
-          <View style={styles.detailRow}>
-            <Ionicons name="time" size={20} color={colors.primary} />
-            <View style={styles.detailContent}>
-              <Text style={styles.detailLabel}>Time</Text>
-              <Text style={styles.detailValue}>{formatTime(booking.booking_time)}</Text>
-            </View>
-          </View>
-          <View style={styles.detailRow}>
-            <Ionicons name="location" size={20} color={colors.primary} />
-            <View style={styles.detailContent}>
-              <Text style={styles.detailLabel}>Location</Text>
-              <Text style={styles.detailValue}>
-                {booking.location_type === 'visit_customer'
-                  ? 'Visit Customer Location'
-                  : 'Customer Visits You'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Address (if visit_customer) */}
-        {booking.location_type === 'visit_customer' && booking.address && (
-          <View style={[styles.card, shadows.sm]}>
-            <Text style={styles.cardTitle}>Service Address</Text>
-            <Text style={styles.address}>{booking.address}</Text>
-            <Text style={styles.address}>
-              {booking.city}, {booking.state} - {booking.pincode}
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Status Banner */}
+          <LinearGradient
+            colors={[statusColor, statusColor + 'cc']}
+            style={styles.statusBanner}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          >
+            <Ionicons name={getStatusIcon(booking.status)} size={24} color="#FFFFFF" />
+            <Text style={styles.statusBannerText}>
+              {booking.status.toUpperCase().replace('_', ' ')}
             </Text>
-          </View>
-        )}
+          </LinearGradient>
 
-        {/* Notes */}
-        {booking.notes && (
-          <View style={[styles.card, shadows.sm]}>
-            <Text style={styles.cardTitle}>Customer Notes</Text>
-            <Text style={styles.notes}>{booking.notes}</Text>
-          </View>
-        )}
-
-        {/* Payment Info */}
-        <View style={[styles.card, shadows.sm]}>
-          <Text style={styles.cardTitle}>Payment Details</Text>
-          <View style={styles.paymentRow}>
-            <Text style={styles.paymentLabel}>Total Amount</Text>
-            <Text style={styles.paymentValue}>₹{booking.total_amount.toFixed(2)}</Text>
-          </View>
-          {booking.payment_method && (
-            <View style={[styles.paymentStatusRow, { backgroundColor: colors.success + '10' }]}>
-              <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-              <Text style={[styles.paymentStatusText, { color: colors.success }]}>
-                Payment Received
-              </Text>
+          {/* Customer Info */}
+          <LinearGradient
+            colors={['#1e1e1e', '#161616']}
+            style={styles.card}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <View style={styles.cardHeader}>
+              <View style={styles.cardIconContainer}>
+                <Ionicons name="person-outline" size={20} color="#a78bfa" />
+              </View>
+              <Text style={styles.cardTitle}>Customer Information</Text>
             </View>
-          )}
-        </View>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.label}>Full Name</Text>
+              <Text style={styles.value}>{booking.customer_name || booking.customer?.name || 'N/A'}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.label}>Phone Number</Text>
+              <Text style={styles.value}>{booking.customer_phone || booking.customer?.phone || 'N/A'}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.label}>Email Address</Text>
+              <Text style={styles.value}>{booking.customer_email || booking.customer?.email || 'N/A'}</Text>
+            </View>
+          </LinearGradient>
 
-        {/* OTP Verified Badge */}
-        {booking.otp_verified && (
-          <View style={[styles.card, shadows.sm, { backgroundColor: colors.success + '10' }]}>
-            <View style={styles.verifiedBadge}>
-              <Ionicons name="checkmark-done-circle" size={32} color={colors.success} />
-              <View style={{ flex: 1, marginLeft: spacing.md }}>
-                <Text style={[styles.cardTitle, { color: colors.success }]}>
-                  Service Completed
-                </Text>
-                <Text style={styles.verifiedText}>
-                  OTP verified successfully. Payment processed.
+          {/* Service Info */}
+          <LinearGradient
+            colors={['#1e1e1e', '#161616']}
+            style={styles.card}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <View style={styles.cardHeader}>
+              <View style={styles.cardIconContainer}>
+                <Ionicons name="briefcase-outline" size={20} color="#a78bfa" />
+              </View>
+              <Text style={styles.cardTitle}>Service Details</Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.label}>Service Name</Text>
+              <Text style={styles.value}>{booking.service?.name || 'N/A'}</Text>
+            </View>
+            {booking.service?.duration && (
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Duration</Text>
+                <Text style={styles.value}>{booking.service.duration} minutes</Text>
+              </View>
+            )}
+            {booking.service?.price && (
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Service Price</Text>
+                <Text style={styles.value}>₹{booking.service.price.toFixed(2)}</Text>
+              </View>
+            )}
+          </LinearGradient>
+
+          {/* Booking Details */}
+          <LinearGradient
+            colors={['#1e1e1e', '#161616']}
+            style={styles.card}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <View style={styles.cardHeader}>
+              <View style={styles.cardIconContainer}>
+                <Ionicons name="calendar-outline" size={20} color="#a78bfa" />
+              </View>
+              <Text style={styles.cardTitle}>Booking Details</Text>
+            </View>
+            
+            <View style={styles.detailRow}>
+              <LinearGradient
+                colors={['rgba(99, 102, 241, 0.15)', 'rgba(139, 92, 246, 0.15)']}
+                style={styles.detailIcon}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Ionicons name="calendar" size={20} color="#a78bfa" />
+              </LinearGradient>
+              <View style={styles.detailContent}>
+                <Text style={styles.detailLabel}>Date</Text>
+                <Text style={styles.detailValue}>{formatDate(booking.booking_date)}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.detailRow}>
+              <LinearGradient
+                colors={['rgba(99, 102, 241, 0.15)', 'rgba(139, 92, 246, 0.15)']}
+                style={styles.detailIcon}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Ionicons name="time" size={20} color="#a78bfa" />
+              </LinearGradient>
+              <View style={styles.detailContent}>
+                <Text style={styles.detailLabel}>Time</Text>
+                <Text style={styles.detailValue}>{formatTime(booking.booking_time)}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.detailRow}>
+              <LinearGradient
+                colors={['rgba(99, 102, 241, 0.15)', 'rgba(139, 92, 246, 0.15)']}
+                style={styles.detailIcon}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Ionicons name="location" size={20} color="#a78bfa" />
+              </LinearGradient>
+              <View style={styles.detailContent}>
+                <Text style={styles.detailLabel}>Location Type</Text>
+                <Text style={styles.detailValue}>
+                  {booking.location_type === 'visit_customer'
+                    ? '🏠 Visit Customer Location'
+                    : '📍 Customer Visits You'}
                 </Text>
               </View>
             </View>
-          </View>
-        )}
+          </LinearGradient>
 
-        {/* Complete Service Button */}
-        {canComplete && (
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.completeButton]}
-              onPress={() => setShowOTPModal(true)}
-              data-testid="complete-service-button"
+          {/* Address (if visit_customer) */}
+          {booking.location_type === 'visit_customer' && booking.address && (
+            <LinearGradient
+              colors={['#1e1e1e', '#161616']}
+              style={styles.card}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
             >
-              <Ionicons name="checkmark-circle" size={20} color={colors.surface} />
-              <Text style={styles.completeButtonText}>Complete Service</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+              <View style={styles.cardHeader}>
+                <View style={styles.cardIconContainer}>
+                  <Ionicons name="home-outline" size={20} color="#a78bfa" />
+                </View>
+                <Text style={styles.cardTitle}>Service Address</Text>
+              </View>
+              <Text style={styles.address}>{booking.address}</Text>
+              <Text style={styles.address}>
+                {booking.city}, {booking.state} - {booking.pincode}
+              </Text>
+            </LinearGradient>
+          )}
 
-        <View style={{ height: spacing.xl }} />
-      </ScrollView>
+          {/* Notes */}
+          {booking.notes && (
+            <LinearGradient
+              colors={['#1e1e1e', '#161616']}
+              style={styles.card}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.cardHeader}>
+                <View style={styles.cardIconContainer}>
+                  <Ionicons name="document-text-outline" size={20} color="#a78bfa" />
+                </View>
+                <Text style={styles.cardTitle}>Customer Notes</Text>
+              </View>
+              <Text style={styles.notes}>{booking.notes}</Text>
+            </LinearGradient>
+          )}
 
-      {/* OTP Verification Modal */}
-      <Modal
-        visible={showOTPModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowOTPModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, shadows.lg]}>
-            <View style={styles.modalHeader}>
-              <Ionicons name="key" size={32} color={colors.primary} />
-              <Text style={styles.modalTitle}>Enter Service OTP</Text>
+          {/* Payment Info */}
+          <LinearGradient
+            colors={['#1e1e1e', '#161616']}
+            style={styles.card}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <View style={styles.cardHeader}>
+              <View style={styles.cardIconContainer}>
+                <Ionicons name="wallet-outline" size={20} color="#a78bfa" />
+              </View>
+              <Text style={styles.cardTitle}>Payment Details</Text>
             </View>
             
-            <Text style={styles.modalDescription}>
-              Ask the customer for the 6-digit OTP shown on their booking page to verify service completion.
-            </Text>
-
-            <TextInput
-              style={styles.otpInput}
-              placeholder="Enter 6-digit OTP"
-              placeholderTextColor={colors.textSecondary}
-              value={otpInput}
-              onChangeText={(text) => setOtpInput(text.replace(/[^0-9]/g, '').slice(0, 6))}
-              keyboardType="number-pad"
-              maxLength={6}
-              autoFocus
-              data-testid="otp-input-field"
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowOTPModal(false);
-                  setOtpInput('');
-                }}
-                disabled={verifying}
+            <View style={styles.paymentRow}>
+              <Text style={styles.paymentLabel}>Total Amount</Text>
+              <Text style={styles.paymentValue}>₹{booking.total_amount?.toFixed(2) || '0.00'}</Text>
+            </View>
+            
+            {booking.payment_method && (
+              <LinearGradient
+                colors={['rgba(16, 185, 129, 0.15)', 'rgba(5, 150, 105, 0.15)']}
+                style={styles.paymentStatusRow}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              
+                <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+                <Text style={styles.paymentStatusText}>Payment Received</Text>
+              </LinearGradient>
+            )}
+          </LinearGradient>
+
+          {/* OTP Verified Badge */}
+          {booking.otp_verified && (
+            <LinearGradient
+              colors={['rgba(16, 185, 129, 0.15)', 'rgba(5, 150, 105, 0.15)']}
+              style={styles.verifiedCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.verifiedBadge}>
+                <Ionicons name="checkmark-done-circle" size={32} color="#10b981" />
+                <View style={styles.verifiedContent}>
+                  <Text style={[styles.cardTitle, { color: '#10b981' }]}>Service Completed</Text>
+                  <Text style={styles.verifiedText}>
+                    OTP verified successfully. Payment has been processed.
+                  </Text>
+                </View>
+              </View>
+            </LinearGradient>
+          )}
+
+          {/* Complete Service Button */}
+          {canComplete && (
+            <View style={styles.actionButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.verifyButton]}
-                onPress={handleVerifyOTP}
-                disabled={verifying || otpInput.length !== 6}
-                data-testid="verify-otp-button"
+                style={styles.completeButton}
+                onPress={() => setShowOTPModal(true)}
+                activeOpacity={0.8}
+                data-testid="complete-service-button"
               >
-                {verifying ? (
-                  <ActivityIndicator size="small" color={colors.surface} />
-                ) : (
-                  <Text style={styles.verifyButtonText}>Verify & Complete</Text>
-                )}
+                <LinearGradient
+                  colors={['#10b981', '#059669']}
+                  style={styles.actionGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+                  <Text style={styles.completeButtonText}>Complete Service</Text>
+                </LinearGradient>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
-      </Modal>
-    </SafeAreaView>
+          )}
+
+          <View style={{ height: spacing.xl }} />
+        </ScrollView>
+
+        {/* OTP Verification Modal */}
+        <Modal
+          visible={showOTPModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowOTPModal(false)}
+        >
+          <TouchableOpacity 
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowOTPModal(false)}
+          >
+            <TouchableOpacity 
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <LinearGradient
+                colors={['#1e1e1e', '#161616']}
+                style={styles.modalContent}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <View style={styles.modalHeader}>
+                  <View style={styles.modalIconContainer}>
+                    <Ionicons name="key" size={32} color="#a78bfa" />
+                  </View>
+                  <Text style={styles.modalTitle}>Enter Service OTP</Text>
+                  <Text style={styles.modalDescription}>
+                    Ask the customer for the 6-digit OTP shown on their booking page to verify service completion.
+                  </Text>
+                </View>
+
+                <TextInput
+                  style={styles.otpInput}
+                  placeholder="Enter 6-digit OTP"
+                  placeholderTextColor="#6b7280"
+                  value={otpInput}
+                  onChangeText={(text) => setOtpInput(text.replace(/[^0-9]/g, '').slice(0, 6))}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  autoFocus
+                  data-testid="otp-input-field"
+                />
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => {
+                      setShowOTPModal(false);
+                      setOtpInput('');
+                    }}
+                    disabled={verifying}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.verifyButton, otpInput.length !== 6 && styles.disabledButton]}
+                    onPress={handleVerifyOTP}
+                    disabled={verifying || otpInput.length !== 6}
+                    data-testid="verify-otp-button"
+                  >
+                    <LinearGradient
+                      colors={otpInput.length === 6 ? ['#10b981', '#059669'] : ['#374151', '#374151']}
+                      style={styles.confirmGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      {verifying ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.verifyButtonText}>Verify & Complete</Text>
+                      )}
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  headerBlur: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingTop: spacing.xl,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   backButton: {
     width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
-    ...typography.h3,
-    color: colors.text,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  scrollContent: {
+    paddingTop: 100,
+    paddingBottom: spacing.xxl,
   },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingTop: spacing.xxl * 2,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#9ca3af',
+    marginTop: spacing.md,
   },
   statusBanner: {
-    padding: spacing.md,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,
+    borderRadius: borderRadius.lg,
   },
   statusBannerText: {
-    ...typography.body,
-    color: colors.surface,
+    fontSize: 14,
     fontWeight: '700',
+    color: '#FFFFFF',
     letterSpacing: 1,
   },
   card: {
-    backgroundColor: colors.surface,
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
     padding: spacing.lg,
     borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  cardIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardTitle: {
-    ...typography.h4,
-    color: colors.text,
-    marginBottom: spacing.md,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
+    alignItems: 'center',
   },
   label: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#6b7280',
+    width: '35%',
   },
   value: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
-    textAlign: 'right',
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '500',
     flex: 1,
-    marginLeft: spacing.md,
+    textAlign: 'right',
   },
   detailRow: {
     flexDirection: 'row',
@@ -387,26 +615,35 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     gap: spacing.md,
   },
+  detailIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   detailContent: {
     flex: 1,
   },
   detailLabel: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 4,
   },
   detailValue: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '500',
   },
   address: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 14,
+    color: '#FFFFFF',
     marginBottom: spacing.xs,
+    lineHeight: 20,
   },
   notes: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 14,
+    color: '#d1d5db',
     lineHeight: 22,
   },
   paymentRow: {
@@ -416,13 +653,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   paymentLabel: {
-    ...typography.h4,
-    color: colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   paymentValue: {
-    ...typography.h3,
-    color: colors.primary,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#a78bfa',
   },
   paymentStatusRow: {
     flexDirection: 'row',
@@ -432,107 +670,139 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
   },
   paymentStatusText: {
-    ...typography.body,
+    fontSize: 14,
     fontWeight: '600',
+    color: '#10b981',
+  },
+  verifiedCard: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
   },
   verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.md,
+  },
+  verifiedContent: {
+    flex: 1,
   },
   verifiedText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    lineHeight: 20,
+    fontSize: 13,
+    color: '#9ca3af',
+    marginTop: 4,
+    lineHeight: 18,
   },
   actionButtons: {
     marginHorizontal: spacing.lg,
     marginTop: spacing.md,
   },
-  actionButton: {
+  completeButton: {
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  actionGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
-  },
-  completeButton: {
-    backgroundColor: colors.success,
   },
   completeButtonText: {
-    ...typography.body,
-    color: colors.surface,
+    fontSize: 16,
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.lg,
   },
   modalContent: {
-    backgroundColor: colors.surface,
     borderRadius: borderRadius.xl,
     padding: spacing.xl,
-    width: '100%',
+    width: width - spacing.xl * 2,
     maxWidth: 400,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   modalHeader: {
     alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  modalIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: spacing.md,
   },
   modalTitle: {
-    ...typography.h3,
-    color: colors.text,
-    marginTop: spacing.md,
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: spacing.xs,
   },
   modalDescription: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#9ca3af',
     textAlign: 'center',
-    marginBottom: spacing.xl,
-    lineHeight: 22,
+    lineHeight: 20,
   },
   otpInput: {
-    ...typography.h2,
-    color: colors.text,
-    backgroundColor: colors.background,
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: borderRadius.md,
     padding: spacing.lg,
     textAlign: 'center',
     letterSpacing: 8,
     marginBottom: spacing.xl,
     borderWidth: 2,
-    borderColor: colors.primary + '30',
+    borderColor: 'rgba(99, 102, 241, 0.3)',
   },
   modalButtons: {
     flexDirection: 'row',
     gap: spacing.md,
   },
-  modalButton: {
+  cancelButton: {
     flex: 1,
     padding: spacing.md,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   cancelButtonText: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 16,
+    color: '#9ca3af',
     fontWeight: '600',
   },
   verifyButton: {
-    backgroundColor: colors.primary,
+    flex: 1,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  confirmGradient: {
+    padding: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   verifyButtonText: {
-    ...typography.body,
-    color: colors.surface,
+    fontSize: 16,
+    color: '#FFFFFF',
     fontWeight: '600',
+  },
+  disabledButton: {
+    opacity: 0.5,
   },
 });

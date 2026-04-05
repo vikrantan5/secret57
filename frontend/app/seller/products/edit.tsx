@@ -9,9 +9,12 @@ import {
   Alert,
   ActivityIndicator,
   SafeAreaView,
+  Dimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../../src/store/authStore';
 import { useSellerStore } from '../../../src/store/sellerStore';
@@ -20,6 +23,8 @@ import { colors, spacing, typography, borderRadius, shadows } from '../../../src
 
 import { Input } from '../../../src/components/ui/Input';
 import { uploadMultipleImages } from '../../../src/utils/imageUpload';
+
+const { width } = Dimensions.get('window');
 
 export default function EditProductScreen() {
   const router = useRouter();
@@ -108,7 +113,6 @@ export default function EditProductScreen() {
 
   const uploadProductImages = async (sellerId: string): Promise<string[]> => {
     try {
-      // Filter only new images (those starting with 'file://')
       const newImages = images.filter(img => img.startsWith('file://'));
       const existingImages = images.filter(img => !img.startsWith('file://'));
 
@@ -144,7 +148,6 @@ export default function EditProductScreen() {
     try {
       setLoading(true);
 
-      // Upload any new images
       const imageUrls = await uploadProductImages(seller.id);
 
       const updateData = {
@@ -176,166 +179,252 @@ export default function EditProductScreen() {
 
   if (initialLoading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading product...</Text>
-        </View>
-      </SafeAreaView>
+      <LinearGradient
+        colors={['#0a0a0a', '#1a1a1a']}
+        style={styles.container}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#6366f1" />
+            <Text style={styles.loadingText}>Loading product...</Text>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   if (!selectedProduct) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <Ionicons name="alert-circle-outline" size={64} color={colors.error} />
-          <Text style={styles.errorText}>Product not found</Text>
-          <TouchableOpacity
-            style={styles.errorButton}
-            onPress={() => router.back()}
-          >
-            <Text style={styles.backButtonText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <LinearGradient
+        colors={['#0a0a0a', '#1a1a1a']}
+        style={styles.container}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.errorContainer}>
+            <LinearGradient
+              colors={['#1a1a1a', '#0a0a0a']}
+              style={styles.errorIconContainer}
+            >
+              <Ionicons name="alert-circle-outline" size={80} color="#f59e0b" />
+            </LinearGradient>
+            <Text style={styles.errorText}>Product not found</Text>
+            <TouchableOpacity
+              style={styles.errorButton}
+              onPress={() => router.back()}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={['#6366f1', '#8b5cf6']}
+                style={styles.errorButtonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
+                <Text style={styles.backButtonText}>Go Back</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+    <LinearGradient
+      colors={['#0a0a0a', '#1a1a1a']}
+      style={styles.container}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+    >
+      <SafeAreaView style={styles.safeArea}>
         {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Edit Product</Text>
-          <View style={{ width: 24 }} />
-        </View>
-
-        <View style={styles.form}>
-          {/* Product Name */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Product Name *</Text>
-            <Input
-              value={name}
-              onChangeText={setName}
-              placeholder="Enter product name"
-              error={errors.name}
-            />
+        <BlurView intensity={80} tint="dark" style={styles.headerBlur}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.7}>
+              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.title}>Edit Product</Text>
+            <View style={{ width: 40 }} />
           </View>
+        </BlurView>
 
-          {/* Description */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Description *</Text>
-            <Input
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Enter product description"
-              multiline
-              numberOfLines={4}
-              error={errors.description}
-            />
-          </View>
-
-          {/* Price */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Price (₹) *</Text>
-            <Input
-              value={price}
-              onChangeText={setPrice}
-              placeholder="Enter price"
-              keyboardType="decimal-pad"
-              error={errors.price}
-            />
-          </View>
-
-          {/* Compare Price */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Compare at Price (₹)</Text>
-            <Input
-              value={comparePrice}
-              onChangeText={setComparePrice}
-              placeholder="Enter original price (optional)"
-              keyboardType="decimal-pad"
-            />
-          </View>
-
-          {/* Stock */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Stock Quantity *</Text>
-            <Input
-              value={stock}
-              onChangeText={setStock}
-              placeholder="Enter stock quantity"
-              keyboardType="number-pad"
-              error={errors.stock}
-            />
-          </View>
-
-          {/* Product Images */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Product Images</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScroll}>
-              {images.map((image, index) => (
-                <View key={index} style={styles.imageContainer}>
-                  <Image source={{ uri: image }} style={styles.image} />
-                  <TouchableOpacity
-                    style={styles.removeImageButton}
-                    onPress={() => removeImage(index)}
-                  >
-                    <Ionicons name="close-circle" size={24} color={colors.error} />
-                  </TouchableOpacity>
-                </View>
-              ))}
-              <TouchableOpacity style={styles.addImageButton} onPress={pickImages}>
-                <Ionicons name="add-circle-outline" size={48} color={colors.primary} />
-                <Text style={styles.addImageText}>Add Image</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-
-          {/* Active Status */}
-          <View style={styles.inputGroup}>
-            <View style={styles.switchRow}>
-              <View>
-                <Text style={styles.label}>Product Status</Text>
-                <Text style={styles.hint}>
-                  {isActive ? 'Product is visible to customers' : 'Product is hidden'}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.switch, isActive && styles.switchActive]}
-                onPress={() => setIsActive(!isActive)}
-              >
-                <View style={[styles.switchThumb, isActive && styles.switchThumbActive]} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Submit Button */}
-          <TouchableOpacity
-            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={loading}
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <LinearGradient
+            colors={['#1e1e1e', '#161616']}
+            style={styles.formCard}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
           >
-            {loading ? (
-              <ActivityIndicator size="small" color={colors.surface} />
-            ) : (
-              <Text style={styles.submitButtonText}>Update Product</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+            {/* Product Name */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Product Name *</Text>
+              <Input
+                value={name}
+                onChangeText={setName}
+                placeholder="Enter product name"
+                error={errors.name}
+              />
+            </View>
+
+            {/* Description */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Description *</Text>
+              <Input
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Enter product description"
+                multiline
+                numberOfLines={4}
+                error={errors.description}
+              />
+            </View>
+
+            {/* Price and Compare Price Row */}
+            <View style={styles.row}>
+              <View style={styles.halfInput}>
+                <Text style={styles.label}>Price (₹) *</Text>
+                <Input
+                  value={price}
+                  onChangeText={setPrice}
+                  placeholder="Enter price"
+                  keyboardType="decimal-pad"
+                  error={errors.price}
+                />
+              </View>
+
+              <View style={styles.halfInput}>
+                <Text style={styles.label}>Compare Price (₹)</Text>
+                <Input
+                  value={comparePrice}
+                  onChangeText={setComparePrice}
+                  placeholder="Original price"
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            </View>
+
+            {/* Stock */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Stock Quantity *</Text>
+              <Input
+                value={stock}
+                onChangeText={setStock}
+                placeholder="Enter stock quantity"
+                keyboardType="number-pad"
+                error={errors.stock}
+              />
+            </View>
+
+            {/* Product Images */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Product Images</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                style={styles.imageScroll}
+              >
+                {images.map((image, index) => (
+                  <View key={index} style={styles.imageContainer}>
+                    <Image source={{ uri: image }} style={styles.image} />
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() => removeImage(index)}
+                      activeOpacity={0.7}
+                    >
+                      <LinearGradient
+                        colors={['#ef4444', '#dc2626']}
+                        style={styles.removeGradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        <Ionicons name="close" size={16} color="#FFFFFF" />
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                <TouchableOpacity style={styles.addImageButton} onPress={pickImages} activeOpacity={0.7}>
+                  <LinearGradient
+                    colors={['#6366f1', '#8b5cf6']}
+                    style={styles.addImageGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Ionicons name="add" size={32} color="#FFFFFF" />
+                  </LinearGradient>
+                  <Text style={styles.addImageText}>Add Image</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+
+            {/* Active Status */}
+            <View style={styles.inputGroup}>
+              <View style={styles.switchRow}>
+                <View>
+                  <Text style={styles.label}>Product Status</Text>
+                  <Text style={styles.hint}>
+                    {isActive ? 'Product is visible to customers' : 'Product is hidden'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.switch, isActive && styles.switchActive]}
+                  onPress={() => setIsActive(!isActive)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.switchThumb, isActive && styles.switchThumbActive]} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={handleSubmit}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={loading ? ['#374151', '#374151'] : ['#6366f1', '#8b5cf6']}
+                style={styles.submitGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="save-outline" size={20} color="#FFFFFF" />
+                    <Text style={styles.submitButtonText}>Update Product</Text>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </LinearGradient>
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  headerBlur: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
   },
   header: {
     flexDirection: 'row',
@@ -343,56 +432,105 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: spacing.lg,
     paddingTop: spacing.xl,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   backButton: {
-    padding: spacing.xs,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
-    ...typography.h3,
-    color: colors.text,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  scrollContent: {
+    paddingTop: 100,
+    paddingBottom: spacing.xxl,
+  },
+  formCard: {
+    margin: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.xl,
+    paddingTop: spacing.xxl * 2,
   },
   loadingText: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 16,
+    color: '#9ca3af',
     marginTop: spacing.md,
   },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  errorIconContainer: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+  },
   errorText: {
-    ...typography.h4,
-    color: colors.error,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
     marginTop: spacing.md,
     marginBottom: spacing.lg,
   },
-    errorButton: {
-    backgroundColor: colors.primary,
+  errorButton: {
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  errorButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
-    borderRadius: borderRadius.lg,
-    marginTop: spacing.md,
   },
-  form: {
-    padding: spacing.lg,
+  backButtonText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   inputGroup: {
     marginBottom: spacing.lg,
   },
   label: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 14,
+    color: '#FFFFFF',
     fontWeight: '600',
     marginBottom: spacing.sm,
   },
   hint: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  halfInput: {
+    flex: 1,
   },
   imageScroll: {
     marginTop: spacing.sm,
@@ -405,13 +543,16 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.border,
   },
   removeImageButton: {
     position: 'absolute',
     top: -8,
     right: -8,
-    backgroundColor: colors.surface,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  removeGradient: {
+    padding: 4,
     borderRadius: 12,
   },
   addImageButton: {
@@ -419,15 +560,22 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: borderRadius.md,
     borderWidth: 2,
-    borderColor: colors.border,
     borderStyle: 'dashed',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    gap: spacing.xs,
+  },
+  addImageGradient: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addImageText: {
-    ...typography.caption,
-    color: colors.primary,
+    fontSize: 12,
+    color: '#a78bfa',
     marginTop: spacing.xs,
   },
   switchRow: {
@@ -439,45 +587,39 @@ const styles = StyleSheet.create({
     width: 56,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.border,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     padding: 2,
     justifyContent: 'center',
   },
   switchActive: {
-    backgroundColor: colors.success,
+    backgroundColor: '#10b981',
   },
   switchThumb: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
     ...shadows.sm,
   },
   switchThumbActive: {
     alignSelf: 'flex-end',
   },
-   submitButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+  submitButton: {
     borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    marginTop: spacing.lg,
+  },
+  submitGradient: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: spacing.lg,
-    minHeight: 48,
-  },
-  submitButtonDisabled: {
-    backgroundColor: colors.border,
-    opacity: 0.6,
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
   },
   submitButtonText: {
-    ...typography.body,
-    color: colors.surface,
-    fontWeight: '600',
-  },
-  backButtonText: {
-    ...typography.body,
-    color: colors.primary,
+    fontSize: 16,
+    color: '#FFFFFF',
     fontWeight: '600',
   },
 });

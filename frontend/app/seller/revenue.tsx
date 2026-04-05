@@ -12,6 +12,9 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { LineChart } from 'react-native-chart-kit';
 import { useSellerStore } from '../../src/store/sellerStore';
 import { supabase } from '../../src/services/supabase';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
@@ -154,7 +157,7 @@ export default function SellerRevenueScreen() {
         month: monthRev,
         total: totalRev,
       });
-      setRecentTransactions(transactions.slice(0, 10)); // Show only 10 most recent
+      setRecentTransactions(transactions.slice(0, 10));
 
     } catch (error) {
       console.error('Error fetching revenue data:', error);
@@ -180,107 +183,252 @@ export default function SellerRevenueScreen() {
     fetchRevenueData();
   };
 
+  const formatCurrency = (amount: number) => {
+    return `₹${amount.toFixed(2)}`;
+  };
+
   if (loading && !refreshing) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Revenue</Text>
-          <View style={{ width: 24 }} />
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading revenue data...</Text>
-        </View>
-      </SafeAreaView>
+      <LinearGradient
+        colors={['#0a0a0a', '#1a1a1a']}
+        style={styles.container}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <SafeAreaView style={styles.safeArea}>
+          <BlurView intensity={80} tint="dark" style={styles.headerBlur}>
+            <View style={styles.header}>
+              <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+              <Text style={styles.title}>Revenue</Text>
+              <View style={{ width: 40 }} />
+            </View>
+          </BlurView>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#6366f1" />
+            <Text style={styles.loadingText}>Loading revenue data...</Text>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Revenue</Text>
-        <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
-          <Ionicons name="refresh" size={24} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
+    <LinearGradient
+      colors={['#0a0a0a', '#1a1a1a']}
+      style={styles.container}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+    >
+      <SafeAreaView style={styles.safeArea}>
+        {/* Header */}
+        <BlurView intensity={80} tint="dark" style={styles.headerBlur}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.7}>
+              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.title}>Revenue Analytics</Text>
+            <TouchableOpacity onPress={onRefresh} style={styles.refreshButton} activeOpacity={0.7}>
+              <Ionicons name="refresh" size={22} color="#a78bfa" />
+            </TouchableOpacity>
+          </View>
+        </BlurView>
 
-      <ScrollView 
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        {/* Revenue Summary */}
-        <View style={styles.summaryContainer}>
-          <View style={[styles.summaryCard, shadows.md]}>
-            <Ionicons name="today" size={24} color={colors.primary} style={styles.summaryIcon} />
-            <Text style={styles.summaryLabel}>Today</Text>
-            <Text style={styles.summaryValue}>₹{revenueData.today.toFixed(2)}</Text>
-          </View>
-        
-          <View style={[styles.summaryCard, shadows.md]}>
-            <Ionicons name="calendar-outline" size={24} color={colors.success} style={styles.summaryIcon} />
-            <Text style={styles.summaryLabel}>This Month</Text>
-            <Text style={styles.summaryValue}>₹{revenueData.month.toFixed(2)}</Text>
-          </View>
-          <View style={[styles.summaryCard, styles.summaryCardPrimary, shadows.md]}>
-            <Ionicons name="wallet" size={28} color={colors.white} style={styles.summaryIcon} />
-            <Text style={[styles.summaryLabel, styles.summaryLabelWhite]}>Total Revenue</Text>
-            <Text style={[styles.summaryValue, styles.summaryValueWhite]}>₹{revenueData.total.toFixed(2)}</Text>
-          </View>
-        </View>
-
-        {/* Recent Transactions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Transactions</Text>
-          {recentTransactions.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="wallet-outline" size={60} color={colors.textSecondary} />
-              <Text style={styles.emptyTitle}>No transactions yet</Text>
-              <Text style={styles.emptySubtitle}>
-                Your sales transactions will appear here once customers complete payments
-              </Text>
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl 
+              refreshing={refreshing} 
+              onRefresh={onRefresh}
+              tintColor="#6366f1"
+              colors={['#6366f1']}
+            />
+          }
+        >
+          {/* Hero Section - Total Revenue */}
+          <LinearGradient
+            colors={['#6366f1', '#8b5cf6']}
+            style={styles.heroCard}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <View style={styles.heroContent}>
+              <View style={styles.heroIconContainer}>
+                <Ionicons name="trending-up" size={24} color="#FFFFFF" />
+              </View>
+              <Text style={styles.heroLabel}>Total Revenue</Text>
+              <Text style={styles.heroValue}>{formatCurrency(revenueData.total)}</Text>
+              <View style={styles.heroBadge}>
+                <Ionicons name="calendar" size={12} color="#FFFFFF" />
+                <Text style={styles.heroBadgeText}>Lifetime</Text>
+              </View>
             </View>
-          ) : (
-            <View>
-              {recentTransactions.map((transaction, index) => (
-                <View key={index} style={[styles.transactionCard, shadows.sm]}>
-                  <View style={[
-                    styles.transactionIcon,
-                    { backgroundColor: transaction.type === 'order' ? colors.primary + '20' : colors.secondary + '20' }
-                  ]}>
-                    <Ionicons 
-                      name={transaction.type === 'order' ? 'cart' : 'calendar'} 
-                      size={24} 
-                      color={transaction.type === 'order' ? colors.primary : colors.secondary} 
-                    />
-                  </View>
-                  <View style={styles.transactionInfo}>
-                    <Text style={styles.transactionTitle}>{transaction.description}</Text>
-                    <Text style={styles.transactionDate}>{transaction.date}</Text>
-                  </View>
-                  <Text style={styles.transactionAmount}>₹{transaction.amount.toFixed(2)}</Text>
+          </LinearGradient>
+
+          {/* Stats Grid */}
+          <View style={styles.statsGrid}>
+            <LinearGradient
+              colors={['#1e1e1e', '#161616']}
+              style={styles.statCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={[styles.statIconContainer, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
+                <Ionicons name="today" size={22} color="#a78bfa" />
+              </View>
+              <Text style={styles.statLabel}>Today</Text>
+              <Text style={styles.statValue}>{formatCurrency(revenueData.today)}</Text>
+            </LinearGradient>
+
+            <LinearGradient
+              colors={['#1e1e1e', '#161616']}
+              style={styles.statCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={[styles.statIconContainer, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+                <Ionicons name="calendar-outline" size={22} color="#10b981" />
+              </View>
+              <Text style={styles.statLabel}>This Week</Text>
+              <Text style={styles.statValue}>{formatCurrency(revenueData.week)}</Text>
+            </LinearGradient>
+
+            <LinearGradient
+              colors={['#1e1e1e', '#161616']}
+              style={styles.statCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={[styles.statIconContainer, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
+                <Ionicons name="calendar" size={22} color="#f59e0b" />
+              </View>
+              <Text style={styles.statLabel}>This Month</Text>
+              <Text style={styles.statValue}>{formatCurrency(revenueData.month)}</Text>
+            </LinearGradient>
+          </View>
+
+          {/* Recent Transactions */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recent Transactions</Text>
+              <TouchableOpacity style={styles.viewAllButton}>
+                <Text style={styles.viewAllText}>View All</Text>
+                <Ionicons name="chevron-forward" size={16} color="#a78bfa" />
+              </TouchableOpacity>
+            </View>
+
+            {recentTransactions.length === 0 ? (
+              <LinearGradient
+                colors={['#1e1e1e', '#161616']}
+                style={styles.emptyStateCard}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <View style={styles.emptyIconContainer}>
+                  <Ionicons name="receipt-outline" size={60} color="#6366f1" />
                 </View>
-              ))}
+                <Text style={styles.emptyTitle}>No transactions yet</Text>
+                <Text style={styles.emptySubtitle}>
+                  Your sales transactions will appear here once customers complete payments
+                </Text>
+              </LinearGradient>
+            ) : (
+              <View>
+                {recentTransactions.map((transaction, index) => (
+                  <LinearGradient
+                    key={index}
+                    colors={['#1e1e1e', '#161616']}
+                    style={styles.transactionCard}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <View style={[
+                      styles.transactionIcon,
+                      { 
+                        backgroundColor: transaction.type === 'order' 
+                          ? 'rgba(99, 102, 241, 0.15)' 
+                          : 'rgba(139, 92, 246, 0.15)' 
+                      }
+                    ]}>
+                      <Ionicons 
+                        name={transaction.type === 'order' ? 'cart-outline' : 'calendar-outline'} 
+                        size={24} 
+                        color={transaction.type === 'order' ? '#a78bfa' : '#c084fc'} 
+                      />
+                    </View>
+                    <View style={styles.transactionInfo}>
+                      <Text style={styles.transactionTitle}>{transaction.description}</Text>
+                      <View style={styles.transactionMeta}>
+                        <Ionicons name="time-outline" size={12} color="#6b7280" />
+                        <Text style={styles.transactionDate}>{transaction.date}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.transactionAmountContainer}>
+                      <Text style={[
+                        styles.transactionAmount,
+                        { color: transaction.type === 'order' ? '#10b981' : '#f59e0b' }
+                      ]}>
+                        +{formatCurrency(transaction.amount)}
+                      </Text>
+                      <View style={styles.transactionTypeBadge}>
+                        <Text style={styles.transactionTypeText}>
+                          {transaction.type === 'order' ? 'Order' : 'Booking'}
+                        </Text>
+                      </View>
+                    </View>
+                  </LinearGradient>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* Insights Section */}
+          {recentTransactions.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Quick Insights</Text>
+              <LinearGradient
+                colors={['#1e1e1e', '#161616']}
+                style={styles.insightCard}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <View style={styles.insightRow}>
+                  <View style={styles.insightItem}>
+                    <Text style={styles.insightLabel}>Avg. Transaction</Text>
+                    <Text style={styles.insightValue}>
+                      {formatCurrency(recentTransactions.reduce((sum, t) => sum + t.amount, 0) / recentTransactions.length)}
+                    </Text>
+                  </View>
+                  <View style={styles.insightDivider} />
+                  <View style={styles.insightItem}>
+                    <Text style={styles.insightLabel}>Total Transactions</Text>
+                    <Text style={styles.insightValue}>{recentTransactions.length}</Text>
+                  </View>
+                </View>
+              </LinearGradient>
             </View>
           )}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  headerBlur: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
   },
   header: {
     flexDirection: 'row',
@@ -288,97 +436,188 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: spacing.lg,
     paddingTop: spacing.xl,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   backButton: {
-    padding: spacing.xs,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   refreshButton: {
-    padding: spacing.xs,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
-    ...typography.h3,
-    color: colors.text,
-    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
     textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  scrollContent: {
+    paddingTop: 100,
+    paddingBottom: spacing.xxl,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingTop: spacing.xxl * 2,
   },
   loadingText: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 16,
+    color: '#9ca3af',
     marginTop: spacing.md,
   },
-  summaryContainer: {
-    padding: spacing.lg,
-    gap: spacing.md,
+  heroCard: {
+    margin: spacing.lg,
+    marginTop: spacing.lg,
+    padding: spacing.xl,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  summaryCard: {
-    backgroundColor: colors.surface,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
+  heroContent: {
     alignItems: 'center',
   },
-  summaryCardPrimary: {
-    backgroundColor: colors.primary,
+  heroIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
   },
-  summaryIcon: {
-    marginBottom: spacing.xs,
-  },
-  summaryLabel: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  summaryLabelWhite: {
-    color: colors.white,
+  heroLabel: {
+    fontSize: 14,
+    color: '#FFFFFF',
     opacity: 0.9,
+    marginBottom: spacing.xs,
   },
-  summaryValue: {
-    ...typography.h2,
-    color: colors.text,
+  heroValue: {
+    fontSize: 42,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: spacing.sm,
+  },
+  heroBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: borderRadius.full,
+  },
+  heroBadgeText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: (width - spacing.lg * 2 - spacing.md * 2) / 3,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+  },
+  statIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginBottom: spacing.xs,
+  },
+  statValue: {
+    fontSize: 16,
     fontWeight: '700',
-  },
-  summaryValueWhite: {
-    color: colors.white,
+    color: '#FFFFFF',
   },
   section: {
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.xl,
   },
-  sectionTitle: {
-    ...typography.h4,
-    color: colors.text,
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: spacing.md,
   },
-  emptyState: {
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  viewAllText: {
+    fontSize: 14,
+    color: '#a78bfa',
+    fontWeight: '600',
+  },
+  emptyStateCard: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.xxl,
+    padding: spacing.xl,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  emptyIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
   },
   emptyTitle: {
-    ...typography.h4,
-    color: colors.text,
-    marginTop: spacing.md,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: spacing.xs,
   },
   emptySubtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#9ca3af',
     textAlign: 'center',
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.lg,
+    lineHeight: 20,
   },
   transactionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
     padding: spacing.md,
     borderRadius: borderRadius.md,
     marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   transactionIcon: {
     width: 48,
@@ -392,18 +631,67 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   transactionTitle: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 14,
     fontWeight: '600',
-    marginBottom: spacing.xs / 2,
+    color: '#FFFFFF',
+    marginBottom: spacing.xs,
+  },
+  transactionMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   transactionDate: {
-    ...typography.caption,
-    color: colors.textSecondary,
+    fontSize: 11,
+    color: '#6b7280',
+  },
+  transactionAmountContainer: {
+    alignItems: 'flex-end',
+    gap: 4,
   },
   transactionAmount: {
-    ...typography.h4,
-    color: colors.success,
+    fontSize: 16,
     fontWeight: '700',
+  },
+  transactionTypeBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: borderRadius.sm,
+  },
+  transactionTypeText: {
+    fontSize: 10,
+    color: '#9ca3af',
+    fontWeight: '600',
+  },
+  insightCard: {
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  insightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  insightItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  insightDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    marginHorizontal: spacing.lg,
+  },
+  insightLabel: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginBottom: spacing.xs,
+  },
+  insightValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

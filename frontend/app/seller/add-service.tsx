@@ -10,9 +10,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../src/store/authStore';
 import { useSellerStore } from '../../src/store/sellerStore';
@@ -27,6 +30,8 @@ import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
 import { uploadMultipleImages } from '../../src/utils/imageUpload';
 import { isValidYouTubeUrl } from '../../src/utils/youtubeHelper';
+
+const { width } = Dimensions.get('window');
 
 export default function AddServiceScreen() {
   const router = useRouter();
@@ -91,9 +96,6 @@ export default function AddServiceScreen() {
     }
   }, [locations]);
 
-  // No longer need to fetch categories or manage categoryId state
-
-  
   const pickImages = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
@@ -118,7 +120,6 @@ export default function AddServiceScreen() {
     setImages(images.filter((_, i) => i !== index));
   };
 
-  
   const handleUseCurrentLocation = async () => {
     setFetchingLocation(true);
     try {
@@ -141,32 +142,31 @@ export default function AddServiceScreen() {
     }
   };
 
-const validate = () => {
-  const newErrors: any = {};
+  const validate = () => {
+    const newErrors: any = {};
 
-  if (!name.trim()) newErrors.name = 'Service name is required';
-  if (!description.trim()) newErrors.description = 'Description is required';
-  if (!basePrice || parseFloat(basePrice) <= 0) newErrors.basePrice = 'Valid price is required';
-  
-  // Validate location (only if not already exists)
-  if (!hasExistingLocation) {
-    if (!address.trim()) newErrors.address = 'Service address is required';
-    if (!city.trim()) newErrors.city = 'City is required';
-    if (!pincode.trim()) newErrors.pincode = 'Pincode is required';
-    // FIXED: Changed 'd' to '\d' for digit matching
-    if (pincode.trim() && !/^\d{6}$/.test(pincode.trim())) {
-      newErrors.pincode = 'Invalid pincode (6 digits required)';
+    if (!name.trim()) newErrors.name = 'Service name is required';
+    if (!description.trim()) newErrors.description = 'Description is required';
+    if (!basePrice || parseFloat(basePrice) <= 0) newErrors.basePrice = 'Valid price is required';
+    
+    // Validate location (only if not already exists)
+    if (!hasExistingLocation) {
+      if (!address.trim()) newErrors.address = 'Service address is required';
+      if (!city.trim()) newErrors.city = 'City is required';
+      if (!pincode.trim()) newErrors.pincode = 'Pincode is required';
+      if (pincode.trim() && !/^\d{6}$/.test(pincode.trim())) {
+        newErrors.pincode = 'Invalid pincode (6 digits required)';
+      }
     }
-  }
 
-  // Validate YouTube URL if provided
-  if (videoUrl.trim() && !isValidYouTubeUrl(videoUrl.trim())) {
-    newErrors.videoUrl = 'Please enter a valid YouTube URL';
-  }
-  
-  setErrors(newErrors);
-  return Object.keys(newErrors).length === 0;
-};
+    // Validate YouTube URL if provided
+    if (videoUrl.trim() && !isValidYouTubeUrl(videoUrl.trim())) {
+      newErrors.videoUrl = 'Please enter a valid YouTube URL';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSubmit = async () => {
     if (!validate()) {
@@ -178,7 +178,7 @@ const validate = () => {
       Alert.alert('Error', 'Seller profile not found. Please complete your profile first.');
       return;
     }
-      if (!seller?.category_id) {
+    if (!seller?.category_id) {
       Alert.alert('Error', 'Your seller category is not set. Please contact support.');
       return;
     }
@@ -249,290 +249,363 @@ const validate = () => {
   };
 
   return (
-    <KeyboardAvoidingView
+    <LinearGradient
+      colors={['#0a0a0a', '#1a1a1a']}
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
     >
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Add Service</Text>
-          <View style={{ width: 24 }} />
-        </View>
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Header */}
+          <BlurView intensity={80} tint="dark" style={styles.headerBlur}>
+            <View style={styles.header}>
+              <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.7}>
+                <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+              <Text style={styles.title}>Add New Service</Text>
+              <View style={{ width: 40 }} />
+            </View>
+          </BlurView>
 
-         {/* Subscription & Bank Account Check */}
-        {(subscriptionLoading || bankLoading) ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Checking requirements...</Text>
-          </View>
-        ) : !hasActiveSubscription || !verifiedBankAccount ? (
-          <View style={styles.restrictionContainer}>
-            <Ionicons name="alert-circle" size={64} color={colors.warning} />
-            <Text style={styles.restrictionTitle}>Requirements Not Met</Text>
-            
-            {!hasActiveSubscription && (
-              <View style={styles.requirementCard}>
-                <Ionicons name="close-circle" size={24} color={colors.error} />
-                <View style={styles.requirementText}>
-                  <Text style={styles.requirementTitle}>Active Subscription Required</Text>
-                  <Text style={styles.requirementDesc}>
-                    You need an active subscription to add services
-                  </Text>
-                </View>
+          {/* Subscription & Bank Account Check */}
+          {(subscriptionLoading || bankLoading) ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#6366f1" />
+              <Text style={styles.loadingText}>Checking requirements...</Text>
+            </View>
+          ) : !hasActiveSubscription || !verifiedBankAccount ? (
+            <LinearGradient
+              colors={['#1e1e1e', '#161616']}
+              style={styles.restrictionContainer}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.restrictionIconContainer}>
+                <Ionicons name="alert-circle" size={64} color="#f59e0b" />
               </View>
-            )}
-
-            {!verifiedBankAccount && (
-              <View style={styles.requirementCard}>
-                <Ionicons name="close-circle" size={24} color={colors.error} />
-                <View style={styles.requirementText}>
-                  <Text style={styles.requirementTitle}>Verified Bank Account Required</Text>
-                  <Text style={styles.requirementDesc}>
-                    Add and verify your bank account to receive payments
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            <View style={styles.actionButtons}>
+              <Text style={styles.restrictionTitle}>Requirements Not Met</Text>
+              
               {!hasActiveSubscription && (
-                <Button
-                  title="View Subscription Plans"
-                  onPress={() => router.push('/seller/subscription')}
-                  variant="primary"
-                  style={styles.actionButton}
-                />
+                <LinearGradient
+                  colors={['rgba(239, 68, 68, 0.15)', 'rgba(220, 38, 38, 0.15)']}
+                  style={styles.requirementCard}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Ionicons name="close-circle" size={24} color="#ef4444" />
+                  <View style={styles.requirementText}>
+                    <Text style={styles.requirementTitle}>Active Subscription Required</Text>
+                    <Text style={styles.requirementDesc}>
+                      You need an active subscription to add services
+                    </Text>
+                  </View>
+                </LinearGradient>
               )}
+
               {!verifiedBankAccount && (
-                <Button
-                  title="Add Bank Account"
-                  onPress={() => router.push('/seller/payout-settings')}
-                  variant="outline"
-                  style={styles.actionButton}
-                />
+                <LinearGradient
+                  colors={['rgba(239, 68, 68, 0.15)', 'rgba(220, 38, 38, 0.15)']}
+                  style={styles.requirementCard}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Ionicons name="close-circle" size={24} color="#ef4444" />
+                  <View style={styles.requirementText}>
+                    <Text style={styles.requirementTitle}>Verified Bank Account Required</Text>
+                    <Text style={styles.requirementDesc}>
+                      Add and verify your bank account to receive payments
+                    </Text>
+                  </View>
+                </LinearGradient>
               )}
-            </View>
-          </View>
-        ) : (
-          <>
 
-          {/* Service Images */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Service Images</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.imagesContainer}>
-              {images.map((image, index) => (
-                <View key={index} style={styles.imageItem}>
-                  <Image source={{ uri: image }} style={styles.serviceImage} />
-                  <TouchableOpacity
-                    style={styles.removeButton}
-                    onPress={() => removeImage(index)}
+              <View style={styles.actionButtons}>
+                {!hasActiveSubscription && (
+                  <Button
+                    title="View Subscription Plans"
+                    onPress={() => router.push('/seller/subscription')}
+                    variant="primary"
+                    style={styles.actionButton}
+                  />
+                )}
+                {!verifiedBankAccount && (
+                  <Button
+                    title="Add Bank Account"
+                    onPress={() => router.push('/seller/payout-settings')}
+                    variant="outline"
+                    style={styles.actionButton}
+                  />
+                )}
+              </View>
+            </LinearGradient>
+          ) : (
+            <>
+              {/* Service Images */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Service Images</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.imagesContainer}>
+                    {images.map((image, index) => (
+                      <View key={index} style={styles.imageItem}>
+                        <Image source={{ uri: image }} style={styles.serviceImage} />
+                        <TouchableOpacity
+                          style={styles.removeButton}
+                          onPress={() => removeImage(index)}
+                        >
+                          <LinearGradient
+                            colors={['#ef4444', '#dc2626']}
+                            style={styles.removeButtonGradient}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                          >
+                            <Ionicons name="close" size={16} color="#FFFFFF" />
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                    <TouchableOpacity style={styles.addImageButton} onPress={pickImages}>
+                      <LinearGradient
+                        colors={['#6366f1', '#8b5cf6']}
+                        style={styles.addImageGradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        <Ionicons name="add" size={32} color="#FFFFFF" />
+                      </LinearGradient>
+                      <Text style={styles.addImageText}>Add Images</Text>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              </View>
+
+              {/* Service Details */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Service Details</Text>
+                
+                <Input
+                  label="Service Name *"
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="Enter service name"
+                  error={errors.name}
+                />
+
+                <Input
+                  label="Description *"
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholder="Describe your service"
+                  multiline
+                  numberOfLines={4}
+                  style={styles.textArea}
+                  error={errors.description}
+                />
+
+                <Input
+                  label="Base Price (₹) *"
+                  value={basePrice}
+                  onChangeText={setBasePrice}
+                  placeholder="0.00"
+                  keyboardType="decimal-pad"
+                  error={errors.basePrice}
+                />
+
+                <Input
+                  label="Duration (minutes)"
+                  value={duration}
+                  onChangeText={setDuration}
+                  placeholder="Optional"
+                  keyboardType="number-pad"
+                />
+
+                <Input
+                  label="YouTube Video URL (Optional)"
+                  value={videoUrl}
+                  onChangeText={setVideoUrl}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  error={errors.videoUrl}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                
+                {videoUrl.trim() && isValidYouTubeUrl(videoUrl.trim()) && (
+                  <LinearGradient
+                    colors={['rgba(16, 185, 129, 0.15)', 'rgba(5, 150, 105, 0.15)']}
+                    style={styles.successMessage}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                   >
-                    <Ionicons name="close-circle" size={24} color={colors.error} />
-                  </TouchableOpacity>
+                    <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                    <Text style={styles.successText}>Valid YouTube URL</Text>
+                  </LinearGradient>
+                )}
+              </View>
+
+              {/* Service Location */}
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>
+                    {hasExistingLocation ? 'Service Location (Optional - Update if needed)' : 'Service Location *'}
+                  </Text>
+                  {!hasExistingLocation && (
+                    <TouchableOpacity
+                      style={styles.locationButton}
+                      onPress={handleUseCurrentLocation}
+                      disabled={fetchingLocation}
+                      activeOpacity={0.7}
+                    >
+                      <LinearGradient
+                        colors={['#6366f1', '#8b5cf6']}
+                        style={styles.locationButtonGradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        <Ionicons name="locate" size={16} color="#FFFFFF" />
+                        <Text style={styles.locationButtonText}>
+                          {fetchingLocation ? 'Fetching...' : 'Use Current'}
+                        </Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  )}
                 </View>
-              ))}
-              <TouchableOpacity style={styles.addImageButton} onPress={pickImages}>
-                <Ionicons name="add-circle" size={32} color={colors.primary} />
-                <Text style={styles.addImageText}>Add Images</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </View>
-        {/* Service Details */}
-        <View style={styles.section}>
-          <Input
-            label="Service Name *"
-            value={name}
-            onChangeText={setName}
-            placeholder="Enter service name"
-            error={errors.name}
-          />
 
-          <Input
-            label="Description *"
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Describe your service"
-            multiline
-            numberOfLines={4}
-            style={styles.textArea}
-            error={errors.description}
-          />
+                {hasExistingLocation && (
+                  <LinearGradient
+                    colors={['rgba(99, 102, 241, 0.1)', 'rgba(139, 92, 246, 0.1)']}
+                    style={styles.infoBox}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Ionicons name="information-circle" size={20} color="#a78bfa" />
+                    <Text style={styles.infoText}>
+                      You already have a service location. You can update it below or leave it as is.
+                    </Text>
+                  </LinearGradient>
+                )}
 
-          <Input
-            label="Base Price (₹) *"
-            value={basePrice}
-            onChangeText={setBasePrice}
-            placeholder="0.00"
-            keyboardType="decimal-pad"
-            error={errors.basePrice}
-          />
-
-          <Input
-            label="Duration (minutes)"
-            value={duration}
-            onChangeText={setDuration}
-            placeholder="Optional"
-            keyboardType="number-pad"
-          />
-
-             <Input
-            label="YouTube Video URL (Optional)"
-            value={videoUrl}
-            onChangeText={setVideoUrl}
-            placeholder="https://www.youtube.com/watch?v=..."
-            error={errors.videoUrl}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {videoUrl.trim() && isValidYouTubeUrl(videoUrl.trim()) && (
-            <View style={styles.successMessage}>
-              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-              <Text style={styles.successText}>Valid YouTube URL</Text>
-            </View>
-          )}
-
-
-             </View>
-
-        {/* Service Location */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              {hasExistingLocation ? 'Service Location (Optional - Update if needed)' : 'Service Location *'}
-            </Text>
-            {!hasExistingLocation && (
-              <TouchableOpacity
-                style={styles.locationButton}
-                onPress={handleUseCurrentLocation}
-                disabled={fetchingLocation}
-              >
-                <Ionicons name="locate" size={16} color={colors.primary} />
-                <Text style={styles.locationButtonText}>
-                  {fetchingLocation ? 'Fetching...' : 'Use Current'}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {hasExistingLocation && (
-            <View style={styles.infoBox}>
-              <Ionicons name="information-circle" size={20} color={colors.primary} />
-              <Text style={styles.infoText}>
-                You already have a service location. You can update it below or leave it as is.
-              </Text>
-            </View>
-          )}
-
-          <Input
-            label="Service Address *"
-            value={address}
-            onChangeText={setAddress}
-            placeholder="Street address, building name"
-            multiline
-            numberOfLines={2}
-            error={errors.address}
-          />
-
-          <View style={styles.row}>
-            <View style={styles.halfInput}>
-              <Input
-                label="City *"
-                value={city}
-                onChangeText={setCity}
-                placeholder="City"
-                error={errors.city}
-              />
-            </View>
-            <View style={styles.halfInput}>
-              <Input
-                label="Pincode *"
-                value={pincode}
-                onChangeText={setPincode}
-                placeholder="000000"
-                keyboardType="number-pad"
-                maxLength={6}
-                error={errors.pincode}
-              />
-            </View>
-          </View>
-
-          <Input
-            label="Service Radius (km)"
-            value={radiusKm}
-            onChangeText={setRadiusKm}
-            placeholder="10"
-            keyboardType="number-pad"
-            helpText="Customers within this radius can book your service"
-          />
-
-          {/* Optional: Manual coordinates */}
-          <TouchableOpacity 
-            style={styles.advancedToggle}
-            onPress={() => setErrors({ ...errors, showAdvanced: !errors.showAdvanced })}
-          >
-            <Text style={styles.advancedToggleText}>
-              {errors.showAdvanced ? 'Hide' : 'Show'} Advanced (Coordinates)
-            </Text>
-            <Ionicons 
-              name={errors.showAdvanced ? 'chevron-up' : 'chevron-down'} 
-              size={20} 
-              color={colors.textSecondary} 
-            />
-          </TouchableOpacity>
-
-          {errors.showAdvanced && (
-            <View style={styles.row}>
-              <View style={styles.halfInput}>
                 <Input
-                  label="Latitude"
-                  value={latitude}
-                  onChangeText={setLatitude}
-                  placeholder="Auto-filled"
-                  keyboardType="decimal-pad"
+                  label="Service Address *"
+                  value={address}
+                  onChangeText={setAddress}
+                  placeholder="Street address, building name"
+                  multiline
+                  numberOfLines={2}
+                  error={errors.address}
+                />
+
+                <View style={styles.row}>
+                  <View style={styles.halfInput}>
+                    <Input
+                      label="City *"
+                      value={city}
+                      onChangeText={setCity}
+                      placeholder="City"
+                      error={errors.city}
+                    />
+                  </View>
+                  <View style={styles.halfInput}>
+                    <Input
+                      label="Pincode *"
+                      value={pincode}
+                      onChangeText={setPincode}
+                      placeholder="000000"
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      error={errors.pincode}
+                    />
+                  </View>
+                </View>
+
+                <Input
+                  label="Service Radius (km)"
+                  value={radiusKm}
+                  onChangeText={setRadiusKm}
+                  placeholder="10"
+                  keyboardType="number-pad"
+                  helpText="Customers within this radius can book your service"
+                />
+
+                {/* Optional: Manual coordinates */}
+                <TouchableOpacity 
+                  style={styles.advancedToggle}
+                  onPress={() => setErrors({ ...errors, showAdvanced: !errors.showAdvanced })}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.advancedToggleText}>
+                    {errors.showAdvanced ? 'Hide' : 'Show'} Advanced (Coordinates)
+                  </Text>
+                  <Ionicons 
+                    name={errors.showAdvanced ? 'chevron-up' : 'chevron-down'} 
+                    size={20} 
+                    color="#6b7280" 
+                  />
+                </TouchableOpacity>
+
+                {errors.showAdvanced && (
+                  <View style={styles.row}>
+                    <View style={styles.halfInput}>
+                      <Input
+                        label="Latitude"
+                        value={latitude}
+                        onChangeText={setLatitude}
+                        placeholder="Auto-filled"
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+                    <View style={styles.halfInput}>
+                      <Input
+                        label="Longitude"
+                        value={longitude}
+                        onChangeText={setLongitude}
+                        placeholder="Auto-filled"
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              {/* Submit Button */}
+              <View style={styles.footer}>
+                <Button
+                  title="Add Service"
+                  onPress={handleSubmit}
+                  loading={loading}
+                  variant="primary"
+                  fullWidth
                 />
               </View>
-              <View style={styles.halfInput}>
-                <Input
-                  label="Longitude"
-                  value={longitude}
-                  onChangeText={setLongitude}
-                  placeholder="Auto-filled"
-                  keyboardType="decimal-pad"
-                />
-              </View>
-            </View>
+            </>
           )}
-
-
-        </View>
-
-        {/* Submit Button */}
-        <View style={styles.footer}>
-          <Button
-            title="Add Service"
-            onPress={handleSubmit}
-            loading={loading}
-            variant="primary"
-            fullWidth
-          />
-        </View>
-           </>
-        )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: spacing.xxl,
+  },
+  headerBlur: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
   },
   header: {
     flexDirection: 'row',
@@ -540,21 +613,32 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: spacing.lg,
     paddingTop: spacing.xl,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   backButton: {
-    padding: spacing.xs,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
-    ...typography.h3,
-    color: colors.text,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    letterSpacing: 0.5,
   },
   section: {
     paddingHorizontal: spacing.lg,
+    marginTop: spacing.xl,
     marginBottom: spacing.lg,
   },
   sectionTitle: {
-    ...typography.h4,
-    color: colors.text,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
     marginBottom: spacing.md,
   },
   imagesContainer: {
@@ -568,96 +652,99 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.border,
   },
   removeButton: {
     position: 'absolute',
     top: -8,
     right: -8,
-    backgroundColor: colors.surface,
+    borderRadius: borderRadius.full,
+    overflow: 'hidden',
+  },
+  removeButtonGradient: {
+    padding: 4,
     borderRadius: borderRadius.full,
   },
   addImageButton: {
     width: 100,
     height: 100,
     borderRadius: borderRadius.md,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  addImageGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addImageText: {
-    ...typography.caption,
-    color: colors.primary,
+    fontSize: 12,
+    color: '#a78bfa',
     marginTop: spacing.xs,
   },
   textArea: {
     height: 100,
     textAlignVertical: 'top',
   },
-  label: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
-    marginBottom: spacing.sm,
-  },
-
-  errorText: {
-    ...typography.caption,
-    color: colors.error,
-    marginTop: spacing.xs,
-  },
   footer: {
     padding: spacing.lg,
     paddingBottom: spacing.xxl,
   },
-   successMessage: {
+  successMessage: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
     marginTop: -spacing.sm,
     marginBottom: spacing.md,
   },
   successText: {
-    ...typography.caption,
-    color: colors.success,
+    fontSize: 12,
+    color: '#10b981',
+    fontWeight: '600',
   },
-
-   sectionHeader: {
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: spacing.md,
   },
   locationButton: {
+    overflow: 'hidden',
+    borderRadius: borderRadius.md,
+  },
+  locationButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.primary + '15',
-    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
   locationButtonText: {
-    ...typography.caption,
-    color: colors.primary,
+    fontSize: 12,
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   infoBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
-    backgroundColor: colors.primary + '10',
     padding: spacing.md,
     borderRadius: borderRadius.md,
     marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.3)',
   },
   infoText: {
-    ...typography.bodySmall,
-    color: colors.text,
+    fontSize: 13,
+    color: '#d1d5db',
     flex: 1,
+    lineHeight: 18,
   },
   row: {
     flexDirection: 'row',
@@ -674,54 +761,60 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   advancedToggleText: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#6b7280',
   },
-   loadingContainer: {
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.xxl,
+    paddingTop: spacing.xxl * 2,
   },
   loadingText: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 16,
+    color: '#9ca3af',
     marginTop: spacing.md,
   },
   restrictionContainer: {
-    flex: 1,
-    alignItems: 'center',
+    margin: spacing.lg,
+    marginTop: 100,
     padding: spacing.xl,
-    paddingTop: spacing.xxl,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  restrictionIconContainer: {
+    alignItems: 'center',
+    marginBottom: spacing.md,
   },
   restrictionTitle: {
-    ...typography.h3,
-    color: colors.text,
-    marginTop: spacing.lg,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
     marginBottom: spacing.xl,
   },
   requirementCard: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
     padding: spacing.lg,
     borderRadius: borderRadius.md,
     marginBottom: spacing.md,
-    width: '100%',
-    ...shadows.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
   },
   requirementText: {
     flex: 1,
     marginLeft: spacing.md,
   },
   requirementTitle: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 14,
+    color: '#FFFFFF',
     fontWeight: '600',
-    marginBottom: spacing.xs / 2,
+    marginBottom: 4,
   },
   requirementDesc: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
+    fontSize: 12,
+    color: '#9ca3af',
   },
   actionButtons: {
     width: '100%',

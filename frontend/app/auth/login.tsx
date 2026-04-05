@@ -8,15 +8,20 @@ import {
   Platform,
   Alert,
   TouchableOpacity,
+  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Input } from '../../src/components/ui/Input';
 import { Button } from '../../src/components/ui/Button';
 import { useAuthStore } from '../../src/store/authStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
+
+const { width } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -39,8 +44,7 @@ export default function LoginScreen() {
     setLoading(false);
 
     if (result.success) {
-      // Routing is now handled by login function in authStore
-      // No need to manually redirect here
+      // Routing is handled by login function
     } else {
       Alert.alert('Login Failed', result.error || 'An error occurred');
     }
@@ -48,179 +52,240 @@ export default function LoginScreen() {
 
   const roleConfig = {
     customer: {
-      color: '#60A5FA',
-      icon: 'cart' as const,
+      gradient: ['#60A5FA', '#3B82F6'],
+      darkGradient: ['#1e3a5f', '#1e3a5f'],
+      icon: 'person-circle' as const,
       title: 'Customer Login',
       subtitle: 'Welcome back! Login to continue shopping',
+      features: [
+        'Wide variety of products & services',
+        'Secure payment options',
+        'Fast delivery & booking',
+        '24/7 Customer support',
+      ],
     },
     seller: {
-      color: '#8B5CF6',
+      gradient: ['#A78BFA', '#7C3AED'],
+      darkGradient: ['#4c1d95', '#4c1d95'],
       icon: 'storefront' as const,
       title: 'Seller Login',
       subtitle: 'Manage your store and grow your business',
+      features: [
+        'Reach thousands of customers',
+        'Easy store management',
+        'Quick payouts',
+        'Real-time analytics',
+      ],
     },
     admin: {
-      color: colors.primaryDark,
+      gradient: ['#F59E0B', '#D97706'],
+      darkGradient: ['#92400e', '#92400e'],
       icon: 'shield-checkmark' as const,
       title: 'Admin Login',
       subtitle: 'Access your admin dashboard',
+      features: [
+        'Complete platform control',
+        'Advanced analytics',
+        'User management',
+        'System monitoring',
+      ],
     },
   };
 
   const config = roleConfig[role];
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+    <LinearGradient
+      colors={['#0a0a0a', '#1a1a1a']}
+      style={styles.container}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+    >
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
         >
-          {/* Header with Gradient */}
-          <LinearGradient
-            colors={[config.color, config.color + 'CC']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.header}
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
+            {/* Header with Gradient */}
+            <LinearGradient
+              colors={config.gradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.header}
             >
-              <Ionicons name="arrow-back" size={24} color={colors.white} />
-            </TouchableOpacity>
+              <BlurView intensity={20} tint="dark" style={styles.headerBlur}>
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={() => router.back()}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
 
-            <View style={styles.headerContent}>
-              <View style={styles.iconContainer}>
-                <Ionicons
-                  name={config.icon}
-                  size={48}
-                  color={colors.white}
-                />
-              </View>
-              <Text style={styles.title}>{config.title}</Text>
-              <Text style={styles.subtitle}>{config.subtitle}</Text>
-            </View>
-          </LinearGradient>
-
-          {/* Form Section */}
-          <View style={styles.formContainer}>
-            <View style={[styles.formCard, shadows.lg]}>
-              <Text style={styles.formTitle}>Sign In</Text>
-
-              <Input
-                label="Email Address"
-                placeholder="Enter your email"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                leftIcon="mail"
-              />
-
-              <Input
-                label="Password"
-                placeholder="Enter your password"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                leftIcon="lock-closed"
-              />
-
-              <TouchableOpacity style={styles.forgotPassword}>
-                <Text style={[styles.forgotPasswordText, { color: config.color }]}>
-                  Forgot Password?
-                </Text>
-              </TouchableOpacity>
-
-              <Button
-                title="Login"
-                onPress={handleLogin}
-                loading={loading}
-                fullWidth
-                style={{ backgroundColor: config.color }}
-              />
-
-              {role !== 'admin' && (
-                <View style={styles.registerContainer}>
-                  <Text style={styles.registerText}>Don't have an account? </Text>
-                  <TouchableOpacity
-                    onPress={() => router.push(`/auth/register?role=${role}`)}
+                <View style={styles.headerContent}>
+                  <LinearGradient
+                    colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']}
+                    style={styles.iconContainer}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                   >
-                    <Text style={[styles.registerLink, { color: config.color }]}>
-                      Register Now
-                    </Text>
-                  </TouchableOpacity>
+                    <Ionicons
+                      name={config.icon}
+                      size={48}
+                      color="#FFFFFF"
+                    />
+                  </LinearGradient>
+                  <Text style={styles.title}>{config.title}</Text>
+                  <Text style={styles.subtitle}>{config.subtitle}</Text>
                 </View>
-              )}
+              </BlurView>
+            </LinearGradient>
+
+            {/* Form Section */}
+            <View style={styles.formContainer}>
+              <LinearGradient
+                colors={['#1e1e1e', '#161616']}
+                style={styles.formCard}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <View style={styles.formHeader}>
+                  <LinearGradient
+                    colors={config.gradient}
+                    style={styles.formIconContainer}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Ionicons name="log-in-outline" size={24} color="#FFFFFF" />
+                  </LinearGradient>
+                  <Text style={styles.formTitle}>Sign In</Text>
+                </View>
+
+                <Input
+                  label="Email Address"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  leftIcon="mail-outline"
+                />
+
+                <Input
+                  label="Password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  leftIcon="lock-closed-outline"
+                />
+
+                <TouchableOpacity style={styles.forgotPassword} activeOpacity={0.7}>
+                  <LinearGradient
+                    colors={['rgba(168, 85, 247, 0.1)', 'rgba(139, 92, 246, 0.1)']}
+                    style={styles.forgotGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Text style={[styles.forgotPasswordText, { color: config.gradient[0] }]}>
+                      Forgot Password?
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.loginButton}
+                  onPress={handleLogin}
+                  disabled={loading}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={config.gradient}
+                    style={styles.loginGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    {loading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+                        <Text style={styles.loginButtonText}>Login</Text>
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                {role !== 'admin' && (
+                  <View style={styles.registerContainer}>
+                    <Text style={styles.registerText}>Don't have an account? </Text>
+                    <TouchableOpacity
+                      onPress={() => router.push(`/auth/register?role=${role}`)}
+                      activeOpacity={0.7}
+                    >
+                      <LinearGradient
+                        colors={['rgba(168, 85, 247, 0.2)', 'rgba(139, 92, 246, 0.2)']}
+                        style={styles.registerLinkGradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        <Text style={[styles.registerLink, { color: config.gradient[0] }]}>
+                          Create Account
+                        </Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </LinearGradient>
+
+              {/* Features */}
+              <LinearGradient
+                colors={['#1e1e1e', '#161616']}
+                style={styles.featuresContainer}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Text style={styles.featuresTitle}>Why join us?</Text>
+                {config.features.map((feature, index) => (
+                  <View key={index} style={styles.featureItem}>
+                    <LinearGradient
+                      colors={config.gradient}
+                      style={styles.featureCheck}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                    </LinearGradient>
+                    <Text style={styles.featureText}>{feature}</Text>
+                  </View>
+                ))}
+              </LinearGradient>
             </View>
 
-            {/* Features */}
-            <View style={styles.featuresContainer}>
-              {role === 'customer' && (
-                <>
-                  <View style={styles.featureItem}>
-                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                    <Text style={styles.featureText}>Wide variety of products & services</Text>
-                  </View>
-                  <View style={styles.featureItem}>
-                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                    <Text style={styles.featureText}>Secure payment options</Text>
-                  </View>
-                  <View style={styles.featureItem}>
-                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                    <Text style={styles.featureText}>Fast delivery & booking</Text>
-                  </View>
-                </>
-              )}
-              {role === 'seller' && (
-                <>
-                  <View style={styles.featureItem}>
-                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                    <Text style={styles.featureText}>Reach thousands of customers</Text>
-                  </View>
-                  <View style={styles.featureItem}>
-                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                    <Text style={styles.featureText}>Easy store management</Text>
-                  </View>
-                  <View style={styles.featureItem}>
-                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                    <Text style={styles.featureText}>Quick payouts</Text>
-                  </View>
-                </>
-              )}
-              {role === 'admin' && (
-                <>
-                  <View style={styles.featureItem}>
-                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                    <Text style={styles.featureText}>Complete platform control</Text>
-                  </View>
-                  <View style={styles.featureItem}>
-                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                    <Text style={styles.featureText}>Advanced analytics</Text>
-                  </View>
-                  <View style={styles.featureItem}>
-                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                    <Text style={styles.featureText}>User management</Text>
-                  </View>
-                </>
-              )}
+            {/* Footer */}
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>
+                Secure Login • Protected by SSL
+              </Text>
             </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+  },
+  safeArea: {
+    flex: 1,
   },
   keyboardView: {
     flex: 1,
@@ -229,11 +294,14 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   header: {
+    borderBottomLeftRadius: borderRadius.xxl,
+    borderBottomRightRadius: borderRadius.xxl,
+    overflow: 'hidden',
+  },
+  headerBlur: {
     paddingTop: spacing.lg,
     paddingBottom: spacing.xxxl,
     paddingHorizontal: spacing.lg,
-    borderBottomLeftRadius: borderRadius.xxl,
-    borderBottomRightRadius: borderRadius.xxl,
   },
   backButton: {
     width: 40,
@@ -248,23 +316,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iconContainer: {
-    width: 88,
-    height: 88,
+    width: 100,
+    height: 100,
     borderRadius: borderRadius.full,
-    backgroundColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   title: {
-    ...typography.h2,
-    color: colors.white,
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFFFFF',
     marginBottom: spacing.xs,
-    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   subtitle: {
-    ...typography.body,
-    color: colors.white,
+    fontSize: 14,
+    color: '#FFFFFF',
     opacity: 0.95,
     textAlign: 'center',
   },
@@ -274,52 +344,117 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
   },
   formCard: {
-    backgroundColor: colors.surface,
     borderRadius: borderRadius.xl,
     padding: spacing.xl,
     marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(32, 31, 31, 0.08)',
+  },
+  formHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  formIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   formTitle: {
-    ...typography.h3,
-    color: colors.text,
+    fontSize: 24,
     fontWeight: '700',
-    marginBottom: spacing.lg,
+    color: '#FFFFFF',
   },
   forgotPassword: {
     alignSelf: 'flex-end',
     marginBottom: spacing.lg,
+    overflow: 'hidden',
+    borderRadius: borderRadius.md,
+  },
+  forgotGradient: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
   },
   forgotPasswordText: {
-    ...typography.bodySmall,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  loginButton: {
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  loginGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+  },
+  loginButtonText: {
+    fontSize: 16,
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   registerContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
     marginTop: spacing.lg,
+    gap: spacing.xs,
   },
   registerText: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  registerLinkGradient: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.md,
   },
   registerLink: {
-    ...typography.body,
+    fontSize: 14,
     fontWeight: '600',
   },
   featuresContainer: {
-    backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     gap: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  featuresTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: spacing.xs,
   },
   featureItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
+  featureCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   featureText: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 13,
+    color: '#d1d5db',
     flex: 1,
+  },
+  footer: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#6b7280',
   },
 });

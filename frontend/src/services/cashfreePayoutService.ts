@@ -353,6 +353,78 @@ class CashfreePayoutService {
       return { success: false, error: error.message };
     }
   }
+
+
+   /**
+   * Add beneficiary to Cashfree Payout system
+   */
+  async addBeneficiary(data: {
+    bene_id: string;
+    name: string;
+    email: string;
+    phone: string;
+    bank_account: string;
+    ifsc: string;
+    address1: string;
+    city: string;
+    state: string;
+    pincode: string;
+  }): Promise<{
+    success: boolean;
+    bene_id?: string;
+    error?: string;
+  }> {
+    try {
+      console.log('Adding beneficiary to Cashfree:', data.bene_id);
+
+      const { data: response, error } = await supabase.functions.invoke(
+        'add-cashfree-beneficiary',
+        {
+          body: data,
+        }
+      );
+
+      if (error) {
+        console.error('Error adding beneficiary:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('Beneficiary addition response:', response);
+      return response;
+    } catch (error: any) {
+      console.error('Error in addBeneficiary:', error);
+      return { success: false, error: error.message || 'Failed to add beneficiary' };
+    }
+  }
+
+  /**
+   * Validate IFSC code format
+   */
+  validateIFSC(ifsc: string): boolean {
+    // IFSC code format: 4 letters (bank code) + 0 + 6 alphanumeric characters (branch code)
+    // Example: SBIN0001234, HDFC0000123
+    const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+    return ifscRegex.test(ifsc.toUpperCase());
+  }
+
+  /**
+   * Validate bank account number
+   */
+  validateAccountNumber(accountNumber: string): boolean {
+    // Account number should be 9-18 digits
+    const accountRegex = /^[0-9]{9,18}$/;
+    return accountRegex.test(accountNumber);
+  }
+
+  /**
+   * Validate PAN number format
+   */
+  validatePAN(pan: string): boolean {
+    // PAN format: 5 letters + 4 digits + 1 letter
+    // Example: ABCDE1234F
+    const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+    return panRegex.test(pan.toUpperCase());
+  }
 }
 
 export default new CashfreePayoutService();

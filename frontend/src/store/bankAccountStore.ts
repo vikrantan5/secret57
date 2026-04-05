@@ -137,16 +137,43 @@ export const useBankAccountStore = create<BankAccountState>((set, get) => ({
       }
 
       // Get seller details
+      console.log('🔍 Fetching seller details for seller_id:', data.seller_id);
+      
       const { data: seller, error: sellerError } = await supabase
         .from('sellers')
-        .select('*, users(*)')
+        .select('*')
         .eq('id', data.seller_id)
         .single();
 
-      if (sellerError || !seller) {
+      if (sellerError) {
+        console.error('❌ Error fetching seller:', sellerError);
         set({ loading: false });
-        return { success: false, error: 'Seller not found' };
+        return { success: false, error: `Seller lookup failed: ${sellerError.message}` };
       }
+
+      if (!seller) {
+        console.error('❌ No seller found for ID:', data.seller_id);
+        set({ loading: false });
+        return { success: false, error: 'Seller profile not found. Please complete your seller registration first.' };
+      }
+
+      console.log('✅ Seller found:', seller.company_name);
+
+      // Get user details separately
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('email, phone')
+        .eq('id', seller.user_id)
+        .single();
+
+      if (userError) {
+        console.warn('⚠️ Could not fetch user details:', userError.message);
+      }
+
+      const sellerWithUser = {
+        ...seller,
+        users: userData
+      };
 
       // Generate unique beneficiary ID
       const beneId = `SELLER_${data.seller_id.substring(0, 8)}_${Date.now()}`;
@@ -173,8 +200,8 @@ export const useBankAccountStore = create<BankAccountState>((set, get) => ({
         const beneficiaryResult = await CashfreePayoutService.addBeneficiary({
           bene_id: beneId,
           name: data.account_holder_name,
-          email: seller.users?.email || '',
-          phone: seller.users?.phone || '',
+       email: sellerWithUser.users?.email || seller.user_id,
+          phone: sellerWithUser.users?.phone || '0000000000',
           bank_account: data.account_number,
           ifsc: data.ifsc_code.toUpperCase(),
           address1: seller.address || 'Address',
