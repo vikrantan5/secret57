@@ -21,6 +21,11 @@ export interface Booking {
   payment_method?: string;
   payment_id?: string;
   payment_expires_at?: string;
+  cashfree_order_id?: string;
+  otp?: string;
+  otp_verified?: boolean;
+  otp_generated_at?: string;
+  payout_status?: string;
   status: 'pending_payment' | 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'rejected';
   cancellation_reason: string | null;
   created_at: string;
@@ -48,8 +53,8 @@ interface BookingState {
   confirmCompletion: (id: string) => Promise<{ success: boolean; error?: string }>;
   startService: (id: string) => Promise<{ success: boolean; error?: string }>;
   updatePaymentStatus: (id: string, paymentStatus: string, paymentId?: string) => Promise<{ success: boolean; error?: string }>;
-  setSelectedBooking: (booking: Booking | null) => void;
-  clearBookings: () => void;
+  verifyOTP: (bookingId: string, otp: string) => Promise<{ success: boolean; error?: string }>;
+  clearError: () => void;
 }
 
 export const useBookingStore = create<BookingState>((set, get) => ({
@@ -92,7 +97,6 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     try {
       set({ loading: true, error: null });
       
-      // Fetch booking details
       const { data: bookingData, error: bookingError } = await supabase
         .from('bookings')
         .select(`
@@ -102,7 +106,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
             *,
             user:users(name, email, phone, avatar_url)
           ),
-         customer:users!bookings_customer_id_fkey(id, name, email, phone, avatar_url)
+          customer:users!bookings_customer_id_fkey(id, name, email, phone, avatar_url)
         `)
         .eq('id', id)
         .single();
@@ -113,7 +117,6 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         return;
       }
 
-      // Fetch booking timeline
       const { data: timelineData, error: timelineError } = await supabase
         .from('booking_timeline')
         .select('*')
@@ -140,7 +143,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         .select(`
           *,
           service:services(*),
-           customer:users!bookings_customer_id_fkey(name, email, phone)
+          customer:users!bookings_customer_id_fkey(name, email, phone)
         `)
         .eq('seller_id', sellerId)
         .order('booking_date', { ascending: false });
@@ -151,7 +154,6 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         return;
       }
 
-     // Map customer data to add customer_name field
       const bookingsWithCustomer = data?.map(booking => ({
         ...booking,
         customer_name: booking.customer?.name || 'N/A',
@@ -170,7 +172,6 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     try {
       set({ loading: true, error: null });
       
-      // First create the booking
       const { data, error } = await supabase
         .from('bookings')
         .insert([{
@@ -188,7 +189,6 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         return { success: false, error: error.message };
       }
 
-      // Add timeline entry
       await supabase
         .from('booking_timeline')
         .insert([{
@@ -198,7 +198,6 @@ export const useBookingStore = create<BookingState>((set, get) => ({
           created_at: new Date().toISOString(),
         }]);
 
-      // Add to local state
       set(state => ({ 
         bookings: [data, ...state.bookings],
         selectedBooking: data,
@@ -237,7 +236,6 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         return { success: false, error: error.message };
       }
 
-      // Add timeline entry
       await supabase
         .from('booking_timeline')
         .insert([{
@@ -247,7 +245,6 @@ export const useBookingStore = create<BookingState>((set, get) => ({
           created_at: new Date().toISOString(),
         }]);
 
-      // Update local state
       set(state => ({
         bookings: state.bookings.map(b => 
           b.id === id ? { ...b, ...updates } : b
@@ -280,7 +277,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
           booking_date: newDate,
           booking_time: newTime,
           updated_at: new Date().toISOString(),
-          status: 'pending', // Reset to pending for seller confirmation
+          status: 'pending',
         })
         .eq('id', id);
 
@@ -290,7 +287,6 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         return { success: false, error: error.message };
       }
 
-      // Add timeline entry
       await supabase
         .from('booking_timeline')
         .insert([{
@@ -300,7 +296,6 @@ export const useBookingStore = create<BookingState>((set, get) => ({
           created_at: new Date().toISOString(),
         }]);
 
-      // Update local state
       const updates = {
         booking_date: newDate,
         booking_time: newTime,
@@ -333,14 +328,13 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     return get().updateBookingStatus(id, 'in_progress');
   },
 
-   updatePaymentStatus: async (id, paymentStatus, paymentId) => {
+  updatePaymentStatus: async (id, paymentStatus, paymentId) => {
     try {
       set({ loading: true });
       
-      // ✅ FIX: Update booking status based on payment status
-      let newStatus = 'pending_payment'; // Default to pending_payment if payment not successful
+      let newStatus = 'pending_payment';
       if (paymentStatus === 'success' || paymentStatus === 'paid') {
-        newStatus = 'pending'; // Change to pending (awaiting seller confirmation) after successful payment
+        newStatus = 'pending';
       } else if (paymentStatus === 'failed') {
         newStatus = 'cancelled';
       }
@@ -363,7 +357,6 @@ export const useBookingStore = create<BookingState>((set, get) => ({
 
       console.log(`✅ Booking ${id} payment status updated: ${paymentStatus} -> ${newStatus}`);
 
-      // Add timeline entry
       await supabase
         .from('booking_timeline')
         .insert([{
@@ -382,7 +375,93 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     }
   },
 
-  setSelectedBooking: (booking) => set({ selectedBooking: booking }),
+  verifyOTP: async (bookingId, otp) => {
+    set({ loading: true, error: null });
 
-  clearBookings: () => set({ bookings: [], selectedBooking: null, error: null }),
+    try {
+      const { data: booking, error: fetchError } = await supabase
+        .from('bookings')
+        .select('*, seller:sellers(id, user_id)')
+        .eq('id', bookingId)
+        .single();
+
+      if (fetchError) throw fetchError;
+      if (!booking) throw new Error('Booking not found');
+
+      if (booking.otp !== otp) {
+        set({ loading: false, error: 'Invalid OTP' });
+        return { success: false, error: 'Invalid OTP. Please check and try again.' };
+      }
+
+      if (booking.otp_verified) {
+        set({ loading: false });
+        return { success: false, error: 'OTP has already been verified.' };
+      }
+
+      const { error: updateError } = await supabase
+        .from('bookings')
+        .update({
+          status: 'completed',
+          otp_verified: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', bookingId);
+
+      if (updateError) throw updateError;
+
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: booking.customer_id,
+          type: 'booking',
+          title: 'Service Completed',
+          message: 'Your service has been completed successfully. Thank you for using our platform!',
+          data: { booking_id: bookingId }
+        });
+
+      // ✅ FIXED: Get Supabase URL correctly
+      const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://wqgafgyzcyjcmtyjlkzw.supabase.co';
+      
+      // Get session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.access_token) {
+        try {
+          const response = await fetch(`${SUPABASE_URL}/functions/v1/create-seller-payout`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({
+              seller_id: booking.seller_id,
+              booking_id: bookingId,
+              amount: booking.total_amount
+            })
+          });
+
+          if (!response.ok) {
+            console.error('Failed to trigger payout:', await response.text());
+          } else {
+            console.log('✅ Payout triggered successfully');
+          }
+        } catch (payoutError) {
+          console.error('Payout trigger error:', payoutError);
+        }
+      } else {
+        console.log('⚠️ No active session, skipping payout trigger');
+      }
+
+      await get().fetchBookingById(bookingId);
+
+      set({ loading: false });
+      return { success: true };
+    } catch (error: any) {
+      console.error('Failed to verify OTP:', error);
+      set({ loading: false, error: error.message });
+      return { success: false, error: error.message };
+    }
+  },
+
+  clearError: () => set({ error: null }),
 }));

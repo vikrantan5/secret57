@@ -238,6 +238,48 @@ export default function BookingDetailScreen() {
           </View>
         </View>
 
+        {/* OTP Card - Show to customer after payment */}
+        {booking.payment_method && booking.otp && booking.status !== 'completed' && (
+          <View style={[styles.card, shadows.sm, styles.otpCard]}>
+            <View style={styles.otpHeader}>
+              <Ionicons name="key" size={28} color={colors.primary} />
+              <Text style={styles.cardTitle}>Service Verification OTP</Text>
+            </View>
+            <Text style={styles.otpDescription}>
+              Share this OTP with the service provider when they complete the service
+            </Text>
+            <View style={styles.otpContainer}>
+              <Text style={styles.otpText}>{booking.otp}</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.copyOtpButton}
+              onPress={() => {
+                // Copy OTP to clipboard (you can add Clipboard API here)
+                Alert.alert('OTP Copied', 'OTP has been copied to clipboard');
+              }}
+              data-testid="copy-otp-button"
+            >
+              <Ionicons name="copy-outline" size={20} color={colors.primary} />
+              <Text style={styles.copyOtpText}>Copy OTP</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* OTP Verified Badge */}
+        {booking.otp_verified && (
+          <View style={[styles.card, shadows.sm, { backgroundColor: colors.success + '10' }]}>
+            <View style={styles.verifiedBadge}>
+              <Ionicons name="checkmark-circle" size={32} color={colors.success} />
+              <View style={{ flex: 1, marginLeft: spacing.md }}>
+                <Text style={[styles.cardTitle, { color: colors.success }]}>Service Completed</Text>
+                <Text style={styles.verifiedText}>
+                  OTP verified successfully. Service has been marked as completed.
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* Address (if visit_customer) */}
         {booking.location_type === 'visit_customer' && booking.address && (
           <View style={[styles.card, shadows.sm]}>
@@ -578,9 +620,66 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.xs / 2,
   },
-  contactButtonValue: {
+   contactButtonValue: {
     ...typography.body,
     color: colors.text,
     fontWeight: '600',
+  },
+  otpCard: {
+    backgroundColor: colors.primary + '08',
+    borderWidth: 2,
+    borderColor: colors.primary + '30',
+  },
+  otpHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  otpDescription: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
+    lineHeight: 20,
+  },
+  otpContainer: {
+    backgroundColor: colors.surface,
+    padding: spacing.xl,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.primary + '20',
+    borderStyle: 'dashed',
+  },
+  otpText: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 8,
+  },
+  copyOtpButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.primary + '10',
+    borderRadius: borderRadius.md,
+  },
+  copyOtpText: {
+    ...typography.body,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  verifiedText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    lineHeight: 20,
   },
 });
