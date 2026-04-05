@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../src/store/authStore';
 import { useSellerStore } from '../../src/store/sellerStore';
@@ -20,11 +21,49 @@ import { useProductStore } from '../../src/store/productStore';
 import { useSubscriptionStore } from '../../src/store/subscriptionStore';
 import { useBankAccountStore } from '../../src/store/bankAccountStore';
 
-import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
 import { supabase } from '../../src/services/supabase';
 import { uploadMultipleImages } from '../../src/utils/imageUpload';
+
+// Premium Professional Color Palette
+const colors = {
+  background: '#0B0C10',
+  surface: '#13151A',
+  surfaceElevated: '#1A1D24',
+  surfaceHigher: '#22262F',
+  
+  textPrimary: '#FFFFFF',
+  textSecondary: '#C0C5D0',
+  textTertiary: '#A0A5B5',
+  textMuted: '#6B7280',
+  
+  accentPrimary: '#2463EB',
+  accentPrimaryLight: '#4B82F5',
+  accentPrimaryGlow: '#2463EB20',
+  
+  accentSuccess: '#00D26A',
+  accentSuccessGlow: '#00D26A10',
+  
+  accentWarning: '#FFB443',
+  accentWarningGlow: '#FFB44310',
+  
+  accentError: '#FF5C8A',
+  accentErrorGlow: '#FF5C8A10',
+  
+  accentPurple: '#7C5CFF',
+  border: '#1E222A',
+};
+
+const gradients = {
+  primary: ['#2463EB', '#1A4FCC'],
+  success: ['#00D26A', '#00A855'],
+  warning: ['#FFB443', '#E69900'],
+  error: ['#FF5C8A', '#E63E6C'],
+  card: ['#13151A', '#0F1116'],
+  header: ['#0B0C10', '#13151A'],
+};
+
 export default function AddProductScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
@@ -32,7 +71,6 @@ export default function AddProductScreen() {
   const { createProduct } = useProductStore();
   const { currentSubscription, fetchSellerSubscriptions, loading: subscriptionLoading } = useSubscriptionStore();
   const { bankAccounts, fetchBankAccounts, loading: bankLoading } = useBankAccountStore();
-
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -44,8 +82,6 @@ export default function AddProductScreen() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<any>({});
 
-
-  
   // Check subscription and bank account
   useEffect(() => {
     if (seller?.id) {
@@ -57,9 +93,6 @@ export default function AddProductScreen() {
   const hasActiveSubscription = currentSubscription && new Date(currentSubscription.expires_at) > new Date();
   const hasBankAccount = bankAccounts.length > 0;
   const verifiedBankAccount = bankAccounts.find(acc => acc.verification_status === 'verified');
-
-
-  // No longer need to fetch categories or manage categoryId state
 
   const pickImages = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -87,11 +120,10 @@ export default function AddProductScreen() {
 
   const uploadProductImages = async (sellerId: string) => {
     try {
-      // Use centralized upload utility
       const uploadedUrls = await uploadMultipleImages(
         images,
         'product-images',
-        sellerId // Organize by seller ID
+        sellerId
       );
 
       if (uploadedUrls.length === 0) {
@@ -114,9 +146,6 @@ export default function AddProductScreen() {
     if (!description.trim()) newErrors.description = 'Description is required';
     if (!price || parseFloat(price) <= 0) newErrors.price = 'Valid price is required';
     if (!stock || parseInt(stock) < 0) newErrors.stock = 'Valid stock is required';
-  
-    // Category is auto-assigned from seller, no validation needed
-
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -133,22 +162,20 @@ export default function AddProductScreen() {
       return;
     }
     
-        if (!seller?.category_id) {
+    if (!seller?.category_id) {
       Alert.alert('Error', 'Your seller category is not set. Please contact support.');
       return;
     }
+    
     try {
       setLoading(true);
 
-      // Upload images first
       const imageUrls = await uploadProductImages(seller.id);
-
-      // Create slug from name
       const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
       const productData = {
         seller_id: seller.id,
-        category_id: seller.category_id, // Auto-assign from seller's category
+        category_id: seller.category_id,
         name,
         slug,
         description,
@@ -177,197 +204,303 @@ export default function AddProductScreen() {
     }
   };
 
+  // Custom Label Component with white text
+  const CustomLabel = ({ text, required }: { text: string; required?: boolean }) => (
+    <Text style={styles.customLabel}>
+      {text} {required && <Text style={styles.requiredStar}>*</Text>}
+    </Text>
+  );
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Add Product</Text>
-          <View style={{ width: 24 }} />
-        </View>
-
-        {/* Subscription & Bank Account Check */}
-        {(subscriptionLoading || bankLoading) ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Checking requirements...</Text>
+      <LinearGradient
+        colors={gradients.header}
+        style={styles.gradientBackground}
+      >
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <LinearGradient
+                colors={[colors.surfaceElevated, colors.surface]}
+                style={styles.backButtonGradient}
+              >
+                <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+              </LinearGradient>
+            </TouchableOpacity>
+            <Text style={styles.title}>Add Product</Text>
+            <View style={{ width: 40 }} />
           </View>
-        ) : !hasActiveSubscription || !verifiedBankAccount ? (
-          <View style={styles.restrictionContainer}>
-            <Ionicons name="alert-circle" size={64} color={colors.warning} />
-            <Text style={styles.restrictionTitle}>Requirements Not Met</Text>
-            
-            {!hasActiveSubscription && (
-              <View style={styles.requirementCard}>
-                <Ionicons name="close-circle" size={24} color={colors.error} />
-                <View style={styles.requirementText}>
-                  <Text style={styles.requirementTitle}>Active Subscription Required</Text>
-                  <Text style={styles.requirementDesc}>
-                    You need an active subscription to add products
-                  </Text>
-                </View>
-              </View>
-            )}
 
-            {!verifiedBankAccount && (
-              <View style={styles.requirementCard}>
-                <Ionicons name="close-circle" size={24} color={colors.error} />
-                <View style={styles.requirementText}>
-                  <Text style={styles.requirementTitle}>Verified Bank Account Required</Text>
-                  <Text style={styles.requirementDesc}>
-                    Add and verify your bank account to receive payments
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            <View style={styles.actionButtons}>
+          {/* Subscription & Bank Account Check */}
+          {(subscriptionLoading || bankLoading) ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.accentPrimary} />
+              <Text style={styles.loadingText}>Checking requirements...</Text>
+            </View>
+          ) : !hasActiveSubscription || !verifiedBankAccount ? (
+            <View style={styles.restrictionContainer}>
+              <LinearGradient
+                colors={[colors.surface, colors.surfaceElevated]}
+                style={styles.restrictionIconContainer}
+              >
+                <Ionicons name="alert-circle" size={48} color={colors.accentWarning} />
+              </LinearGradient>
+              <Text style={styles.restrictionTitle}>Requirements Not Met</Text>
+              <Text style={styles.restrictionSubtitle}>Complete these to start selling</Text>
+              
               {!hasActiveSubscription && (
-                <Button
-                  title="View Subscription Plans"
-                  onPress={() => router.push('/seller/subscription')}
-                  variant="primary"
-                  style={styles.actionButton}
-                />
+                <LinearGradient
+                  colors={[colors.surface, colors.surfaceElevated]}
+                  style={styles.requirementCard}
+                >
+                  <LinearGradient
+                    colors={gradients.warning}
+                    style={styles.requirementIcon}
+                  >
+                    <Ionicons name="close-circle" size={20} color="#FFF" />
+                  </LinearGradient>
+                  <View style={styles.requirementText}>
+                    <Text style={styles.requirementTitle}>Active Subscription Required</Text>
+                    <Text style={styles.requirementDesc}>
+                      You need an active subscription to add products
+                    </Text>
+                  </View>
+                </LinearGradient>
               )}
+
               {!verifiedBankAccount && (
-                <Button
-                  title="Add Bank Account"
-                  onPress={() => router.push('/seller/payout-settings')}
-                  variant="outline"
-                  style={styles.actionButton}
-                />
+                <LinearGradient
+                  colors={[colors.surface, colors.surfaceElevated]}
+                  style={styles.requirementCard}
+                >
+                  <LinearGradient
+                    colors={gradients.error}
+                    style={styles.requirementIcon}
+                  >
+                    <Ionicons name="close-circle" size={20} color="#FFF" />
+                  </LinearGradient>
+                  <View style={styles.requirementText}>
+                    <Text style={styles.requirementTitle}>Verified Bank Account Required</Text>
+                    <Text style={styles.requirementDesc}>
+                      Add and verify your bank account to receive payments
+                    </Text>
+                  </View>
+                </LinearGradient>
               )}
-            </View>
-          </View>
-        ) : (
-          <>
-            {/* Product Images */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Product Images</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.imagesContainer}>
-                  {images.map((image, index) => (
-                    <View key={index} style={styles.imageItem}>
-                      <Image source={{ uri: image }} style={styles.productImage} />
-                      <TouchableOpacity
-                        style={styles.removeButton}
-                        onPress={() => removeImage(index)}
-                      >
-                        <Ionicons name="close-circle" size={24} color={colors.error} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                  <TouchableOpacity style={styles.addImageButton} onPress={pickImages}>
-                    <Ionicons name="add-circle" size={32} color={colors.primary} />
-                    <Text style={styles.addImageText}>Add Images</Text>
+
+              <View style={styles.actionButtons}>
+                {!hasActiveSubscription && (
+                  <TouchableOpacity
+                    onPress={() => router.push('/seller/subscription')}
+                    activeOpacity={0.8}
+                  >
+                    <LinearGradient
+                      colors={gradients.primary}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.actionButton}
+                    >
+                      <Text style={styles.actionButtonText}>View Subscription Plans</Text>
+                      <Ionicons name="arrow-forward" size={18} color="#FFF" />
+                    </LinearGradient>
                   </TouchableOpacity>
-                </View>
-              </ScrollView>
+                )}
+                {!verifiedBankAccount && (
+                  <TouchableOpacity
+                    onPress={() => router.push('/seller/payout-settings')}
+                    activeOpacity={0.8}
+                  >
+                    <LinearGradient
+                      colors={[colors.surfaceElevated, colors.surface]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={[styles.actionButton, styles.outlineButton]}
+                    >
+                      <Text style={[styles.actionButtonText, { color: colors.accentPrimary }]}>Add Bank Account</Text>
+                      <Ionicons name="arrow-forward" size={18} color={colors.accentPrimary} />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
-             {/* Product Details */}
-        <View style={styles.section}>
-          <Input
-            label="Product Name *"
-            value={name}
-            onChangeText={setName}
-            placeholder="Enter product name"
-            error={errors.name}
-          />
+          ) : (
+            <>
+              {/* Product Images */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Product Images</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.imagesContainer}>
+                    {images.map((image, index) => (
+                      <View key={index} style={styles.imageItem}>
+                        <Image source={{ uri: image }} style={styles.productImage} />
+                        <TouchableOpacity
+                          style={styles.removeButton}
+                          onPress={() => removeImage(index)}
+                        >
+                          <LinearGradient
+                            colors={gradients.error}
+                            style={styles.removeButtonGradient}
+                          >
+                            <Ionicons name="close" size={14} color="#FFF" />
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                    <TouchableOpacity style={styles.addImageButton} onPress={pickImages}>
+                      <LinearGradient
+                        colors={[colors.surfaceElevated, colors.surface]}
+                        style={styles.addImageGradient}
+                      >
+                        <Ionicons name="add-circle" size={32} color={colors.accentPrimary} />
+                        <Text style={styles.addImageText}>Add Images</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              </View>
 
-          <Input
-            label="Description *"
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Describe your product"
-            multiline
-            numberOfLines={4}
-            style={styles.textArea}
-            error={errors.description}
-          />
+              {/* Product Details with Custom Labels */}
+              <View style={styles.section}>
+                {/* Product Name */}
+                <View style={styles.inputWrapper}>
+                  <CustomLabel text="Product Name" required />
+                  <Input
+                    value={name}
+                    onChangeText={setName}
+                    placeholder="Enter product name"
+                    error={errors.name}
+                  />
+                </View>
 
-          <Input
-            label="Price (₹) *"
-            value={price}
-            onChangeText={setPrice}
-            placeholder="0.00"
-            keyboardType="decimal-pad"
-            error={errors.price}
-          />
+                {/* Description */}
+                <View style={styles.inputWrapper}>
+                  <CustomLabel text="Description" required />
+                  <Input
+                    value={description}
+                    onChangeText={setDescription}
+                    placeholder="Describe your product"
+                    multiline
+                    numberOfLines={4}
+                    style={styles.textArea}
+                    error={errors.description}
+                  />
+                </View>
 
-          <Input
-            label="Compare at Price (₹)"
-            value={comparePrice}
-            onChangeText={setComparePrice}
-            placeholder="Optional"
-            keyboardType="decimal-pad"
-          />
+                {/* Price */}
+                <View style={styles.inputWrapper}>
+                  <CustomLabel text="Price (₹)" required />
+                  <Input
+                    value={price}
+                    onChangeText={setPrice}
+                    placeholder="0.00"
+                    keyboardType="decimal-pad"
+                    error={errors.price}
+                  />
+                </View>
 
-          <Input
-            label="Stock *"
-            value={stock}
-            onChangeText={setStock}
-            placeholder="Available quantity"
-            keyboardType="number-pad"
-            error={errors.stock}
-          />
+                {/* Compare at Price */}
+                <View style={styles.inputWrapper}>
+                  <CustomLabel text="Compare at Price (₹)" />
+                  <Input
+                    value={comparePrice}
+                    onChangeText={setComparePrice}
+                    placeholder="Optional"
+                    keyboardType="decimal-pad"
+                  />
+                </View>
 
-       
-        </View>
+                {/* Stock */}
+                <View style={styles.inputWrapper}>
+                  <CustomLabel text="Stock" required />
+                  <Input
+                    value={stock}
+                    onChangeText={setStock}
+                    placeholder="Available quantity"
+                    keyboardType="number-pad"
+                    error={errors.stock}
+                  />
+                </View>
+              </View>
 
-        {/* Submit Button */}
-        <View style={styles.footer}>
-          <Button
-            title="Add Product"
-            onPress={handleSubmit}
-            loading={loading}
-            variant="primary"
-            fullWidth
-          />
-        </View>
-          </>
-        )}
-      </ScrollView>
+              {/* Submit Button */}
+              <View style={styles.footer}>
+                <TouchableOpacity onPress={handleSubmit} disabled={loading} activeOpacity={0.8}>
+                  <LinearGradient
+                    colors={gradients.primary}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.submitButton}
+                  >
+                    {loading ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <>
+                        <Text style={styles.submitButtonText}>Add Product</Text>
+                        <Ionicons name="checkmark-circle" size={20} color="#FFF" />
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </ScrollView>
+      </LinearGradient>
     </KeyboardAvoidingView>
   );
 }
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
+  gradientBackground: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: spacing.lg,
-    paddingTop: spacing.xl,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   backButton: {
-    padding: spacing.xs,
+    overflow: 'hidden',
+    borderRadius: 12,
+  },
+  backButtonGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
-    ...typography.h3,
-    color: colors.text,
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    letterSpacing: -0.3,
   },
   section: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
+    paddingHorizontal: 20,
+    marginBottom: 24,
   },
   sectionTitle: {
-    ...typography.h4,
-    color: colors.text,
-    marginBottom: spacing.md,
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 16,
+    letterSpacing: -0.3,
   },
   imagesContainer: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: 12,
   },
   imageItem: {
     position: 'relative',
@@ -375,104 +508,165 @@ const styles = StyleSheet.create({
   productImage: {
     width: 100,
     height: 100,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.border,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceElevated,
   },
   removeButton: {
     position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.full,
+    top: -6,
+    right: -6,
+    overflow: 'hidden',
+    borderRadius: 12,
+  },
+  removeButtonGradient: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addImageButton: {
+    overflow: 'hidden',
+    borderRadius: 12,
+  },
+  addImageGradient: {
     width: 100,
     height: 100,
-    borderRadius: borderRadius.md,
+    borderRadius: 12,
     borderWidth: 2,
     borderStyle: 'dashed',
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
   },
   addImageText: {
-    ...typography.caption,
-    color: colors.primary,
-    marginTop: spacing.xs,
+    fontSize: 11,
+    color: colors.accentPrimary,
+    marginTop: 6,
   },
   textArea: {
     height: 100,
     textAlignVertical: 'top',
   },
-  label: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
-    marginBottom: spacing.sm,
-  },
-
-  errorText: {
-    ...typography.caption,
-    color: colors.error,
-    marginTop: spacing.xs,
-  },
   footer: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl,
+    padding: 20,
+    paddingBottom: 32,
   },
-    loadingContainer: {
+  submitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  submitButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.xxl,
+    padding: 48,
   },
   loadingText: {
-    ...typography.body,
+    fontSize: 14,
     color: colors.textSecondary,
-    marginTop: spacing.md,
+    marginTop: 12,
   },
   restrictionContainer: {
     flex: 1,
     alignItems: 'center',
-    padding: spacing.xl,
-    paddingTop: spacing.xxl,
+    padding: 24,
+    paddingTop: 48,
+  },
+  restrictionIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
   restrictionTitle: {
-    ...typography.h3,
-    color: colors.text,
-    marginTop: spacing.lg,
-    marginBottom: spacing.xl,
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginTop: 8,
+    marginBottom: 4,
+    letterSpacing: -0.5,
+  },
+  restrictionSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 32,
   },
   requirementCard: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
-    padding: spacing.lg,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.md,
+    padding: 16,
+    borderRadius: 14,
+    marginBottom: 12,
     width: '100%',
-    ...shadows.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  requirementIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
   requirementText: {
     flex: 1,
-    marginLeft: spacing.md,
   },
   requirementTitle: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 14,
     fontWeight: '600',
-    marginBottom: spacing.xs / 2,
+    color: colors.textPrimary,
+    marginBottom: 2,
   },
   requirementDesc: {
-    ...typography.bodySmall,
+    fontSize: 12,
     color: colors.textSecondary,
   },
   actionButtons: {
     width: '100%',
-    marginTop: spacing.xl,
-    gap: spacing.md,
+    marginTop: 20,
+    gap: 12,
   },
   actionButton: {
-    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  outlineButton: {
+    borderWidth: 1,
+    borderColor: colors.accentPrimary,
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  // Custom Label Styles
+  customLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#FFFFFF', // White text for labels
+    marginBottom: 8,
+    letterSpacing: -0.3,
+  },
+  requiredStar: {
+    color: '#FF5C8A', // Red/pink color for required star
+  },
+  inputWrapper: {
+    marginBottom: 16,
   },
 });

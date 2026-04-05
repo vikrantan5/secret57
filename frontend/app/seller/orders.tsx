@@ -11,9 +11,45 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSellerStore } from '../../src/store/sellerStore';
 import { useOrderStore } from '../../src/store/orderStore';
-import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
+
+// Premium Professional Color Palette (matching dashboard)
+const colors = {
+  background: '#0B0C10',
+  surface: '#13151A',
+  surfaceElevated: '#1A1D24',
+  surfaceHigher: '#22262F',
+  
+  textPrimary: '#FFFFFF',
+  textSecondary: '#8E95A9',
+  textTertiary: '#5A6178',
+  
+  accentPrimary: '#2463EB',
+  accentPrimaryLight: '#4B82F5',
+  accentPrimaryGlow: '#2463EB20',
+  
+  accentSuccess: '#00D26A',
+  accentSuccessGlow: '#00D26A10',
+  
+  accentWarning: '#FFB443',
+  accentWarningGlow: '#FFB44310',
+  
+  accentError: '#FF5C8A',
+  accentErrorGlow: '#FF5C8A10',
+  
+  accentPurple: '#7C5CFF',
+  border: '#1E222A',
+};
+
+const gradients = {
+  primary: ['#2463EB', '#1A4FCC'],
+  success: ['#00D26A', '#00A855'],
+  warning: ['#FFB443', '#E69900'],
+  error: ['#FF5C8A', '#E63E6C'],
+  card: ['#13151A', '#0F1116'],
+};
 
 export default function SellerOrdersScreen() {
   const router = useRouter();
@@ -42,17 +78,34 @@ export default function SellerOrdersScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending':
-        return colors.warning;
+        return colors.accentWarning;
       case 'processing':
-        return colors.primary;
+        return colors.accentPrimary;
       case 'shipped':
-        return colors.primary;
+        return colors.accentPrimary;
       case 'delivered':
-        return colors.success;
+        return colors.accentSuccess;
       case 'cancelled':
-        return colors.error;
+        return colors.accentError;
       default:
         return colors.textSecondary;
+    }
+  };
+
+  const getStatusGradient = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return gradients.warning;
+      case 'processing':
+        return gradients.primary;
+      case 'shipped':
+        return gradients.primary;
+      case 'delivered':
+        return gradients.success;
+      case 'cancelled':
+        return gradients.error;
+      default:
+        return gradients.primary;
     }
   };
 
@@ -71,122 +124,165 @@ export default function SellerOrdersScreen() {
   };
 
   const renderOrderCard = ({ item: order }: { item: any }) => {
-    // Get first product image
     const firstProductImage = order.items?.[0]?.product?.images?.[0] || order.items?.[0]?.product_image;
     const productCount = order.items?.length || 0;
 
     return (
       <TouchableOpacity
-        style={[styles.orderCard, shadows.sm]}
+        activeOpacity={0.7}
         onPress={() => router.push(`/seller/order-detail/${order.id}` as any)}
         data-testid={`order-card-${order.id}`}
       >
-        {/* Order Header */}
-        <View style={styles.orderHeader}>
-          <View style={styles.orderHeaderLeft}>
-            <Text style={styles.orderNumber}>{order.order_number || `#${order.id.slice(0, 8)}`}</Text>
-            <Text style={styles.orderDate}>{formatDate(order.created_at)}</Text>
-          </View>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) + '20' }]}>
-            <Text style={[styles.statusText, { color: getStatusColor(order.status) }]}>
-              {order.status?.toUpperCase() || 'PENDING'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Product Preview with Image */}
-        {productCount > 0 && (
-          <View style={styles.productPreview}>
-            {firstProductImage && (
-              <Image
-                source={{ uri: firstProductImage }}
-                style={styles.productImage}
-                defaultSource={require('../../assets/images/placeholder.jpg')}
-              />
-            )}
-            <View style={styles.productInfo}>
-              <Text style={styles.productName} numberOfLines={2}>
-                {order.items?.[0]?.product_name || order.items?.[0]?.product?.name || 'Product'}
-              </Text>
-              {productCount > 1 && (
-                <Text style={styles.moreItems}>+{productCount - 1} more item{productCount - 1 > 1 ? 's' : ''}</Text>
-              )}
+        <LinearGradient
+          colors={gradients.card}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.orderCard}
+        >
+          {/* Order Header */}
+          <View style={styles.orderHeader}>
+            <View style={styles.orderHeaderLeft}>
+              <Text style={styles.orderNumber}>{order.order_number || `#${order.id.slice(0, 8)}`}</Text>
+              <Text style={styles.orderDate}>{formatDate(order.created_at)}</Text>
             </View>
-          </View>
-        )}
-
-        {/* Order Details */}
-        <View style={styles.orderBody}>
-          <View style={styles.orderInfo}>
-            <View style={styles.infoRow}>
-              <Ionicons name="cube-outline" size={16} color={colors.textSecondary} />
-              <Text style={styles.infoText}>{productCount} item{productCount !== 1 ? 's' : ''}</Text>
-            </View>
-            {/* Payment Status Badge */}
-            <View
-              style={[
-                styles.paymentBadge,
-                {
-                  backgroundColor: order.payment_status === 'paid' ? colors.success + '20' : colors.warning + '20',
-                },
-              ]}
+            <LinearGradient
+              colors={getStatusGradient(order.status)}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.statusBadge}
             >
-              <Ionicons
-                name={order.payment_status === 'paid' ? 'checkmark-circle' : 'time'}
-                size={14}
-                color={order.payment_status === 'paid' ? colors.success : colors.warning}
-              />
-              <Text
+              <Text style={styles.statusText}>
+                {order.status?.toUpperCase() || 'PENDING'}
+              </Text>
+            </LinearGradient>
+          </View>
+
+          {/* Product Preview with Image */}
+          {productCount > 0 && (
+            <View style={styles.productPreview}>
+              {firstProductImage ? (
+                <Image
+                  source={{ uri: firstProductImage }}
+                  style={styles.productImage}
+                  defaultSource={require('../../assets/images/placeholder.jpg')}
+                />
+              ) : (
+                <LinearGradient
+                  colors={[colors.surfaceElevated, colors.surface]}
+                  style={styles.productImagePlaceholder}
+                >
+                  <Ionicons name="image-outline" size={24} color={colors.textTertiary} />
+                </LinearGradient>
+              )}
+              <View style={styles.productInfo}>
+                <Text style={styles.productName} numberOfLines={2}>
+                  {order.items?.[0]?.product_name || order.items?.[0]?.product?.name || 'Product'}
+                </Text>
+                {productCount > 1 && (
+                  <Text style={styles.moreItems}>+{productCount - 1} more item{productCount - 1 > 1 ? 's' : ''}</Text>
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* Order Details */}
+          <View style={styles.orderBody}>
+            <View style={styles.orderInfo}>
+              <View style={styles.infoRow}>
+                <Ionicons name="cube-outline" size={14} color={colors.textTertiary} />
+                <Text style={styles.infoText}>{productCount} item{productCount !== 1 ? 's' : ''}</Text>
+              </View>
+              {/* Payment Status Badge */}
+              <View
                 style={[
-                  styles.paymentStatusText,
+                  styles.paymentBadge,
                   {
-                    color: order.payment_status === 'paid' ? colors.success : colors.warning,
+                    backgroundColor: order.payment_status === 'paid' ? colors.accentSuccessGlow : colors.accentWarningGlow,
                   },
                 ]}
               >
-                {order.payment_status === 'paid' ? 'PAID' : order.payment_status?.toUpperCase() || 'PENDING'}
-              </Text>
+                <Ionicons
+                  name={order.payment_status === 'paid' ? 'checkmark-circle' : 'time-outline'}
+                  size={12}
+                  color={order.payment_status === 'paid' ? colors.accentSuccess : colors.accentWarning}
+                />
+                <Text
+                  style={[
+                    styles.paymentStatusText,
+                    {
+                      color: order.payment_status === 'paid' ? colors.accentSuccess : colors.accentWarning,
+                    },
+                  ]}
+                >
+                  {order.payment_status === 'paid' ? 'PAID' : order.payment_status?.toUpperCase() || 'PENDING'}
+                </Text>
+              </View>
             </View>
+            <Text style={styles.orderTotal}>₹{Number(order.total_amount || 0).toFixed(2)}</Text>
           </View>
-          <Text style={styles.orderTotal}>₹{Number(order.total_amount || 0).toFixed(2)}</Text>
-        </View>
 
-        {/* Order Footer */}
-        <View style={styles.orderFooter}>
-          <Text style={styles.customerName}>Customer: {order.customer_name || order.shipping_name || 'N/A'}</Text>
-          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-        </View>
+          {/* Order Footer */}
+          <View style={styles.orderFooter}>
+            <View style={styles.customerInfo}>
+              <Ionicons name="person-outline" size={14} color={colors.textTertiary} />
+              <Text style={styles.customerName}>{order.customer_name || order.shipping_name || 'Customer'}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+          </View>
+        </LinearGradient>
       </TouchableOpacity>
     );
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Orders</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      {orders.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="receipt-outline" size={80} color={colors.textSecondary} />
-          <Text style={styles.emptyTitle}>No orders yet</Text>
-          <Text style={styles.emptySubtitle}>Orders from customers will appear here</Text>
+      <LinearGradient
+        colors={[colors.background, colors.surface]}
+        style={styles.gradientBackground}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <LinearGradient
+              colors={[colors.surfaceElevated, colors.surface]}
+              style={styles.backButtonGradient}
+            >
+              <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+            </LinearGradient>
+          </TouchableOpacity>
+          <Text style={styles.title}>Orders</Text>
+          <View style={{ width: 40 }} />
         </View>
-      ) : (
-        <FlatList
-          data={orders}
-          renderItem={renderOrderCard}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.orderList}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
-        />
-      )}
+
+        {orders.length === 0 ? (
+          <View style={styles.emptyState}>
+            <LinearGradient
+              colors={[colors.surface, colors.surfaceElevated]}
+              style={styles.emptyIconContainer}
+            >
+              <Ionicons name="receipt-outline" size={60} color={colors.textTertiary} />
+            </LinearGradient>
+            <Text style={styles.emptyTitle}>No orders yet</Text>
+            <Text style={styles.emptySubtitle}>Orders from customers will appear here</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={orders}
+            renderItem={renderOrderCard}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.orderList}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl 
+                refreshing={refreshing} 
+                onRefresh={onRefresh} 
+                tintColor={colors.accentPrimary}
+                colors={[colors.accentPrimary]} 
+              />
+            }
+          />
+        )}
+      </LinearGradient>
     </SafeAreaView>
   );
 }
@@ -196,151 +292,192 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  gradientBackground: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: spacing.lg,
-    paddingTop: spacing.xl,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   backButton: {
-    padding: spacing.xs,
+    overflow: 'hidden',
+    borderRadius: 12,
+  },
+  backButtonGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
-    ...typography.h3,
-    color: colors.text,
-    flex: 1,
-    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    letterSpacing: -0.3,
   },
   emptyState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: 20,
+  },
+  emptyIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
   emptyTitle: {
-    ...typography.h3,
-    color: colors.text,
-    marginTop: spacing.lg,
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginTop: 8,
+    letterSpacing: -0.3,
   },
   emptySubtitle: {
-    ...typography.body,
+    fontSize: 14,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginTop: spacing.sm,
+    marginTop: 8,
   },
   orderList: {
-    padding: spacing.lg,
+    padding: 16,
+    paddingTop: 8,
   },
   orderCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   orderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: 14,
   },
   orderHeaderLeft: {
     flex: 1,
   },
   orderNumber: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 15,
     fontWeight: '600',
+    color: colors.textPrimary,
+    letterSpacing: -0.3,
   },
   orderDate: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.xs / 2,
+    fontSize: 11,
+    color: colors.textTertiary,
+    marginTop: 2,
   },
   statusBadge: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
   statusText: {
-    ...typography.caption,
+    fontSize: 10,
     fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   productPreview: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
+    gap: 12,
+    paddingVertical: 12,
     borderTopWidth: 1,
+    borderBottomWidth: 1,
     borderTopColor: colors.border,
+    borderBottomColor: colors.border,
   },
   productImage: {
-    width: 60,
-    height: 60,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.border,
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceElevated,
+  },
+  productImagePlaceholder: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   productInfo: {
     flex: 1,
   },
   productName: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 14,
     fontWeight: '500',
-    marginBottom: spacing.xs / 2,
+    color: colors.textPrimary,
+    marginBottom: 4,
   },
   moreItems: {
-    ...typography.caption,
-    color: colors.textSecondary,
+    fontSize: 11,
+    color: colors.textTertiary,
   },
   orderBody: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderColor: colors.border,
+    borderBottomColor: colors.border,
   },
   orderInfo: {
-    flexDirection: 'column',
-    gap: spacing.xs,
+    gap: 6,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 6,
   },
   infoText: {
-    ...typography.body,
+    fontSize: 12,
     color: colors.textSecondary,
   },
   paymentBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs / 2,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs / 2,
-    borderRadius: borderRadius.sm,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
   },
   paymentStatusText: {
-    ...typography.caption,
+    fontSize: 10,
     fontWeight: '600',
-    fontSize: 11,
+    letterSpacing: 0.3,
   },
   orderTotal: {
-    ...typography.h4,
-    color: colors.primary,
+    fontSize: 18,
     fontWeight: '700',
+    color: colors.accentPrimary,
+    letterSpacing: -0.5,
   },
   orderFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: spacing.md,
+    marginTop: 12,
+  },
+  customerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   customerName: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 12,
+    color: colors.textSecondary,
   },
 });

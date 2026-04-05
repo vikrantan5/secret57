@@ -12,11 +12,50 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../../src/store/authStore';
 import { useSellerStore } from '../../src/store/sellerStore';
 import { useSubscriptionStore, SubscriptionPlan } from '../../src/store/subscriptionStore';
 import CashfreePayment from '../../src/components/CashfreePayment';
-import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
+
+// Premium Professional Color Palette
+const colors = {
+  background: '#0B0C10',
+  surface: '#13151A',
+  surfaceElevated: '#1A1D24',
+  surfaceHigher: '#22262F',
+  
+  textPrimary: '#FFFFFF',
+  textSecondary: '#C0C5D0',
+  textTertiary: '#A0A5B5',
+  textMuted: '#6B7280',
+  
+  accentPrimary: '#2463EB',
+  accentPrimaryLight: '#4B82F5',
+  accentPrimaryGlow: '#2463EB20',
+  
+  accentSuccess: '#00D26A',
+  accentSuccessGlow: '#00D26A10',
+  
+  accentWarning: '#FFB443',
+  accentWarningGlow: '#FFB44310',
+  
+  accentError: '#FF5C8A',
+  accentErrorGlow: '#FF5C8A10',
+  
+  accentPurple: '#7C5CFF',
+  border: '#1E222A',
+};
+
+const gradients = {
+  primary: ['#2463EB', '#1A4FCC'],
+  success: ['#00D26A', '#00A855'],
+  warning: ['#FFB443', '#E69900'],
+  error: ['#FF5C8A', '#E63E6C'],
+  card: ['#13151A', '#0F1116'],
+  header: ['#0B0C10', '#13151A'],
+  premium: ['#667eea', '#764ba2', '#f093fb'],
+};
 
 export default function SellerSubscription() {
   const router = useRouter();
@@ -84,11 +123,7 @@ export default function SellerSubscription() {
         Alert.alert('Error', result.error || 'Failed to create subscription order');
         return;
       }
-
-      // Open payment modal
-      console.log('Order result from edge function:', JSON.stringify(result.order_data, null, 2));
       
-      // Check if we have payment_session_id
       if (!result.order_data.payment_session_id) {
         Alert.alert('Error', 'Payment session ID not received from server');
         return;
@@ -96,7 +131,6 @@ export default function SellerSubscription() {
       
       setOrderData(result.order_data);
       setPaymentVisible(true);
-      console.log('Payment Session ID:', result.order_data.payment_session_id);
     } catch (error: any) {
       console.error('Subscription error:', error);
       Alert.alert('Error', error.message || 'Failed to initiate subscription');
@@ -159,13 +193,13 @@ export default function SellerSubscription() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
-        return colors.success;
+        return colors.accentSuccess;
       case 'expired':
-        return colors.error;
+        return colors.accentError;
       case 'cancelled':
-        return colors.textSecondary;
+        return colors.textTertiary;
       default:
-        return colors.textSecondary;
+        return colors.textTertiary;
     }
   };
 
@@ -180,10 +214,13 @@ export default function SellerSubscription() {
   if (loading && !refreshing) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        <LinearGradient
+          colors={[colors.background, colors.surface]}
+          style={styles.loadingContainer}
+        >
+          <ActivityIndicator size="large" color={colors.accentPrimary} />
           <Text style={styles.loadingText}>Loading subscription data...</Text>
-        </View>
+        </LinearGradient>
       </SafeAreaView>
     );
   }
@@ -193,179 +230,245 @@ export default function SellerSubscription() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Subscription</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      <LinearGradient
+        colors={gradients.header}
+        style={styles.gradientBackground}
       >
-        {/* Current Subscription Status */}
-        {currentSubscription ? (
-          <View style={[styles.currentPlanCard, shadows.md]}>
-            <View style={styles.currentPlanHeader}>
-              <Ionicons name="checkmark-circle" size={32} color={colors.success} />
-              <View style={styles.currentPlanInfo}>
-                <Text style={styles.currentPlanLabel}>Current Plan</Text>
-                <Text style={styles.currentPlanName}>{currentSubscription.plan?.name}</Text>
-              </View>
-              <View
-                style={[
-                  styles.statusBadge,
-                  { backgroundColor: getStatusColor(currentSubscription.status) + '20' },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusText,
-                    { color: getStatusColor(currentSubscription.status) },
-                  ]}
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <LinearGradient
+              colors={[colors.surfaceElevated, colors.surface]}
+              style={styles.backButtonGradient}
+            >
+              <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+            </LinearGradient>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Subscription</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl 
+              refreshing={refreshing} 
+              onRefresh={onRefresh} 
+              tintColor={colors.accentPrimary}
+              colors={[colors.accentPrimary]} 
+            />
+          }
+        >
+          {/* Current Subscription Status */}
+          {currentSubscription ? (
+            <LinearGradient
+              colors={gradients.card}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.currentPlanCard}
+            >
+              <View style={styles.currentPlanHeader}>
+                <LinearGradient
+                  colors={gradients.success}
+                  style={styles.checkIcon}
                 >
-                  {currentSubscription.status.toUpperCase()}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.expirySection}>
-              <View style={styles.expiryRow}>
-                <Ionicons name="calendar-outline" size={18} color={colors.textSecondary} />
-                <Text style={styles.expiryLabel}>Expires on:</Text>
-                <Text style={styles.expiryDate}>
-                  {new Date(currentSubscription.expires_at).toLocaleDateString()}
-                </Text>
-              </View>
-              {isExpiringSoon && (
-                <View style={styles.warningBanner}>
-                  <Ionicons name="warning" size={16} color={colors.warning} />
-                  <Text style={styles.warningText}>
-                    {daysRemaining} {daysRemaining === 1 ? 'day' : 'days'} remaining
-                  </Text>
+                  <Ionicons name="checkmark" size={20} color="#FFF" />
+                </LinearGradient>
+                <View style={styles.currentPlanInfo}>
+                  <Text style={styles.currentPlanLabel}>Current Plan</Text>
+                  <Text style={styles.currentPlanName}>{currentSubscription.plan?.name}</Text>
                 </View>
-              )}
-              {daysRemaining === 0 && (
-                <View style={[styles.warningBanner, { backgroundColor: colors.error + '15' }]}>
-                  <Ionicons name="alert-circle" size={16} color={colors.error} />
-                  <Text style={[styles.warningText, { color: colors.error }]}>Expired</Text>
-                </View>
-              )}
-            </View>
-
-            {currentSubscription.plan?.features && (
-              <View style={styles.featuresSection}>
-                <Text style={styles.featuresTitle}>Plan Features:</Text>
-                {currentSubscription.plan.features.map((feature: string, index: number) => (
-                  <View key={index} style={styles.featureRow}>
-                    <Ionicons name="checkmark" size={16} color={colors.success} />
-                    <Text style={styles.featureText}>{feature}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-        ) : (
-          <View style={[styles.noSubscriptionCard, shadows.sm]}>
-            <Ionicons name="alert-circle-outline" size={48} color={colors.warning} />
-            <Text style={styles.noSubscriptionTitle}>No Active Subscription</Text>
-            <Text style={styles.noSubscriptionText}>
-              Subscribe to a plan to start selling products and services
-            </Text>
-          </View>
-        )}
-
-        {/* Available Plans */}
-        <View style={styles.plansSection}>
-          <Text style={styles.sectionTitle}>
-            {currentSubscription ? 'Upgrade or Renew' : 'Choose Your Plan'}
-          </Text>
-
-          {plans.map((plan) => {
-            const isCurrentPlan = currentSubscription?.plan_id === plan.id;
-
-            return (
-              <View key={plan.id} style={[styles.planCard, shadows.sm]}>
-                {plan.duration_type === 'yearly' && (
-                  <View style={styles.popularBadge}>
-                    <Text style={styles.popularText}>BEST VALUE</Text>
-                  </View>
-                )}
-
-                <Text style={styles.planName}>{plan.name}</Text>
-                <View style={styles.priceRow}>
-                  <Text style={styles.planPrice}>₹{plan.price}</Text>
-                  <Text style={styles.planDuration}>/{plan.duration_type}</Text>
-                </View>
-
-                {plan.features && (
-                  <View style={styles.planFeatures}>
-                    {plan.features.map((feature, index) => (
-                      <View key={index} style={styles.featureRow}>
-                        <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
-                        <Text style={styles.planFeatureText}>{feature}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                <TouchableOpacity
-                  style={[
-                    styles.subscribeButton,
-                    isCurrentPlan && styles.subscribeButtonDisabled,
-                  ]}
-                  onPress={() => handleSubscribe(plan)}
-                  disabled={isCurrentPlan}
-                  data-testid={`subscribe-${plan.duration_type}-button`}
+                <LinearGradient
+                  colors={[getStatusColor(currentSubscription.status) + '20', getStatusColor(currentSubscription.status) + '10']}
+                  style={styles.statusBadge}
                 >
                   <Text
                     style={[
-                      styles.subscribeButtonText,
-                      isCurrentPlan && styles.subscribeButtonTextDisabled,
+                      styles.statusText,
+                      { color: getStatusColor(currentSubscription.status) },
                     ]}
                   >
-                    {isCurrentPlan ? 'Current Plan' : `Subscribe for ₹${plan.price}`}
+                    {currentSubscription.status.toUpperCase()}
                   </Text>
-                </TouchableOpacity>
+                </LinearGradient>
+              </View>
 
-                {plan.duration_type === 'yearly' && (
-                  <Text style={styles.savingsText}>
-                    Save ₹{499 * 12 - plan.price} compared to monthly
+              <View style={styles.divider} />
+
+              <View style={styles.expirySection}>
+                <View style={styles.expiryRow}>
+                  <Ionicons name="calendar-outline" size={16} color={colors.textTertiary} />
+                  <Text style={styles.expiryLabel}>Expires on:</Text>
+                  <Text style={styles.expiryDate}>
+                    {new Date(currentSubscription.expires_at).toLocaleDateString('en-IN', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                    })}
                   </Text>
+                </View>
+                {isExpiringSoon && (
+                  <LinearGradient
+                    colors={[colors.accentWarningGlow, 'transparent']}
+                    style={styles.warningBanner}
+                  >
+                    <Ionicons name="alert-circle" size={16} color={colors.accentWarning} />
+                    <Text style={styles.warningText}>
+                      {daysRemaining} {daysRemaining === 1 ? 'day' : 'days'} remaining
+                    </Text>
+                  </LinearGradient>
+                )}
+                {daysRemaining === 0 && (
+                  <LinearGradient
+                    colors={[colors.accentErrorGlow, 'transparent']}
+                    style={styles.warningBanner}
+                  >
+                    <Ionicons name="close-circle" size={16} color={colors.accentError} />
+                    <Text style={[styles.warningText, { color: colors.accentError }]}>Expired</Text>
+                  </LinearGradient>
                 )}
               </View>
-            );
-          })}
-        </View>
 
-        {/* Info Section */}
-        <View style={styles.infoSection}>
-          <View style={styles.infoCard}>
-            <Ionicons name="information-circle" size={20} color={colors.primary} />
-            <Text style={styles.infoText}>
-              With an active subscription, you can add unlimited products and services. Payments
-              from customers go directly to your bank account.
+              {currentSubscription.plan?.features && (
+                <View style={styles.featuresSection}>
+                  <Text style={styles.featuresTitle}>Plan Features:</Text>
+                  {currentSubscription.plan.features.map((feature: string, index: number) => (
+                    <View key={index} style={styles.featureRow}>
+                      <Ionicons name="checkmark-circle" size={14} color={colors.accentSuccess} />
+                      <Text style={styles.featureText}>{feature}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </LinearGradient>
+          ) : (
+            <LinearGradient
+              colors={gradients.card}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.noSubscriptionCard}
+            >
+              <LinearGradient
+                colors={gradients.warning}
+                style={styles.warningIconContainer}
+              >
+                <Ionicons name="alert-circle-outline" size={32} color="#FFF" />
+              </LinearGradient>
+              <Text style={styles.noSubscriptionTitle}>No Active Subscription</Text>
+              <Text style={styles.noSubscriptionText}>
+                Subscribe to a plan to start selling products and services
+              </Text>
+            </LinearGradient>
+          )}
+
+          {/* Available Plans */}
+          <View style={styles.plansSection}>
+            <Text style={styles.sectionTitle}>
+              {currentSubscription ? 'Upgrade or Renew' : 'Choose Your Plan'}
             </Text>
-          </View>
-        </View>
-      </ScrollView>
 
-      {/* Payment Modal - UPDATED */}
-      {paymentVisible && orderData && (
-        <CashfreePayment
-          visible={paymentVisible}
-          paymentSessionId={orderData.payment_session_id}  // Pass the raw session ID
-          orderId={orderData.order_id}
-          onSuccess={handlePaymentSuccess}
-          onFailure={handlePaymentFailure}
-          onCancel={handlePaymentCancel}
-        />
-      )}
+            {plans.map((plan, index) => {
+              const isCurrentPlan = currentSubscription?.plan_id === plan.id;
+              const isPopular = plan.duration_type === 'yearly';
+
+              return (
+                <LinearGradient
+                  key={plan.id}
+                  colors={isPopular ? ['#1A1D24', '#13151A'] : gradients.card}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[
+                    styles.planCard,
+                    isPopular && styles.popularPlanCard,
+                  ]}
+                >
+                  {isPopular && (
+                    <LinearGradient
+                      colors={gradients.premium}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.popularBadge}
+                    >
+                      <Text style={styles.popularText}>BEST VALUE</Text>
+                    </LinearGradient>
+                  )}
+
+                  <Text style={styles.planName}>{plan.name}</Text>
+                  <View style={styles.priceRow}>
+                    <Text style={styles.planPrice}>₹{plan.price}</Text>
+                    <Text style={styles.planDuration}>/{plan.duration_type}</Text>
+                  </View>
+
+                  {plan.features && (
+                    <View style={styles.planFeatures}>
+                      {plan.features.slice(0, 4).map((feature, idx) => (
+                        <View key={idx} style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={14} color={colors.accentPrimary} />
+                          <Text style={styles.planFeatureText}>{feature}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => handleSubscribe(plan)}
+                    disabled={isCurrentPlan}
+                  >
+                    <LinearGradient
+                      colors={isCurrentPlan ? [colors.surfaceHigher, colors.surface] : gradients.primary}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.subscribeButton}
+                    >
+                      <Text style={styles.subscribeButtonText}>
+                        {isCurrentPlan ? 'Current Plan' : `Subscribe • ₹${plan.price}`}
+                      </Text>
+                      {!isCurrentPlan && (
+                        <Ionicons name="arrow-forward" size={18} color="#FFF" />
+                      )}
+                    </LinearGradient>
+                  </TouchableOpacity>
+
+                  {isPopular && (
+                    <Text style={styles.savingsText}>
+                      Save ₹{499 * 12 - plan.price} compared to monthly
+                    </Text>
+                  )}
+                </LinearGradient>
+              );
+            })}
+          </View>
+
+          {/* Info Section */}
+          <View style={styles.infoSection}>
+            <LinearGradient
+              colors={[colors.accentPrimaryGlow, 'transparent']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.infoCard}
+            >
+              <Ionicons name="information-circle" size={20} color={colors.accentPrimary} />
+              <Text style={styles.infoText}>
+                With an active subscription, you can add unlimited products and services. Payments
+                from customers go directly to your bank account.
+              </Text>
+            </LinearGradient>
+          </View>
+        </ScrollView>
+
+        {/* Payment Modal */}
+        {paymentVisible && orderData && (
+          <CashfreePayment
+            visible={paymentVisible}
+            paymentSessionId={orderData.payment_session_id}
+            orderId={orderData.order_id}
+            onSuccess={handlePaymentSuccess}
+            onFailure={handlePaymentFailure}
+            onCancel={handlePaymentCancel}
+          />
+        )}
+      </LinearGradient>
     </SafeAreaView>
   );
 }
@@ -375,231 +478,269 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  gradientBackground: {
+    flex: 1,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingText: {
-    ...typography.body,
+    fontSize: 14,
     color: colors.textSecondary,
-    marginTop: spacing.md,
+    marginTop: 12,
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   backButton: {
-    padding: spacing.xs,
+    overflow: 'hidden',
+    borderRadius: 12,
+  },
+  backButtonGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
-    ...typography.h3,
-    color: colors.text,
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    letterSpacing: -0.3,
   },
   currentPlanCard: {
-    backgroundColor: colors.surface,
-    margin: spacing.lg,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
+    margin: 20,
+    padding: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   currentPlanHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: 12,
+  },
+  checkIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   currentPlanInfo: {
     flex: 1,
   },
   currentPlanLabel: {
-    ...typography.caption,
-    color: colors.textSecondary,
+    fontSize: 12,
+    color: colors.textTertiary,
   },
   currentPlanName: {
-    ...typography.h4,
-    color: colors.text,
-    marginTop: spacing.xs / 2,
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginTop: 2,
   },
   statusBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs / 2,
-    borderRadius: borderRadius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
   statusText: {
-    ...typography.caption,
+    fontSize: 10,
     fontWeight: '600',
-    fontSize: 11,
+    letterSpacing: 0.5,
   },
   divider: {
     height: 1,
     backgroundColor: colors.border,
-    marginVertical: spacing.md,
+    marginVertical: 16,
   },
   expirySection: {
-    gap: spacing.sm,
+    gap: 12,
   },
   expiryRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 6,
   },
   expiryLabel: {
-    ...typography.body,
+    fontSize: 13,
     color: colors.textSecondary,
   },
   expiryDate: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 13,
     fontWeight: '600',
+    color: colors.textPrimary,
   },
   warningBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.warning + '15',
-    padding: spacing.sm,
-    borderRadius: borderRadius.sm,
+    gap: 8,
+    padding: 10,
+    borderRadius: 10,
   },
   warningText: {
-    ...typography.bodySmall,
-    color: colors.warning,
+    fontSize: 12,
     fontWeight: '600',
+    color: colors.accentWarning,
   },
   featuresSection: {
-    marginTop: spacing.md,
-    gap: spacing.xs,
+    marginTop: 16,
+    gap: 8,
   },
   featuresTitle: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs / 2,
+    fontSize: 12,
+    color: colors.textTertiary,
+    marginBottom: 4,
   },
   featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 8,
   },
   featureText: {
-    ...typography.bodySmall,
-    color: colors.text,
+    fontSize: 13,
+    color: colors.textSecondary,
   },
   noSubscriptionCard: {
-    backgroundColor: colors.surface,
-    margin: spacing.lg,
-    padding: spacing.xl,
-    borderRadius: borderRadius.lg,
+    margin: 20,
+    padding: 32,
+    borderRadius: 20,
     alignItems: 'center',
-    gap: spacing.md,
+    gap: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  warningIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   noSubscriptionTitle: {
-    ...typography.h4,
-    color: colors.text,
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   noSubscriptionText: {
-    ...typography.body,
+    fontSize: 14,
     color: colors.textSecondary,
     textAlign: 'center',
   },
   plansSection: {
-    padding: spacing.lg,
-    gap: spacing.md,
+    paddingHorizontal: 20,
+    gap: 16,
+    marginBottom: 16,
   },
   sectionTitle: {
-    ...typography.h4,
-    color: colors.text,
-    marginBottom: spacing.xs,
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 4,
+    letterSpacing: -0.3,
   },
   planCard: {
-    backgroundColor: colors.surface,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
+    padding: 20,
+    borderRadius: 20,
     position: 'relative',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  popularPlanCard: {
+    borderWidth: 2,
+    borderColor: colors.accentPurple,
   },
   popularBadge: {
     position: 'absolute',
-    top: spacing.md,
-    right: spacing.md,
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs / 2,
-    borderRadius: borderRadius.full,
+    top: -12,
+    right: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
   popularText: {
-    ...typography.caption,
-    color: colors.white,
-    fontWeight: '700',
     fontSize: 10,
+    fontWeight: '700',
+    color: '#FFF',
+    letterSpacing: 0.5,
   },
   planName: {
-    ...typography.h3,
-    color: colors.text,
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    letterSpacing: -0.5,
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginTop: spacing.xs,
-    marginBottom: spacing.md,
+    marginTop: 8,
+    marginBottom: 16,
   },
   planPrice: {
-    ...typography.h2,
-    color: colors.primary,
-    fontWeight: '700',
+    fontSize: 32,
+    fontWeight: '800',
+    color: colors.accentPrimary,
+    letterSpacing: -1,
   },
   planDuration: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: colors.textTertiary,
+    marginLeft: 4,
   },
   planFeatures: {
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+    gap: 10,
+    marginBottom: 20,
   },
   planFeatureText: {
-    ...typography.body,
-    color: colors.text,
-  },
-  subscribeButton: {
-    backgroundColor: colors.primary,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-  },
-  subscribeButtonDisabled: {
-    backgroundColor: colors.border,
-  },
-  subscribeButtonText: {
-    ...typography.body,
-    color: colors.white,
-    fontWeight: '600',
-  },
-  subscribeButtonTextDisabled: {
+    fontSize: 13,
     color: colors.textSecondary,
   },
+  subscribeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  subscribeButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
   savingsText: {
-    ...typography.caption,
-    color: colors.success,
+    fontSize: 11,
+    color: colors.accentSuccess,
     textAlign: 'center',
-    marginTop: spacing.sm,
+    marginTop: 12,
     fontWeight: '600',
   },
   infoSection: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl,
+    paddingHorizontal: 20,
+    paddingBottom: 32,
   },
   infoCard: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    backgroundColor: colors.primary + '10',
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
+    gap: 12,
+    padding: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   infoText: {
-    ...typography.bodySmall,
-    color: colors.text,
     flex: 1,
-    lineHeight: 20,
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 18,
   },
 });
