@@ -429,7 +429,7 @@ export default function SellerDashboard() {
 
               <TouchableOpacity
                 style={[styles.actionCard, shadows.sm]}
-                onPress={() => router.push('/seller/services/edit' as any)}
+                onPress={() => router.push(`/seller/services/edit/${id}`)}
                 data-testid="edit-service-button"
               >
                 <View style={[styles.actionIcon, { backgroundColor: '#8B5CF6' + '15' }]}>

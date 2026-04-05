@@ -312,15 +312,23 @@ export default function SellerOrderDetailScreen() {
         <View style={{ height: spacing.xl }} />
       </ScrollView>
 
-      {/* Update Status Modal */}
+       {/* Update Status Modal */}
       <Modal
         visible={showStatusModal}
         transparent
         animationType="slide"
         onRequestClose={() => setShowStatusModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, shadows.lg]}>
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowStatusModal(false)}
+        >
+          <TouchableOpacity 
+            style={[styles.modalContent, shadows.lg]}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
             <View style={styles.modalHeader}>
               <Ionicons name="swap-horizontal" size={32} color={colors.primary} />
               <Text style={styles.modalTitle}>Update Order Status</Text>
@@ -328,7 +336,10 @@ export default function SellerOrderDetailScreen() {
             
             <Text style={styles.modalDescription}>Select the current status of this order</Text>
 
-            <View style={styles.statusOptions}>
+            <ScrollView 
+              style={styles.statusOptionsScroll}
+              showsVerticalScrollIndicator={false}
+            >
               {statusOptions.map((option) => (
                 <TouchableOpacity
                   key={option.value}
@@ -351,7 +362,7 @@ export default function SellerOrderDetailScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </ScrollView>
 
             <TextInput
               style={styles.notesInput}
@@ -381,8 +392,8 @@ export default function SellerOrderDetailScreen() {
                 <Text style={styles.confirmButtonText}>Update Status</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* OTP Verification Modal */}
@@ -630,17 +641,16 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    padding: spacing.lg,
   },
   modalContent: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
     padding: spacing.xl,
     width: '100%',
-    maxWidth: 400,
-    maxHeight: '80%',
+    maxHeight: '85%',
   },
   modalHeader: {
     alignItems: 'center',
@@ -657,6 +667,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.lg,
     lineHeight: 22,
+  },
+  statusOptionsScroll: {
+    maxHeight: 300,
+    marginBottom: spacing.lg,
   },
   statusOptions: {
     gap: spacing.sm,

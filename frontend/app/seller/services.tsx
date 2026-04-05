@@ -184,7 +184,7 @@ export default function SellerServicesScreen() {
                   <View style={styles.actionButtons}>
                     <TouchableOpacity
                       style={[styles.actionButton, styles.editButton]}
-                      onPress={() => router.push(`/seller/services/edit?id=${service.id}` as any)}
+                      onPress={() => router.push(`/seller/services/edit/${service.id}` as any)}
                     >
                       <Ionicons name="create-outline" size={18} color={colors.primary} />
                       <Text style={styles.editButtonText}>Edit</Text>

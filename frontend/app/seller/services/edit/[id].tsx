@@ -13,23 +13,24 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useAuthStore } from '../../../src/store/authStore';
-import { useSellerStore } from '../../../src/store/sellerStore';
-import { useServiceStore } from '../../../src/store/serviceStore';
-import { colors, spacing, typography, borderRadius, shadows } from '../../../src/constants/theme';
-import { Button } from '../../../src/components/ui/Button';
-import { Input } from '../../../src/components/ui/Input';
-import { uploadMultipleImages } from '../../../src/utils/imageUpload';
-import { isValidYouTubeUrl } from '../../../src/utils/youtubeHelper';
+
+import { useAuthStore } from '../../../../src/store/authStore';
+import { useSellerStore } from '../../../../src/store/sellerStore';
+import { useServiceStore } from '../../../../src/store/serviceStore';
+import { colors, spacing, typography, borderRadius, shadows } from '../../../../src/constants/theme';
+import { Button } from '../../../../src/components/ui/Button';
+import { Input } from '../../../../src/components/ui/Input';
+import { uploadMultipleImages } from '../../../../src/utils/imageUpload';
+import { isValidYouTubeUrl } from '../../../../src/utils/youtubeHelper';
 
 export default function EditServiceScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string }>();
-  const serviceId = params.id as string;
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const serviceId = id;
   
   const { user } = useAuthStore();
   const { seller } = useSellerStore();
-  const { selectedService, fetchServiceById, updateService } = useServiceStore();
+  const { selectedService, loading: storeLoading, error: storeError, fetchServiceById, updateService, setSelectedService } = useServiceStore();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -40,28 +41,42 @@ export default function EditServiceScreen() {
   const [locationType, setLocationType] = useState<'visit_customer' | 'customer_visits' | 'both'>('visit_customer');
   const [isActive, setIsActive] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [errors, setErrors] = useState<any>({});
 
   useEffect(() => {
+    // Clear previous service when component mounts
+    setSelectedService(null);
+    setDataLoaded(false);
+    
     if (serviceId) {
+      console.log('Loading service with ID:', serviceId);
       loadService();
+    } else {
+       console.error('No service ID provided in route params');
+      Alert.alert('Error', 'No service ID provided');
+      router.back();
     }
+    
+    // Cleanup on unmount
+    return () => {
+      setSelectedService(null);
+    };
   }, [serviceId]);
 
   const loadService = async () => {
     try {
-      setInitialLoading(true);
+      console.log('Fetching service:', serviceId);
       await fetchServiceById(serviceId);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to load service details');
-    } finally {
-      setInitialLoading(false);
+    } catch (error: any) {
+      console.error('Failed to load service:', error);
+      Alert.alert('Error', 'Failed to load service details. Please try again.');
     }
   };
 
   useEffect(() => {
-    if (selectedService) {
+    if (selectedService && selectedService.id === serviceId) {
+      console.log('Service loaded successfully:', selectedService.name);
       setName(selectedService.name || '');
       setDescription(selectedService.description || '');
       setBasePrice(selectedService.price?.toString() || '');
@@ -70,8 +85,17 @@ export default function EditServiceScreen() {
       setImages(selectedService.images || []);
       setLocationType(selectedService.location_type || 'visit_customer');
       setIsActive(selectedService.is_active ?? true);
+      setDataLoaded(true);
     }
-  }, [selectedService]);
+  }, [selectedService, serviceId]);
+
+  // Show error if store has error
+  useEffect(() => {
+    if (storeError && !storeLoading) {
+      console.error('Store error:', storeError);
+      Alert.alert('Error', `Failed to load service: ${storeError}`);
+    }
+  }, [storeError, storeLoading]);
 
   const pickImages = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -162,7 +186,7 @@ export default function EditServiceScreen() {
     }
   };
 
-  if (initialLoading) {
+  if (storeLoading && !dataLoaded) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
@@ -173,15 +197,24 @@ export default function EditServiceScreen() {
     );
   }
 
-
-  
-  if (!selectedService) {
+  if (!selectedService && !storeLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <Ionicons name="alert-circle-outline" size={64} color={colors.error} />
           <Text style={styles.errorText}>Service not found</Text>
           <Button title="Go Back" onPress={() => router.back()} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!dataLoaded) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading service data...</Text>
         </View>
       </SafeAreaView>
     );

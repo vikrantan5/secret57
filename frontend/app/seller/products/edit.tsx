@@ -178,7 +178,7 @@ export default function EditProductScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size=  "large    " color={colors.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading product...</Text>
         </View>
       </SafeAreaView>
@@ -189,10 +189,10 @@ export default function EditProductScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <Ionicons name=   "alert-circle-outline  " size={64} color={colors.error} />
+          <Ionicons name="alert-circle-outline" size={64} color={colors.error} />
           <Text style={styles.errorText}>Product not found</Text>
           <TouchableOpacity
-            style={styles.backButton}
+            style={styles.errorButton}
             onPress={() => router.back()}
           >
             <Text style={styles.backButtonText}>Go Back</Text>
@@ -208,7 +208,7 @@ export default function EditProductScreen() {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name= "arrow-back  " size={24} color={colors.text} />
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={styles.title}>Edit Product</Text>
           <View style={{ width: 24 }} />
@@ -221,7 +221,7 @@ export default function EditProductScreen() {
             <Input
               value={name}
               onChangeText={setName}
-              placeholder=  "Enter product name   "
+              placeholder="Enter product name"
               error={errors.name}
             />
           </View>
@@ -232,7 +232,7 @@ export default function EditProductScreen() {
             <Input
               value={description}
               onChangeText={setDescription}
-              placeholder=  "Enter product description    "
+              placeholder="Enter product description"
               multiline
               numberOfLines={4}
               error={errors.description}
@@ -241,24 +241,24 @@ export default function EditProductScreen() {
 
           {/* Price */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Price (  u20b9) *</Text>
+            <Text style={styles.label}>Price (₹) *</Text>
             <Input
               value={price}
               onChangeText={setPrice}
-              placeholder=  "Enter price  "
-              keyboardType= "decimal-pad "
+              placeholder="Enter price"
+              keyboardType="decimal-pad"
               error={errors.price}
             />
           </View>
 
           {/* Compare Price */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Compare at Price (   u20b9)</Text>
+            <Text style={styles.label}>Compare at Price (₹)</Text>
             <Input
               value={comparePrice}
               onChangeText={setComparePrice}
-              placeholder=  "Enter original price (optional)  "
-              keyboardType= "decimal-pad "
+              placeholder="Enter original price (optional)"
+              keyboardType="decimal-pad"
             />
           </View>
 
@@ -268,8 +268,8 @@ export default function EditProductScreen() {
             <Input
               value={stock}
               onChangeText={setStock}
-              placeholder=  "Enter stock quantity "
-              keyboardType= "number-pad  "
+              placeholder="Enter stock quantity"
+              keyboardType="number-pad"
               error={errors.stock}
             />
           </View>
@@ -285,12 +285,12 @@ export default function EditProductScreen() {
                     style={styles.removeImageButton}
                     onPress={() => removeImage(index)}
                   >
-                    <Ionicons name= "close-circle    " size={24} color={colors.error} />
+                    <Ionicons name="close-circle" size={24} color={colors.error} />
                   </TouchableOpacity>
                 </View>
               ))}
               <TouchableOpacity style={styles.addImageButton} onPress={pickImages}>
-                <Ionicons name= "add-circle-outline  " size={48} color={colors.primary} />
+                <Ionicons name="add-circle-outline" size={48} color={colors.primary} />
                 <Text style={styles.addImageText}>Add Image</Text>
               </TouchableOpacity>
             </ScrollView>
@@ -369,6 +369,13 @@ const styles = StyleSheet.create({
     color: colors.error,
     marginTop: spacing.md,
     marginBottom: spacing.lg,
+  },
+    errorButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.lg,
+    marginTop: spacing.md,
   },
   form: {
     padding: spacing.lg,
