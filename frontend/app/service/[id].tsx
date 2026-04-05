@@ -20,6 +20,7 @@ import { useServiceStore } from '../../src/store/serviceStore';
 import { useBookingStore } from '../../src/store/bookingStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { usePaymentStore } from '../../src/store/paymentStore';
+import { useWishlistStore } from '../../src/store/wishlistStore';
 import { useAddressStore } from '../../src/store/addressStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { YouTubePlayerComponent } from '../../src/components/ui/YouTubePlayer';
@@ -39,6 +40,7 @@ export default function ServiceDetailScreen() {
   const { createBooking } = useBookingStore();
   const { createPayment, updatePaymentStatus } = usePaymentStore();
   const { addresses, getDefaultAddress, fetchUserAddresses } = useAddressStore();
+    const { isInWishlist, toggleWishlist, fetchWishlist } = useWishlistStore();
   
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
@@ -73,7 +75,10 @@ const [cashfreePaymentSessionId, setCashfreePaymentSessionId] = useState<string>
     if (serviceId) {
       fetchServiceById(serviceId);
     }
-  }, [serviceId]);
+  if (user?.id) {
+      fetchWishlist(user.id);
+    }
+  }, [serviceId, user?.id]);
 
   // Load user addresses and auto-fill with default address
   useEffect(() => {
@@ -434,6 +439,14 @@ const handleBookService = async () => {
     }
   };
 
+  const handleToggleWishlist = async () => {
+    if (!user?.id) {
+      Alert.alert('Login Required', 'Please login to add items to wishlist');
+      return;
+    }
+    await toggleWishlist(serviceId, user.id, 'service');
+  };
+
 
   if (loading || !selectedService) {
     return (
@@ -446,7 +459,7 @@ const handleBookService = async () => {
   }
 
   const service = selectedService;
-
+  const inWishlist = isInWishlist(serviceId);
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -455,8 +468,12 @@ const handleBookService = async () => {
           <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
-            <Ionicons name="heart-outline" size={24} color={colors.text} />
+          <TouchableOpacity style={styles.iconButton} onPress={handleToggleWishlist}>
+            <Ionicons 
+              name={inWishlist ? "heart" : "heart-outline"} 
+              size={24} 
+              color={inWishlist ? colors.error : colors.text} 
+            />
           </TouchableOpacity>
         </View>
 

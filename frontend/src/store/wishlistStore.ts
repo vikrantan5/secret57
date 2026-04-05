@@ -4,45 +4,58 @@ import { supabase } from '../services/supabase';
 interface WishlistItem {
   id: string;
   user_id: string;
-  product_id: string;
+  product_id: string | null;
+  service_id: string | null;
+  item_type: 'product' | 'service';
   created_at: string;
   product?: any;
+  service?: any;
 }
 
 interface WishlistState {
-  wishlistItems: string[]; // product IDs
-  items: WishlistItem[]; // Full wishlist items with product details
+  wishlistItems: string[]; // product/service IDs
+  items: WishlistItem[]; // Full wishlist items with product/service details
   loading: boolean;
   
-  addToWishlist: (productId: string, userId: string) => Promise<{ success: boolean; error?: string }>;
-  removeFromWishlist: (userId: string, productId: string) => Promise<{ success: boolean; error?: string }>;
+  addToWishlist: (itemId: string, userId: string, itemType: 'product' | 'service') => Promise<{ success: boolean; error?: string }>;
+  removeFromWishlist: (userId: string, itemId: string, itemType: 'product' | 'service') => Promise<{ success: boolean; error?: string }>;
   fetchWishlist: (userId: string) => Promise<void>;
-  isInWishlist: (productId: string) => boolean;
-  toggleWishlist: (productId: string, userId: string) => Promise<void>;
+  isInWishlist: (itemId: string) => boolean;
+  toggleWishlist: (itemId: string, userId: string, itemType: 'product' | 'service') => Promise<void>;
 }
-
 export const useWishlistStore = create<WishlistState>((set, get) => ({
   wishlistItems: [],
   items: [],
   loading: false,
 
-  addToWishlist: async (productId: string, userId: string) => {
+  addToWishlist: async (itemId: string, userId: string, itemType: 'product' | 'service') => {
     try {
       // Check if already in wishlist
       const { data: existing } = await supabase
         .from('wishlists')
         .select('id')
         .eq('user_id', userId)
-        .eq('product_id', productId)
+        .eq(itemType === 'product' ? 'product_id' : 'service_id', itemId)
         .single();
 
       if (existing) {
         return { success: true }; // Already in wishlist
       }
 
+      const insertData: any = {
+        user_id: userId,
+        item_type: itemType,
+      };
+      
+      if (itemType === 'product') {
+        insertData.product_id = itemId;
+      } else {
+        insertData.service_id = itemId;
+      }
+
       const { error } = await supabase
         .from('wishlists')
-        .insert([{ user_id: userId, product_id: productId }]);
+        .insert([insertData]);
       
       if (error) {
         console.error('Error adding to wishlist:', error);
@@ -50,7 +63,7 @@ export const useWishlistStore = create<WishlistState>((set, get) => ({
       }
 
       set(state => ({
-        wishlistItems: [...state.wishlistItems, productId],
+        wishlistItems: [...state.wishlistItems, itemId],
       }));
 
       // Refresh wishlist to get full data
@@ -63,13 +76,13 @@ export const useWishlistStore = create<WishlistState>((set, get) => ({
     }
   },
 
-  removeFromWishlist: async (userId: string, productId: string) => {
+  removeFromWishlist: async (userId: string, itemId: string, itemType: 'product' | 'service') => {
     try {
       const { error } = await supabase
         .from('wishlists')
         .delete()
         .eq('user_id', userId)
-        .eq('product_id', productId);
+        .eq(itemType === 'product' ? 'product_id' : 'service_id', itemId);
       
       if (error) {
         console.error('Error removing from wishlist:', error);
@@ -77,8 +90,10 @@ export const useWishlistStore = create<WishlistState>((set, get) => ({
       }
 
       set(state => ({
-        wishlistItems: state.wishlistItems.filter(id => id !== productId),
-        items: state.items.filter(item => item.product_id !== productId),
+        wishlistItems: state.wishlistItems.filter(id => id !== itemId),
+        items: state.items.filter(item => 
+          itemType === 'product' ? item.product_id !== itemId : item.service_id !== itemId
+        ),
       }));
       
       return { success: true };
@@ -92,19 +107,20 @@ export const useWishlistStore = create<WishlistState>((set, get) => ({
     try {
       set({ loading: true });
 
-      // Fetch wishlist with product details
+      // Fetch wishlist with product and service details
       const { data, error } = await supabase
         .from('wishlists')
         .select(`
           *,
-          product:products(*)
+          product:products(*),
+          service:services(*)
         `)
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
 
-      const wishlistItems = data?.map(w => w.product_id) || [];
+      const wishlistItems = data?.map(w => w.product_id || w.service_id).filter(Boolean) || [];
       
       set({ 
         wishlistItems,
@@ -117,17 +133,17 @@ export const useWishlistStore = create<WishlistState>((set, get) => ({
     }
   },
 
-  isInWishlist: (productId: string) => {
-    return get().wishlistItems.includes(productId);
+  isInWishlist: (itemId: string) => {
+    return get().wishlistItems.includes(itemId);
   },
 
-  toggleWishlist: async (productId: string, userId: string) => {
-    const isInWishlist = get().isInWishlist(productId);
+  toggleWishlist: async (itemId: string, userId: string, itemType: 'product' | 'service') => {
+    const isInWishlist = get().isInWishlist(itemId);
     
     if (isInWishlist) {
-      await get().removeFromWishlist(userId, productId);
+      await get().removeFromWishlist(userId, itemId, itemType);
     } else {
-      await get().addToWishlist(productId, userId);
+      await get().addToWishlist(itemId, userId, itemType);
     }
   },
 }));

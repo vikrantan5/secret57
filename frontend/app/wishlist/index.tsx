@@ -36,9 +36,9 @@ export default function WishlistScreen() {
     }
   }, [user]);
 
-  const handleRemove = async (productId: string) => {
+  const handleRemove = async (itemId: string, itemType: 'product' | 'service') => {
     if (user?.id) {
-      await removeFromWishlist(user.id, productId);
+      await removeFromWishlist(user.id, itemId, itemType);
     }
   };
 
@@ -59,10 +59,13 @@ export default function WishlistScreen() {
 
   const renderItem = ({ item }: { item: any }) => {
     const product = item.product;
-    if (!product) return null;
+    const service = item.service;
+    const isProduct = item.item_type === 'product';
+    
+    if (!product && !service) return null;
 
-    const hasDiscount =
-      product.compare_at_price && product.compare_at_price > product.price;
+    const itemData = isProduct ? product : service;
+    const hasDiscount = isProduct && product.compare_at_price && product.compare_at_price > product.price;
     const discountPercent = hasDiscount
       ? Math.round(
           ((product.compare_at_price - product.price) / product.compare_at_price) * 100
@@ -72,20 +75,33 @@ export default function WishlistScreen() {
     return (
       <TouchableOpacity
         style={[styles.itemCard, shadows.sm]}
-        onPress={() => router.push(`/product/${product.id}`)}
+        onPress={() => router.push(isProduct ? `/product/${itemData.id}` : `/service/${itemData.id}`)}
       >
         <Image
-          source={{ uri: product.images?.[0] || 'https://via.placeholder.com/100' }}
+          source={{ uri: itemData.images?.[0] || 'https://via.placeholder.com/100' }}
           style={styles.image}
         />
 
         <View style={styles.content}>
+          <View style={styles.typeRow}>
+            <View style={[styles.typeBadge, { backgroundColor: isProduct ? colors.primary + '20' : colors.success + '20' }]}>
+              <Ionicons 
+                name={isProduct ? "cube" : "calendar"} 
+                size={12} 
+                color={isProduct ? colors.primary : colors.success} 
+              />
+              <Text style={[styles.typeText, { color: isProduct ? colors.primary : colors.success }]}>
+                {isProduct ? 'Product' : 'Service'}
+              </Text>
+            </View>
+          </View>
+          
           <Text style={styles.name} numberOfLines={2}>
-            {product.name}
+            {itemData.name}
           </Text>
 
           <View style={styles.priceRow}>
-            <Text style={styles.price}>₹{product.price.toFixed(2)}</Text>
+            <Text style={styles.price}>₹{itemData.price.toFixed(2)}</Text>
             {hasDiscount && (
               <View style={styles.discountBadge}>
                 <Text style={styles.discountText}>{discountPercent}% OFF</Text>
@@ -93,9 +109,9 @@ export default function WishlistScreen() {
             )}
           </View>
 
-          {product.stock === 0 ? (
+          {isProduct && product.stock === 0 ? (
             <Text style={styles.outOfStock}>Out of Stock</Text>
-          ) : (
+          ) : isProduct ? (
             <TouchableOpacity
               style={styles.addToCartButton}
               onPress={() => handleAddToCart(item)}
@@ -103,12 +119,20 @@ export default function WishlistScreen() {
               <Ionicons name="cart-outline" size={18} color={colors.primary} />
               <Text style={styles.addToCartText}>Add to Cart</Text>
             </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.bookButton}
+              onPress={() => router.push(`/service/${service.id}`)}
+            >
+              <Ionicons name="calendar-outline" size={18} color={colors.success} />
+              <Text style={styles.bookButtonText}>Book Now</Text>
+            </TouchableOpacity>
           )}
         </View>
 
         <TouchableOpacity
           style={styles.removeButton}
-          onPress={() => handleRemove(product.id)}
+          onPress={() => handleRemove(itemData.id, item.item_type)}
         >
           <Ionicons name="close" size={24} color={colors.error} />
         </TouchableOpacity>
@@ -202,6 +226,21 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
   },
   content: { flex: 1, justifyContent: 'space-between' },
+   typeRow: { marginBottom: spacing.xs },
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs / 2,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+    alignSelf: 'flex-start',
+  },
+  typeText: {
+    ...typography.caption,
+    fontWeight: '600',
+    fontSize: 10,
+  },
   name: {
     ...typography.body,
     color: colors.text,
@@ -230,6 +269,12 @@ const styles = StyleSheet.create({
   addToCartText: {
     ...typography.bodySmall,
     color: colors.primary,
+    fontWeight: '600',
+  },
+    bookButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  bookButtonText: {
+    ...typography.bodySmall,
+    color: colors.success,
     fontWeight: '600',
   },
   removeButton: { position: 'absolute', top: spacing.sm, right: spacing.sm },

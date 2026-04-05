@@ -8,12 +8,15 @@ import {
   TouchableOpacity,
   SafeAreaView,
   ActivityIndicator,
+    Alert,
   Dimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useProductStore } from '../../src/store/productStore';
 import { useCartStore } from '../../src/store/cartStore';
+import { useWishlistStore } from '../../src/store/wishlistStore';
+import { useAuthStore } from '../../src/store/authStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 
 const { width } = Dimensions.get('window');
@@ -23,8 +26,10 @@ export default function ProductDetailScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const productId = params.id as string;
   
+  const { user } = useAuthStore();
   const { selectedProduct, loading, fetchProductById } = useProductStore();
   const { addItem } = useCartStore();
+  const { isInWishlist, toggleWishlist, fetchWishlist } = useWishlistStore();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
 
@@ -32,7 +37,10 @@ export default function ProductDetailScreen() {
     if (productId) {
       fetchProductById(productId);
     }
-  }, [productId]);
+    if (user?.id) {
+      fetchWishlist(user.id);
+    }
+  }, [productId, user?.id]);
 
   if (loading || !selectedProduct) {
     return (
@@ -63,6 +71,17 @@ export default function ProductDetailScreen() {
     router.back();
   };
 
+
+   const handleToggleWishlist = async () => {
+    if (!user?.id) {
+      Alert.alert('Login Required', 'Please login to add items to wishlist');
+      return;
+    }
+    await toggleWishlist(productId, user.id, 'product');
+  };
+
+  const inWishlist = isInWishlist(productId);
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -71,8 +90,12 @@ export default function ProductDetailScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
-            <Ionicons name="heart-outline" size={24} color={colors.text} />
+         <TouchableOpacity style={styles.iconButton} onPress={handleToggleWishlist}>
+            <Ionicons 
+              name={inWishlist ? "heart" : "heart-outline"} 
+              size={24} 
+              color={inWishlist ? colors.error : colors.text} 
+            />
           </TouchableOpacity>
         </View>
 
