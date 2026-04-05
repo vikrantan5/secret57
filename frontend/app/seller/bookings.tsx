@@ -4,9 +4,10 @@ import {
   Text,
   StyleSheet,
   SafeAreaView,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,16 +42,121 @@ export default function SellerBookingsScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending':
+      case 'pending_payment':
         return colors.warning;
       case 'confirmed':
         return colors.success;
+      case 'in_progress':
+        return colors.primary;
       case 'completed':
         return colors.primary;
       case 'cancelled':
+      case 'rejected':
         return colors.error;
       default:
         return colors.textSecondary;
     }
+  };
+
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      return date.toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+    } catch (error) {
+      return 'Invalid Date';
+    }
+  };
+
+  const formatTime = (timeString: string) => {
+    if (!timeString) return 'N/A';
+    try {
+      const [hours, minutes] = timeString.split(':');
+      const hour = parseInt(hours);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const formattedHour = hour % 12 || 12;
+      return `${formattedHour}:${minutes} ${ampm}`;
+    } catch (error) {
+      return timeString;
+    }
+  };
+
+  const renderBookingCard = ({ item: booking }: { item: any }) => {
+    const serviceImage = booking.service?.images?.[0];
+    const serviceName = booking.service?.name || 'Service';
+
+    return (
+      <TouchableOpacity
+        key={booking.id}
+        style={[styles.bookingCard, shadows.sm]}
+        onPress={() => router.push(`/seller/booking-detail/${booking.id}` as any)}
+        data-testid={`booking-card-${booking.id}`}
+      >
+        {/* Booking Header */}
+        <View style={styles.bookingHeader}>
+          <View style={styles.bookingHeaderLeft}>
+            <Text style={styles.bookingId}>Booking #{booking.id.slice(0, 8)}</Text>
+            <Text style={styles.bookingDate}>{formatDate(booking.booking_date)}</Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(booking.status) + '20' }]}>
+            <Text style={[styles.statusText, { color: getStatusColor(booking.status) }]}>
+              {booking.status?.toUpperCase().replace('_', ' ') || 'PENDING'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Service Preview with Image */}
+        <View style={styles.servicePreview}>
+          {serviceImage && (
+            <Image
+              source={{ uri: serviceImage }}
+              style={styles.serviceImage}
+              defaultSource={require('../../assets/images/placeholder.jpg')}
+            />
+          )}
+          <View style={styles.serviceInfo}>
+            <Text style={styles.serviceName} numberOfLines={2}>
+              {serviceName}
+            </Text>
+            {booking.service?.duration && (
+              <Text style={styles.serviceDuration}>
+                <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
+                {' '}{booking.service.duration} mins
+              </Text>
+            )}
+          </View>
+        </View>
+
+        {/* Booking Details */}
+        <View style={styles.bookingBody}>
+          <View style={styles.infoRow}>
+            <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
+            <Text style={styles.infoText}>{formatTime(booking.booking_time)}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
+            <Text style={styles.infoText}>{booking.customer_name || booking.customer?.name || 'N/A'}</Text>
+          </View>
+          {/* Payment Status Indicator */}
+          {booking.payment_method && (
+            <View style={[styles.infoRow, styles.paymentRow]}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+              <Text style={[styles.infoText, { color: colors.success, fontWeight: '600' }]}>Payment Received</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Booking Footer */}
+        <View style={styles.bookingFooter}>
+          <Text style={styles.bookingAmount}>₹{Number(booking.total_amount || 0).toFixed(2)}</Text>
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+        </View>
+      </TouchableOpacity>
+    );
   };
 
   return (
@@ -64,83 +170,22 @@ export default function SellerBookingsScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        {bookings.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="calendar-outline" size={80} color={colors.textSecondary} />
-            <Text style={styles.emptyTitle}>No bookings yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Service bookings from customers will appear here
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.bookingList}>
-            {bookings.map((booking) => (
-              <TouchableOpacity
-                key={booking.id}
-                style={[styles.bookingCard, shadows.sm]}
-                onPress={() => router.push(`/booking/${booking.id}` as any)}
-              >
-                <View style={styles.bookingHeader}>
-                  <View>
-                    <Text style={styles.bookingId}>Booking #{booking.id.slice(0, 8)}</Text>
-                    <Text style={styles.bookingDate}>
-                      {new Date(booking.booking_date).toLocaleDateString()}
-                    </Text>
-                  </View>
-                  <View style={[
-                    styles.statusBadge,
-                    { backgroundColor: getStatusColor(booking.status) + '20' }
-                  ]}>
-                    <Text style={[
-                      styles.statusText,
-                      { color: getStatusColor(booking.status) }
-                    ]}>
-                      {booking.status.toUpperCase()}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.bookingBody}>
-                  <View style={styles.infoRow}>
-                    <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
-                    <Text style={styles.infoText}>{booking.booking_time || 'N/A'}</Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
-                    <Text style={styles.infoText}>{booking.customer_name || 'N/A'}</Text>
-                  </View>
-                     {/* Payment Status Indicator */}
-                  {booking.payment_method && (
-                    <View style={[styles.infoRow, styles.paymentRow]}>
-                      <Ionicons 
-                        name="checkmark-circle" 
-                        size={16} 
-                        color={colors.success} 
-                      />
-                      <Text style={[styles.infoText, { color: colors.success, fontWeight: '600' }]}>
-                        Payment Received
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                <View style={styles.bookingFooter}>
-                  <Text style={styles.serviceType}>
-                    Service: {booking.service_type || 'Standard'}
-                  </Text>
-                  <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-      </ScrollView>
+      {bookings.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="calendar-outline" size={80} color={colors.textSecondary} />
+          <Text style={styles.emptyTitle}>No bookings yet</Text>
+          <Text style={styles.emptySubtitle}>Service bookings from customers will appear here</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={bookings}
+          renderItem={renderBookingCard}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.bookingList}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -167,9 +212,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   emptyState: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: spacing.xxl * 2,
     paddingHorizontal: spacing.lg,
   },
   emptyTitle: {
@@ -198,6 +243,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.md,
   },
+  bookingHeaderLeft: {
+    flex: 1,
+  },
   bookingId: {
     ...typography.body,
     color: colors.text,
@@ -217,6 +265,35 @@ const styles = StyleSheet.create({
     ...typography.caption,
     fontWeight: '600',
   },
+  servicePreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  serviceImage: {
+    width: 60,
+    height: 60,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.border,
+  },
+  serviceInfo: {
+    flex: 1,
+  },
+  serviceName: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '500',
+    marginBottom: spacing.xs / 2,
+  },
+  serviceDuration: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   bookingBody: {
     gap: spacing.sm,
     paddingVertical: spacing.md,
@@ -233,7 +310,7 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
   },
-    paymentRow: {
+  paymentRow: {
     backgroundColor: colors.success + '10',
     padding: spacing.sm,
     borderRadius: borderRadius.sm,
@@ -245,8 +322,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: spacing.md,
   },
-  serviceType: {
-    ...typography.body,
-    color: colors.text,
+  bookingAmount: {
+    ...typography.h4,
+    color: colors.primary,
+    fontWeight: '700',
   },
 });

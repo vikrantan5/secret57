@@ -267,6 +267,45 @@ export default function OrderDetailScreen() {
           </View>
         </View>
 
+
+                {/* Delivery OTP Card - Show to customer when order is delivered */}
+        {order.delivery_otp && !order.otp_verified && order.seller_status === 'delivered' && (
+          <View style={[styles.card, shadows.sm, styles.otpCard]}>
+            <View style={styles.otpHeader}>
+              <Ionicons name="key" size={28} color={colors.primary} />
+              <Text style={styles.cardTitle}>Delivery Verification OTP</Text>
+            </View>
+            <Text style={styles.otpDescription}>
+              Share this OTP with the delivery person to confirm you have received your order
+            </Text>
+            <View style={styles.otpContainer}>
+              <Text style={styles.otpText}>{order.delivery_otp}</Text>
+            </View>
+            <View style={styles.otpNote}>
+              <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
+              <Text style={styles.otpNoteText}>
+                Keep this OTP private. Only share with the delivery person upon receiving your order.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* OTP Verified Badge */}
+        {order.otp_verified && (
+          <View style={[styles.card, shadows.sm, { backgroundColor: colors.success + '10' }]}>
+            <View style={styles.verifiedBadge}>
+              <Ionicons name="checkmark-circle" size={32} color={colors.success} />
+              <View style={{ flex: 1, marginLeft: spacing.md }}>
+                <Text style={[styles.cardTitle, { color: colors.success }]}>Delivery Verified</Text>
+                <Text style={styles.verifiedText}>
+                  Your order has been successfully delivered and verified.
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+
         {/* Payment Summary */}
         <View style={[styles.card, shadows.sm]}>
           <Text style={styles.cardTitle}>Payment Summary</Text>
@@ -679,5 +718,62 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.surface,
     fontWeight: '600',
+  },
+  otpCard: {
+    backgroundColor: colors.primary + '08',
+    borderWidth: 2,
+    borderColor: colors.primary + '30',
+  },
+  otpHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  otpDescription: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
+    lineHeight: 20,
+  },
+  otpContainer: {
+    backgroundColor: colors.surface,
+    padding: spacing.xl,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.primary + '20',
+    borderStyle: 'dashed',
+    marginBottom: spacing.md,
+  },
+  otpText: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 8,
+  },
+  otpNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primary + '10',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  otpNoteText: {
+    ...typography.bodySmall,
+    color: colors.primary,
+    flex: 1,
+    lineHeight: 18,
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  verifiedText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    lineHeight: 20,
   },
 });

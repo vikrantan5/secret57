@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { supabase } from '../services/supabase';
-
 export interface Order {
   id: string;
   customer_id: string;
@@ -10,6 +9,7 @@ export interface Order {
   delivery_charges: number;
   total_amount: number;
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
+  seller_status?: 'pending' | 'processing' | 'processed' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled';
   payment_status: 'pending' | 'paid' | 'failed' | 'refunded';
   shipping_name: string;
   shipping_phone: string;
@@ -25,10 +25,17 @@ export interface Order {
   actual_delivery_date: string | null;
   tracking_number: string | null;
   cancellation_reason: string | null;
+  delivery_otp?: string | null;
+  otp_verified?: boolean;
+  otp_attempts?: number;
   created_at: string;
   updated_at: string;
+  seller_status_updated_at?: string | null;
+  seller_notes?: string | null;
   // Joined data
   order_items?: any[];
+  items?: any[];
+  timeline?: Array<{ status: string; seller_status?: string; created_at: string; notes?: string }>;
 }
 
 interface OrderState {
@@ -42,9 +49,11 @@ interface OrderState {
    fetchSellerOrders: (sellerId: string) => Promise<void>;
   createOrder: (order: Partial<Order>, items: any[]) => Promise<{ success: boolean; error?: string; order?: Order }>;
   updateOrderStatus: (id: string, status: string) => Promise<{ success: boolean; error?: string }>;
+  updateSellerStatus: (orderId: string, sellerStatus: string, notes?: string) => Promise<{ success: boolean; error?: string }>;
   updatePaymentStatus: (orderId: string, paymentData: any) => Promise<{ success: boolean; error?: string }>;
    cancelOrder: (orderId: string, reason: string) => Promise<{ success: boolean; error?: string }>;
   requestRefund: (orderId: string, reason: string) => Promise<{ success: boolean; error?: string }>;
+  verifyDeliveryOTP: (orderId: string, otp: string) => Promise<{ success: boolean; error?: string }>;
   setSelectedOrder: (order: Order | null) => void;
 }
 
@@ -411,6 +420,139 @@ export const useOrderStore = create<OrderState>((set, get) => ({
       return { success: true };
     } catch (error: any) {
       console.error('Error in requestRefund:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+   updateSellerStatus: async (orderId, sellerStatus, notes) => {
+    try {
+      set({ loading: true });
+      
+      // Generate OTP if status is 'delivered'
+      const updateData: any = {
+        seller_status: sellerStatus,
+        seller_status_updated_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (notes) {
+        updateData.seller_notes = notes;
+      }
+
+      // Generate OTP when marking as delivered
+      if (sellerStatus === 'delivered') {
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        updateData.delivery_otp = otp;
+        updateData.otp_verified = false;
+        updateData.otp_attempts = 0;
+        updateData.otp_generated_at = new Date().toISOString();
+      }
+
+      const { error } = await supabase
+        .from('orders')
+        .update(updateData)
+        .eq('id', orderId);
+
+      if (error) {
+        console.error('Error updating seller status:', error);
+        set({ loading: false });
+        return { success: false, error: error.message };
+      }
+
+      // Insert into order_timeline
+      await supabase
+        .from('order_timeline')
+        .insert([{
+          order_id: orderId,
+          seller_status: sellerStatus,
+          status: sellerStatus === 'delivered' ? 'delivered' : undefined,
+          notes: notes || `Order status updated to ${sellerStatus}`,
+          created_at: new Date().toISOString(),
+        }]);
+
+      // Update local state
+      set(state => ({
+        orders: state.orders.map(o =>
+          o.id === orderId ? { ...o, ...updateData } : o
+        ),
+        selectedOrder: state.selectedOrder?.id === orderId
+          ? { ...state.selectedOrder, ...updateData }
+          : state.selectedOrder,
+        loading: false
+      }));
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error in updateSellerStatus:', error);
+      set({ loading: false });
+      return { success: false, error: error.message };
+    }
+  },
+
+  verifyDeliveryOTP: async (orderId, otp) => {
+    try {
+      set({ loading: true, error: null });
+
+      // Fetch the order
+      const { data: order, error: fetchError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .single();
+
+      if (fetchError) throw fetchError;
+      if (!order) throw new Error('Order not found');
+
+      // Check OTP
+      if (order.delivery_otp !== otp) {
+        // Increment OTP attempts
+        await supabase
+          .from('orders')
+          .update({ otp_attempts: (order.otp_attempts || 0) + 1 })
+          .eq('id', orderId);
+
+        set({ loading: false, error: 'Invalid OTP' });
+        return { success: false, error: 'Invalid OTP. Please check and try again.' };
+      }
+
+      if (order.otp_verified) {
+        set({ loading: false });
+        return { success: false, error: 'OTP has already been verified.' };
+      }
+
+      // Verify OTP and mark order as completed
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({
+          status: 'delivered',
+          seller_status: 'delivered',
+          otp_verified: true,
+          otp_verified_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
+
+      if (updateError) throw updateError;
+
+      // Add to timeline
+      await supabase
+        .from('order_timeline')
+        .insert({
+          order_id: orderId,
+          status: 'delivered',
+          seller_status: 'delivered',
+          notes: 'Order delivered and OTP verified successfully',
+          created_at: new Date().toISOString()
+        });
+
+      // Refresh order data
+      await get().fetchOrderById(orderId);
+
+      set({ loading: false });
+      return { success: true };
+    } catch (error: any) {
+      console.error('Failed to verify OTP:', error);
+      set({ loading: false, error: error.message });
       return { success: false, error: error.message };
     }
   },
