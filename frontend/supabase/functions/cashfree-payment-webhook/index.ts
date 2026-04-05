@@ -37,22 +37,25 @@ serve(async (req) => {
     if (type === 'PAYMENT_SUCCESS_WEBHOOK' || data?.order?.order_status === 'PAID') {
       const orderData = data?.order || data;
       const cashfreeOrderId = orderData.order_id;
-      const cashfreePaymentId = orderData.cf_order_id;
+      const cashfreePaymentId = orderData.cf_payment_id || orderData.payment_id;
       const orderAmount = orderData.order_amount;
       const paymentTime = orderData.payment_time || new Date().toISOString();
 
-      console.log('✅ Payment Success - Order ID:', cashfreeOrderId);
+      console.log('✅ Payment Success - Cashfree Order ID:', cashfreeOrderId);
+      console.log('📦 Payment ID:', cashfreePaymentId);
+      console.log('💰 Amount:', orderAmount);
 
-      // Find order or booking by cashfree_order_id
+      // ✅ FIX: Find order by cashfree_order_id (which we now store during order creation)
       const { data: orders, error: orderError } = await supabase
         .from('orders')
         .select('*')
-        .or(`cashfree_order_id.eq.${cashfreeOrderId},razorpay_order_id.eq.${cashfreeOrderId}`)
+        .eq('cashfree_order_id', cashfreeOrderId)
         .limit(1);
 
       if (orders && orders.length > 0) {
         const order = orders[0];
-        console.log('📦 Found Order:', order.id);
+        console.log('📦 Found Order in Supabase:', order.id);
+        console.log('📦 Order Number:', order.order_number);
 
         // Update order payment status
         const { error: updateError } = await supabase
@@ -60,7 +63,6 @@ serve(async (req) => {
           .update({
             payment_status: 'paid',
             status: 'processing',
-            cashfree_order_id: cashfreeOrderId,
             cashfree_payment_id: cashfreePaymentId,
             updated_at: new Date().toISOString()
           })
@@ -69,22 +71,45 @@ serve(async (req) => {
         if (updateError) {
           console.error('❌ Failed to update order:', updateError);
         } else {
-          console.log('✅ Order updated successfully');
+          console.log('✅ Order payment status updated to PAID');
         }
 
-        // Update payment record
-        const { error: paymentError } = await supabase
+        // Update or create payment record
+        const { data: existingPayment } = await supabase
           .from('payments')
-          .update({
-            status: 'success',
-            cashfree_order_id: cashfreeOrderId,
-            cashfree_payment_id: cashfreePaymentId,
-            updated_at: new Date().toISOString()
-          })
-          .eq('order_id', order.id);
+          .select('id')
+          .eq('order_id', order.id)
+          .limit(1)
+          .single();
 
-        if (paymentError) {
-          console.error('❌ Failed to update payment:', paymentError);
+        if (existingPayment) {
+          // Update existing payment
+          await supabase
+            .from('payments')
+            .update({
+              status: 'success',
+              cashfree_order_id: cashfreeOrderId,
+              cashfree_payment_id: cashfreePaymentId,
+              payment_method: 'cashfree',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingPayment.id);
+          console.log('✅ Payment record updated');
+        } else {
+          // Create new payment record
+          await supabase
+            .from('payments')
+            .insert({
+              order_id: order.id,
+              user_id: order.customer_id,
+              amount: orderAmount,
+              status: 'success',
+              payment_method: 'cashfree',
+              cashfree_order_id: cashfreeOrderId,
+              cashfree_payment_id: cashfreePaymentId,
+              created_at: new Date().toISOString()
+            });
+          console.log('✅ Payment record created');
         }
 
         // Send notification to customer
@@ -95,8 +120,10 @@ serve(async (req) => {
             type: 'payment',
             title: 'Payment Successful',
             message: `Your payment of ₹${orderAmount} has been received. Order #${order.order_number} is being processed.`,
-            data: { order_id: order.id }
+            data: { order_id: order.id },
+            created_at: new Date().toISOString()
           });
+        console.log('✅ Customer notification sent');
 
         // Get order items to notify sellers
         const { data: orderItems } = await supabase
@@ -106,8 +133,9 @@ serve(async (req) => {
 
         if (orderItems && orderItems.length > 0) {
           // Notify each seller
+          const notifiedSellers = new Set();
           for (const item of orderItems) {
-            if (item.seller?.user_id) {
+            if (item.seller?.user_id && !notifiedSellers.has(item.seller.user_id)) {
               await supabase
                 .from('notifications')
                 .insert({
@@ -115,31 +143,34 @@ serve(async (req) => {
                   type: 'order',
                   title: 'New Order Received',
                   message: `You have a new order for ${item.product_name}. Order #${order.order_number}`,
-                  data: { order_id: order.id, order_item_id: item.id }
+                  data: { order_id: order.id, order_item_id: item.id },
+                  created_at: new Date().toISOString()
                 });
+              notifiedSellers.add(item.seller.user_id);
             }
           }
+          console.log(`✅ Notified ${notifiedSellers.size} seller(s)`);
         }
       }
 
-      // Check for booking
+      // ✅ FIX: Check for booking by cashfree_order_id
       const { data: bookings, error: bookingError } = await supabase
         .from('bookings')
-        .select('*, seller:sellers(id, user_id, company_name)')
+        .select('*, seller:sellers(id, user_id, company_name), service:services(name)')
         .eq('cashfree_order_id', cashfreeOrderId)
         .limit(1);
 
       if (bookings && bookings.length > 0) {
         const booking = bookings[0];
-        console.log('📅 Found Booking:', booking.id);
+        console.log('📅 Found Booking in Supabase:', booking.id);
 
-        // Update booking status
+        // Update booking status to confirmed
         const { error: updateBookingError } = await supabase
           .from('bookings')
           .update({
             status: 'confirmed',
             payment_method: 'cashfree',
-            cashfree_order_id: cashfreeOrderId,
+            cashfree_payment_id: cashfreePaymentId,
             updated_at: new Date().toISOString()
           })
           .eq('id', booking.id);
@@ -147,19 +178,55 @@ serve(async (req) => {
         if (updateBookingError) {
           console.error('❌ Failed to update booking:', updateBookingError);
         } else {
-          console.log('✅ Booking updated successfully');
+          console.log('✅ Booking status updated to CONFIRMED');
         }
 
-        // Update payment record
+        // Add booking timeline entry
         await supabase
+          .from('booking_timeline')
+          .insert({
+            booking_id: booking.id,
+            status: 'payment_received',
+            notes: 'Payment received successfully, booking confirmed',
+            created_at: new Date().toISOString()
+          });
+        console.log('✅ Booking timeline updated');
+
+        // Update or create payment record
+        const { data: existingPayment } = await supabase
           .from('payments')
-          .update({
-            status: 'success',
-            cashfree_order_id: cashfreeOrderId,
-            cashfree_payment_id: cashfreePaymentId,
-            updated_at: new Date().toISOString()
-          })
-          .eq('booking_id', booking.id);
+          .select('id')
+          .eq('booking_id', booking.id)
+          .limit(1)
+          .single();
+
+        if (existingPayment) {
+          await supabase
+            .from('payments')
+            .update({
+              status: 'success',
+              cashfree_order_id: cashfreeOrderId,
+              cashfree_payment_id: cashfreePaymentId,
+              payment_method: 'cashfree',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingPayment.id);
+          console.log('✅ Booking payment record updated');
+        } else {
+          await supabase
+            .from('payments')
+            .insert({
+              booking_id: booking.id,
+              user_id: booking.customer_id,
+              amount: orderAmount,
+              status: 'success',
+              payment_method: 'cashfree',
+              cashfree_order_id: cashfreeOrderId,
+              cashfree_payment_id: cashfreePaymentId,
+              created_at: new Date().toISOString()
+            });
+          console.log('✅ Booking payment record created');
+        }
 
         // Send notification to customer
         await supabase
@@ -168,9 +235,11 @@ serve(async (req) => {
             user_id: booking.customer_id,
             type: 'booking',
             title: 'Booking Confirmed',
-            message: `Your booking has been confirmed. Service scheduled for ${new Date(booking.booking_date).toLocaleDateString()}.`,
-            data: { booking_id: booking.id }
+            message: `Your booking has been confirmed. Service: ${booking.service?.name || 'Service'} scheduled for ${new Date(booking.booking_date).toLocaleDateString()}.`,
+            data: { booking_id: booking.id },
+            created_at: new Date().toISOString()
           });
+        console.log('✅ Customer notification sent');
 
         // Send notification to seller
         if (booking.seller?.user_id) {
@@ -180,9 +249,11 @@ serve(async (req) => {
               user_id: booking.seller.user_id,
               type: 'booking',
               title: 'New Booking Received',
-              message: `You have a new booking scheduled for ${new Date(booking.booking_date).toLocaleDateString()}.`,
-              data: { booking_id: booking.id }
+              message: `You have a new booking for ${booking.service?.name || 'Service'} scheduled for ${new Date(booking.booking_date).toLocaleDateString()}.`,
+              data: { booking_id: booking.id },
+              created_at: new Date().toISOString()
             });
+          console.log('✅ Seller notification sent');
         }
       }
 

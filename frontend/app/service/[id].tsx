@@ -201,6 +201,26 @@ const handleBookService = async () => {
     console.log('Cashfree order created successfully:', orderId);
     console.log('Payment Session ID:', paymentSessionId);
 
+
+      // ✅ FIX: Store Cashfree order ID in Supabase booking IMMEDIATELY
+    // This links the internal booking with Cashfree order so webhook can find it
+    console.log('Linking Cashfree order to Supabase booking...');
+    const { error: updateError } = await supabase
+      .from('bookings')
+      .update({
+        cashfree_order_id: orderId,
+        payment_method: 'cashfree',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', bookingId);
+
+    if (updateError) {
+      console.error('Failed to link Cashfree order to booking:', updateError);
+      throw new Error('Failed to link payment gateway. Please try again.');
+    }
+
+    console.log('✅ Cashfree order linked to Supabase booking successfully');
+
     // Step 3: Open Cashfree payment gateway
     setProcessingPayment(false);
     setShowCashfree(true);

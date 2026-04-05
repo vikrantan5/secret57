@@ -31,6 +31,18 @@ export default function OrderDetailScreen() {
       fetchOrderById(orderId);
     }
   }, [orderId]);
+   // ✅ FIX: Auto-refresh order when screen comes into focus
+  useEffect(() => {
+    const refreshTimer = setInterval(() => {
+      if (orderId && selectedOrder?.payment_status === 'pending') {
+        console.log('🔄 Auto-refreshing pending order...');
+        fetchOrderById(orderId);
+      }
+    }, 5000); // Refresh every 5 seconds if payment is pending
+
+    return () => clearInterval(refreshTimer);
+  }, [orderId, selectedOrder?.payment_status]);
+
 
   const getStatusColor = (status: string) => {
     switch (status) {

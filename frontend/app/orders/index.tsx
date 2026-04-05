@@ -30,6 +30,20 @@ export default function OrdersScreen() {
     }
   }, [user]);
 
+   // ✅ FIX: Auto-refresh orders every 10 seconds if there are pending orders
+  useEffect(() => {
+    const hasPendingOrders = orders.some(order => order.payment_status === 'pending');
+    
+    if (hasPendingOrders && user?.id) {
+      const refreshTimer = setInterval(() => {
+        console.log('🔄 Auto-refreshing orders (pending orders detected)...');
+        fetchOrders(user.id);
+      }, 10000); // Refresh every 10 seconds
+
+      return () => clearInterval(refreshTimer);
+    }
+  }, [orders, user?.id]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     if (user?.id) {

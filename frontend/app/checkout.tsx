@@ -152,6 +152,27 @@ export default function CheckoutScreen() {
       console.log('Cashfree order created successfully:', cfOrderId);
       console.log('Payment Session ID:', cfPaymentSessionId);
 
+
+
+          // ✅ FIX: Store Cashfree order ID in Supabase order IMMEDIATELY
+      // This links the internal order with Cashfree order so webhook can find it
+      console.log('Linking Cashfree order to Supabase order...');
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({
+          cashfree_order_id: cfOrderId,
+          payment_method: 'cashfree',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId);
+
+      if (updateError) {
+        console.error('Failed to link Cashfree order:', updateError);
+        throw new Error('Failed to link payment gateway. Please try again.');
+      }
+
+      console.log('✅ Cashfree order linked to Supabase order successfully');
+
       // Step 3: Open Cashfree payment gateway
       setLoading(false);
       setShowCashfree(true);
@@ -238,24 +259,19 @@ const handlePaymentSuccess = async (paymentId: string, orderId: string) => {
         // Step 4.6: Send notifications to admin and sellers
         console.log('📧 Sending notifications...');
         try {
-          // Get order details with items and sellers
-          const { data: orderWithItems, error: orderError } = await supabase
-            .from('orders')
-            .select(`
-              *,
-              order_items(
-                *,
-                seller:sellers!inner(
-                  id,
-                  company_name,
-                  user_id
-                )
-              )
-            `)
-            .eq('id', currentOrderId)
-            .single();
+          // ✅ FIX: Get order items first, then fetch seller details separately
+          const { data: orderItems, error: itemsError } = await supabase
+            .from('order_items')
+            .select('id, seller_id, product_name, quantity, price')
+            .eq('order_id', currentOrderId);
 
-          if (!orderError && orderWithItems) {
+          console.log('📦 Order items found:', orderItems?.length || 0);
+          
+          if (itemsError) {
+            console.error('❌ Error fetching order items:', itemsError);
+          }
+
+          if (orderItems && orderItems.length > 0) {
             // Notify Admin
             const { data: adminUsers } = await supabase
               .from('users')
@@ -277,23 +293,36 @@ const handlePaymentSuccess = async (paymentId: string, orderId: string) => {
               console.log('✅ Admin notified');
             }
 
-            // Notify each seller
-            const uniqueSellers = Array.from(
-              new Map(orderWithItems.order_items.map(item => [item.seller_id, item.seller])).values()
-            );
+            // Get unique seller IDs
+            const sellerIds = [...new Set(orderItems.map(item => item.seller_id).filter(Boolean))];
+            console.log('👥 Unique seller IDs:', sellerIds);
 
-            for (const seller of uniqueSellers) {
-              await supabase.from('notifications').insert({
-                user_id: seller.user_id,
-                title: '🎉 New Order Received!',
-                message: `You have a new order #${currentOrderId.substring(0, 8)}. Payment received: ₹${finalTotal}`,
-                type: 'new_order',
-                reference_id: currentOrderId,
-                reference_type: 'order',
-                created_at: new Date().toISOString(),
-              });
+            // Fetch seller details for each unique seller
+            for (const sellerId of sellerIds) {
+              const { data: seller, error: sellerError } = await supabase
+                .from('sellers')
+                .select('id, user_id, company_name')
+                .eq('id', sellerId)
+                .single();
+
+              if (!sellerError && seller && seller.user_id) {
+                await supabase.from('notifications').insert({
+                  user_id: seller.user_id,
+                  title: '🎉 New Order Received!',
+                  message: `You have a new order #${currentOrderId.substring(0, 8)}. Payment received: ₹${finalTotal}`,
+                  type: 'new_order',
+                  reference_id: currentOrderId,
+                  reference_type: 'order',
+                  created_at: new Date().toISOString(),
+                });
+                console.log(`✅ Seller ${seller.company_name} notified (user_id: ${seller.user_id})`);
+              } else {
+                console.error(`❌ Failed to notify seller ${sellerId}:`, sellerError);
+              }
             }
-            console.log(`✅ ${uniqueSellers.length} seller(s) notified`);
+            console.log(`✅ ${sellerIds.length} seller(s) notified`);
+          } else {
+            console.warn('⚠️ No order items found for order:', currentOrderId);
           }
         } catch (notifError: any) {
           console.error('❌ Notification error:', notifError);
@@ -305,6 +334,14 @@ const handlePaymentSuccess = async (paymentId: string, orderId: string) => {
 
       // Step 6: Clear cart
       clearCart();
+
+        // ✅ FIX: Refresh orders so the updated status appears immediately
+      const { fetchOrders } = require('../src/store/orderStore').useOrderStore.getState();
+      if (user?.id) {
+        await fetchOrders(user.id);
+        console.log('✅ Orders refreshed in store');
+      }
+      
       
       setLoading(false);
       setProcessingPayment(false);
