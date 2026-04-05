@@ -106,15 +106,16 @@ export const useOrderStore = create<OrderState>((set, get) => ({
     }
   },
 
-   fetchSellerOrders: async (sellerId: string) => {
+    fetchSellerOrders: async (sellerId: string) => {
     try {
       set({ loading: true, error: null });
       
+      // ✅ Fetch ALL orders (both pending and paid) for seller to track abandoned checkouts
       const { data, error } = await supabase
         .from('order_items')
         .select(`
           *,
-           order:orders(
+           order:orders!inner(
             *,
             customer:users!orders_customer_id_fkey(name, email, phone)
           )
@@ -127,6 +128,8 @@ export const useOrderStore = create<OrderState>((set, get) => ({
         set({ error: error.message, loading: false });
         return;
       }
+
+      console.log('Fetched seller order items:', data?.length);
 
       // Group by order and format
       const ordersMap = new Map();
@@ -146,13 +149,14 @@ export const useOrderStore = create<OrderState>((set, get) => ({
       });
 
       const orders = Array.from(ordersMap.values());
+      console.log('Grouped seller orders:', orders.length);
+      
       set({ orders, loading: false });
     } catch (error: any) {
       console.error('Error in fetchSellerOrders:', error);
       set({ error: error.message, loading: false });
     }
   },
-
   createOrder: async (order, items) => {
     try {
       // Generate order number
@@ -240,23 +244,44 @@ export const useOrderStore = create<OrderState>((set, get) => ({
 
   updatePaymentStatus: async (orderId, paymentData) => {
     try {
+      // ✅ Support both Razorpay and Cashfree payment methods
+      const updateData: any = {
+        payment_status: 'paid',
+        status: 'processing', // Auto-update order status to processing when payment is confirmed
+        payment_method: paymentData.method,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Add Razorpay fields if present
+      if (paymentData.razorpay_order_id) {
+        updateData.razorpay_order_id = paymentData.razorpay_order_id;
+      }
+      if (paymentData.razorpay_payment_id) {
+        updateData.razorpay_payment_id = paymentData.razorpay_payment_id;
+      }
+      if (paymentData.razorpay_signature) {
+        updateData.razorpay_signature = paymentData.razorpay_signature;
+      }
+
+      // Add Cashfree fields if present
+      if (paymentData.cashfree_order_id) {
+        updateData.razorpay_order_id = paymentData.cashfree_order_id; // Reusing razorpay_order_id column for Cashfree
+      }
+      if (paymentData.cashfree_payment_id) {
+        updateData.razorpay_payment_id = paymentData.cashfree_payment_id; // Reusing razorpay_payment_id column for Cashfree
+      }
+
       const { error } = await supabase
         .from('orders')
-        .update({
-          payment_status: 'paid',
-          status: 'processing', // Auto-update order status to processing when payment is confirmed
-          payment_method: paymentData.method,
-          razorpay_order_id: paymentData.razorpay_order_id,
-          razorpay_payment_id: paymentData.razorpay_payment_id,
-          razorpay_signature: paymentData.razorpay_signature,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', orderId);
 
       if (error) {
         console.error('Error updating payment status:', error);
         return { success: false, error: error.message };
       }
+
+      console.log('✅ Payment status updated successfully for order:', orderId);
 
       // Update local state
       set(state => ({
@@ -271,7 +296,6 @@ export const useOrderStore = create<OrderState>((set, get) => ({
       return { success: false, error: error.message };
     }
   },
-
 
     cancelOrder: async (orderId, reason) => {
     try {

@@ -333,13 +333,14 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     return get().updateBookingStatus(id, 'in_progress');
   },
 
-  updatePaymentStatus: async (id, paymentStatus, paymentId) => {
+   updatePaymentStatus: async (id, paymentStatus, paymentId) => {
     try {
       set({ loading: true });
       
-      let newStatus = 'pending'; // Default to pending (awaiting seller confirmation)
-      if (paymentStatus === 'success') {
-        newStatus = 'confirmed'; // Auto-confirm booking after successful payment
+      // ✅ FIX: Update booking status based on payment status
+      let newStatus = 'pending_payment'; // Default to pending_payment if payment not successful
+      if (paymentStatus === 'success' || paymentStatus === 'paid') {
+        newStatus = 'pending'; // Change to pending (awaiting seller confirmation) after successful payment
       } else if (paymentStatus === 'failed') {
         newStatus = 'cancelled';
       }
@@ -360,13 +361,15 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         return { success: false, error: error.message };
       }
 
+      console.log(`✅ Booking ${id} payment status updated: ${paymentStatus} -> ${newStatus}`);
+
       // Add timeline entry
       await supabase
         .from('booking_timeline')
         .insert([{
           booking_id: id,
-          status: paymentStatus === 'success' ? 'payment_received' : 'payment_failed',
-          notes: paymentStatus === 'success' ? 'Payment received successfully, booking confirmed' : 'Payment failed',
+          status: paymentStatus === 'success' || paymentStatus === 'paid' ? 'payment_received' : 'payment_failed',
+          notes: paymentStatus === 'success' || paymentStatus === 'paid' ? 'Payment received successfully, awaiting seller confirmation' : 'Payment failed',
           created_at: new Date().toISOString(),
         }]);
 

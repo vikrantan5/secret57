@@ -182,16 +182,16 @@ const handlePaymentSuccess = async (paymentId: string, orderId: string) => {
 
     const paymentStatus = verificationResult.data.payment_status || verificationResult.data.order_status;
     
-    // ✅ FIX: Accept both 'SUCCESS', 'PAID', and 'ACTIVE' as successful
-    // In test mode, status might be 'ACTIVE' or 'pending' but payment is already captured
+    // ✅ FIX: Accept 'SUCCESS', 'PAID', and 'ACTIVE' as successful
+    // Cashfree sandbox/test mode returns 'ACTIVE' for successful test payments
+    // Production returns 'PAID' for actual successful payments
     const isSuccess = paymentStatus === 'SUCCESS' || 
                       paymentStatus === 'PAID' || 
-                      paymentStatus === 'ACTIVE' ||
-                      // In test mode, even 'pending' can be considered success for order placement
-                      (paymentStatus === 'pending' && verificationResult.data.order_status === 'ACTIVE');
+                      paymentStatus === 'ACTIVE';
     
     if (!isSuccess) {
-      throw new Error(`Payment status: ${paymentStatus}`);
+      console.warn(`Payment status not successful: ${paymentStatus}`);
+      throw new Error(`Payment not confirmed. Status: ${paymentStatus}`);
     }
 
     console.log('Payment verified successfully!');
@@ -223,7 +223,7 @@ const handlePaymentSuccess = async (paymentId: string, orderId: string) => {
         const paymentData = {
           method: 'cashfree',
           cashfree_order_id: orderId,
-          cashfree_payment_id: paymentId,
+          cashfree_payment_id: paymentId || verificationResult.data.cf_payment_id,
         };
         await updatePaymentStatus(currentOrderId, paymentData);
         console.log('Order payment status updated to paid');

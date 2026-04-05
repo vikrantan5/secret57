@@ -28,7 +28,7 @@ async function generateRSASignature(clientId: string, publicKeyPem: string): Pro
   const publicKey = await crypto.subtle.importKey(
     'spki',
     binaryDer,
-    { name: 'RSA-OAEP', hash: 'SHA-256' },
+    { name: 'RSA-OAEP', hash: 'SHA-1' },  // Cashfree uses SHA-1, not SHA-256
     false,
     ['encrypt']
   );

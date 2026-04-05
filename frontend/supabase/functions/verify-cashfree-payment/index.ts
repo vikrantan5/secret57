@@ -54,7 +54,10 @@ serve(async (req) => {
     console.log('Order status:', orderData.order_status);
 
     // Check if payment is successful
-    const isSuccess = orderData.order_status === 'PAID';
+     // In test/sandbox mode, Cashfree returns 'ACTIVE' for successful payments
+    // In production, it returns 'PAID'
+    const isSuccess = orderData.order_status === 'PAID' || orderData.order_status === 'ACTIVE';
+
 
     return new Response(
       JSON.stringify({
