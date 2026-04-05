@@ -173,6 +173,21 @@ export default function EditServiceScreen() {
     );
   }
 
+
+  
+  if (!selectedService) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Ionicons name="alert-circle-outline" size={64} color={colors.error} />
+          <Text style={styles.errorText}>Service not found</Text>
+          <Button title="Go Back" onPress={() => router.back()} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -538,5 +553,12 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginTop: spacing.md,
+  },
+ errorText: {
+    ...typography.h4,
+    color: colors.error,
+    marginTop: spacing.md,
+    marginBottom: spacing.lg,
+    textAlign: 'center',
   },
 });

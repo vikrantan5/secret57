@@ -127,15 +127,15 @@ export default function SellerBookingDetailScreen() {
           <Text style={styles.cardTitle}>Customer Information</Text>
           <View style={styles.infoRow}>
             <Text style={styles.label}>Name:</Text>
-            <Text style={styles.value}>{booking.customer?.name || 'N/A'}</Text>
+            <Text style={styles.value}>{booking.customer_name || booking.customer?.name || 'N/A'}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.label}>Phone:</Text>
-            <Text style={styles.value}>{booking.customer?.phone || 'N/A'}</Text>
+            <Text style={styles.value}>{booking.customer_phone || booking.customer?.phone || 'N/A'}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.label}>Email:</Text>
-            <Text style={styles.value}>{booking.customer?.email || 'N/A'}</Text>
+            <Text style={styles.value}>{booking.customer_email || booking.customer?.email || 'N/A'}</Text>
           </View>
         </View>
 

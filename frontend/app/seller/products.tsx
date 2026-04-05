@@ -133,7 +133,7 @@ export default function SellerProductsScreen() {
                 <View style={styles.productActions}>
                   <TouchableOpacity
                     style={styles.actionButton}
-                    onPress={() => router.push(`/seller/edit-product/${product.id}` as any)}
+                       onPress={() => router.push(`/seller/products/edit?id=${product.id}` as any)}
                   >
                     <Ionicons name="create-outline" size={20} color={colors.primary} />
                   </TouchableOpacity>
