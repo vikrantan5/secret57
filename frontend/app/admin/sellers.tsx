@@ -107,6 +107,57 @@ export default function AllSellersScreen() {
     );
   };
 
+
+
+    const handleBlockSeller = async (sellerId: string, isBlocked: boolean) => {
+    Alert.prompt(
+      isBlocked ? 'Unblock Seller' : 'Block Seller',
+      isBlocked 
+        ? 'Unblocking will allow the seller to login and their listings will be visible again.' 
+        : 'Please provide a reason for blocking this seller:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: isBlocked ? 'Unblock' : 'Block',
+          onPress: async (reason?: string) => {
+            try {
+              const { data: { user } } = await supabase.auth.getUser();
+              
+              const updates: any = {
+                is_blocked: !isBlocked,
+                updated_at: new Date().toISOString()
+              };
+
+              if (!isBlocked && reason) {
+                updates.block_reason = reason;
+                updates.blocked_at = new Date().toISOString();
+                updates.blocked_by = user?.id;
+              } else if (isBlocked) {
+                updates.block_reason = null;
+                updates.blocked_at = null;
+                updates.blocked_by = null;
+              }
+
+              const { error } = await supabase
+                .from('sellers')
+                .update(updates)
+                .eq('id', sellerId);
+
+              if (error) throw error;
+              
+              Alert.alert('Success', `Seller ${isBlocked ? 'unblocked' : 'blocked'} successfully`);
+              loadSellers();
+            } catch (error: any) {
+              console.error('Block/Unblock error:', error);
+              Alert.alert('Error', error.message || `Failed to ${isBlocked ? 'unblock' : 'block'} seller`);
+            }
+          },
+        },
+      ],
+      'plain-text'
+    );
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'approved': return colors.success;
@@ -216,17 +267,37 @@ export default function AllSellersScreen() {
                   </View>
                 )}
 
-                <View style={[
-                  styles.statusBadge,
-                  { backgroundColor: getStatusColor(seller.status) + '15' }
-                ]}>
-                  <Text style={[
-                    styles.statusText,
-                    { color: getStatusColor(seller.status) }
+                <View style={styles.badgeContainer}>
+                  <View style={[
+                    styles.statusBadge,
+                    { backgroundColor: getStatusColor(seller.status) + '15' }
                   ]}>
-                    {seller.status.toUpperCase()}
-                  </Text>
+                    <Text style={[
+                      styles.statusText,
+                      { color: getStatusColor(seller.status) }
+                    ]}>
+                      {seller.status.toUpperCase()}
+                    </Text>
+                  </View>
+                  
+                  {seller.is_blocked && (
+                    <View style={[styles.statusBadge, { backgroundColor: colors.error + '15' }]}>
+                      <Ionicons name="ban" size={12} color={colors.error} />
+                      <Text style={[styles.statusText, { color: colors.error, marginLeft: 4 }]}>
+                        BLOCKED
+                      </Text>
+                    </View>
+                  )}
                 </View>
+
+                {seller.is_blocked && seller.block_reason && (
+                  <View style={styles.blockReasonContainer}>
+                    <Ionicons name="information-circle" size={16} color={colors.error} />
+                    <Text style={styles.blockReasonText}>
+                      Blocked: {seller.block_reason}
+                    </Text>
+                  </View>
+                )}
 
                 <View style={styles.infoRow}>
                   <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
@@ -254,6 +325,24 @@ export default function AllSellersScreen() {
                       onPress={() => handleStatusChange(seller.id, 'approved')}
                     >
                       <Text style={styles.actionButtonText}>Approve</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                   {seller.status === 'approved' && (
+                  <View style={styles.actions}>
+                    <TouchableOpacity
+                      style={[styles.actionButton, seller.is_blocked ? styles.approveButton : styles.blockButton]}
+                      onPress={() => handleBlockSeller(seller.id, seller.is_blocked)}
+                      data-testid={seller.is_blocked ? "unblock-seller-button" : "block-seller-button"}
+                    >
+                      <Ionicons 
+                        name={seller.is_blocked ? "checkmark-circle-outline" : "ban-outline"} 
+                        size={18} 
+                        color={colors.white} 
+                      />
+                      <Text style={styles.actionButtonText}>
+                        {seller.is_blocked ? 'Unblock Seller' : 'Block Seller'}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -407,6 +496,28 @@ statsContainer: {
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
     marginBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  blockReasonContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+    backgroundColor: colors.error + '10',
+    padding: spacing.sm,
+    borderRadius: borderRadius.sm,
+    marginBottom: spacing.sm,
+  },
+  blockReasonText: {
+    ...typography.caption,
+    color: colors.error,
+    flex: 1,
   },
   statusText: {
     ...typography.caption,
@@ -432,12 +543,18 @@ statsContainer: {
     padding: spacing.md,
     borderRadius: borderRadius.md,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.xs,
   },
   approveButton: {
     backgroundColor: colors.success,
   },
   rejectButton: {
     backgroundColor: colors.error,
+  },
+  blockButton: {
+    backgroundColor: '#EF4444',
   },
   actionButtonText: {
     ...typography.body,
