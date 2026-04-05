@@ -8,6 +8,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -85,61 +86,95 @@ export default function OrdersScreen() {
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      return date.toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+    } catch (error) {
+      return 'Invalid Date';
+    }
   };
 
-  const renderOrderCard = ({ item }: { item: Order }) => (
-    <TouchableOpacity
-      style={[styles.orderCard, shadows.sm]}
-      onPress={() => router.push(`/order/${item.id}`)}
-      data-testid={`order-card-${item.id}`}
-    >
-      <View style={styles.cardHeader}>
-        <View>
-          <Text style={styles.orderNumber}>{item.order_number}</Text>
-          <Text style={styles.orderDate}>{formatDate(item.created_at)}</Text>
-        </View>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-          <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-          </Text>
-        </View>
-      </View>
+  const renderOrderCard = ({ item }: { item: Order }) => {
+    // ✅ FIX: Get product image and details from order_items
+    const firstProductImage = item.order_items?.[0]?.product_image || item.order_items?.[0]?.product?.images?.[0];
+    const firstProductName = item.order_items?.[0]?.product_name || item.order_items?.[0]?.product?.name || 'Product';
+    const productCount = item.order_items?.length || 0;
 
-      <View style={styles.divider} />
-
-      <View style={styles.cardBody}>
-        <View style={styles.infoRow}>
-          <Ionicons name="cube" size={18} color={colors.textSecondary} />
-          <Text style={styles.infoText}>
-            {item.order_items?.length || 0} item{(item.order_items?.length || 0) !== 1 ? 's' : ''}
-          </Text>
+    return (
+      <TouchableOpacity
+        style={[styles.orderCard, shadows.sm]}
+        onPress={() => router.push(`/order/${item.id}`)}
+        data-testid={`order-card-${item.id}`}
+      >
+        {/* Order Header */}
+        <View style={styles.cardHeader}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.orderNumber}>{item.order_number}</Text>
+            <Text style={styles.orderDate}>{formatDate(item.created_at)}</Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
+            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+              {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+            </Text>
+          </View>
         </View>
-        <View style={styles.infoRow}>
-          <Ionicons 
-            name={item.payment_status === 'paid' ? 'checkmark-circle' : 'time'} 
-            size={18} 
-            color={item.payment_status === 'paid' ? colors.success : colors.warning} 
-          />
-          <Text style={styles.infoText}>
-            {item.payment_status.charAt(0).toUpperCase() + item.payment_status.slice(1)}
-          </Text>
+
+        {/* ✅ FIX: Product Preview with Image */}
+        {productCount > 0 && (
+          <View style={styles.productPreview}>
+            {firstProductImage && (
+              <Image
+                source={{ uri: firstProductImage }}
+                style={styles.productImage}
+                defaultSource={require('../../assets/images/placeholder.jpg')}
+              />
+            )}
+            <View style={styles.productInfo}>
+              <Text style={styles.productName} numberOfLines={2}>
+                {firstProductName}
+              </Text>
+              {productCount > 1 && (
+                <Text style={styles.moreItems}>+{productCount - 1} more item{productCount - 1 > 1 ? 's' : ''}</Text>
+              )}
+            </View>
+          </View>
+        )}
+
+        <View style={styles.divider} />
+
+        <View style={styles.cardBody}>
+          <View style={styles.infoRow}>
+            <Ionicons name="cube" size={18} color={colors.textSecondary} />
+            <Text style={styles.infoText}>
+              {productCount} item{productCount !== 1 ? 's' : ''}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Ionicons 
+              name={item.payment_status === 'paid' ? 'checkmark-circle' : 'time'} 
+              size={18} 
+              color={item.payment_status === 'paid' ? colors.success : colors.warning} 
+            />
+            <Text style={styles.infoText}>
+              {item.payment_status.charAt(0).toUpperCase() + item.payment_status.slice(1)}
+            </Text>
+          </View>
         </View>
-      </View>
 
-      <View style={styles.divider} />
+        <View style={styles.divider} />
 
-      <View style={styles.cardFooter}>
-        <Text style={styles.totalLabel}>Total Amount</Text>
-        <Text style={styles.totalValue}>₹{item.total_amount.toFixed(2)}</Text>
-      </View>
-    </TouchableOpacity>
-  );
+        <View style={styles.cardFooter}>
+          <Text style={styles.totalLabel}>Total Amount</Text>
+          <Text style={styles.totalValue}>₹{(item.total_amount || 0).toFixed(2)}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   if (loading && orders.length === 0) {
     return (
@@ -302,6 +337,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: spacing.md,
   },
+  headerLeft: {
+    flex: 1,
+  },
   orderNumber: {
     ...typography.body,
     color: colors.text,
@@ -320,6 +358,33 @@ const styles = StyleSheet.create({
   statusText: {
     ...typography.caption,
     fontWeight: '600',
+  },
+  productPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  productImage: {
+    width: 60,
+    height: 60,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.border,
+  },
+  productInfo: {
+    flex: 1,
+  },
+  productName: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '500',
+    marginBottom: spacing.xs / 2,
+  },
+  moreItems: {
+    ...typography.caption,
+    color: colors.textSecondary,
   },
   divider: {
     height: 1,

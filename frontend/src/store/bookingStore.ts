@@ -419,38 +419,9 @@ export const useBookingStore = create<BookingState>((set, get) => ({
           data: { booking_id: bookingId }
         });
 
-      // ✅ FIXED: Get Supabase URL correctly
-      const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://wqgafgyzcyjcmtyjlkzw.supabase.co';
-      
-      // Get session
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.access_token) {
-        try {
-          const response = await fetch(`${SUPABASE_URL}/functions/v1/create-seller-payout`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`
-            },
-            body: JSON.stringify({
-              seller_id: booking.seller_id,
-              booking_id: bookingId,
-              amount: booking.total_amount
-            })
-          });
-
-          if (!response.ok) {
-            console.error('Failed to trigger payout:', await response.text());
-          } else {
-            console.log('✅ Payout triggered successfully');
-          }
-        } catch (payoutError) {
-          console.error('Payout trigger error:', payoutError);
-        }
-      } else {
-        console.log('⚠️ No active session, skipping payout trigger');
-      }
+      // ✅ FIXED: Payout will be handled by backend database trigger or webhook
+      // Removed frontend payout trigger to prevent JWT errors
+      console.log('✅ Service completed. Payout will be processed by backend.');
 
       await get().fetchBookingById(bookingId);
 

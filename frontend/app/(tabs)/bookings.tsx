@@ -6,7 +6,7 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  Animated,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -59,26 +59,38 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking, onPress }) => {
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      return date.toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+    } catch (error) {
+      return 'Invalid Date';
+    }
   };
 
-const formatTime = (timeString?: string) => {
-  if (!timeString) return 'Time not set'; // 🛡️ fix
+  const formatTime = (timeString?: string) => {
+    if (!timeString) return 'Time not set';
 
-  const [hours, minutes] = timeString.split(':');
-  const hour = parseInt(hours);
-  const ampm = hour >= 12 ? 'PM' : 'AM';
-  const formattedHour = hour % 12 || 12;
-
-  return `${formattedHour}:${minutes} ${ampm}`;
-};
+    try {
+      const [hours, minutes] = timeString.split(':');
+      const hour = parseInt(hours);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const formattedHour = hour % 12 || 12;
+      return `${formattedHour}:${minutes} ${ampm}`;
+    } catch (error) {
+      return timeString;
+    }
+  };
 
   const statusColor = getStatusColor(booking.status);
+
+  // ✅ FIX: Get service image
+  const serviceImage = booking.service?.images?.[0];
+  const serviceName = booking.service?.name || 'Service Booking';
 
   return (
     <TouchableOpacity
@@ -106,31 +118,55 @@ const formatTime = (timeString?: string) => {
           <Text style={styles.bookingId}>#{booking.id.slice(0, 8)}</Text>
         </View>
 
-        {/* Service/Product Name */}
-        <Text style={styles.serviceName} numberOfLines={2}>
-          {booking.service?.name || 'Service Booking'}
-        </Text>
+        {/* ✅ FIX: Service Preview with Image */}
+        {serviceImage && (
+          <View style={styles.servicePreview}>
+            <Image
+              source={{ uri: serviceImage }}
+              style={styles.serviceImage}
+              defaultSource={require('../../assets/images/placeholder.jpg')}
+            />
+            <View style={styles.serviceInfo}>
+              <Text style={styles.serviceName} numberOfLines={2}>
+                {serviceName}
+              </Text>
+              {booking.service?.duration && (
+                <Text style={styles.serviceDuration}>
+                  <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
+                  {' '}{booking.service.duration} mins
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Service Name (if no image) */}
+        {!serviceImage && (
+          <Text style={styles.serviceName} numberOfLines={2}>
+            {serviceName}
+          </Text>
+        )}
 
         {/* Details Row */}
         <View style={styles.detailsRow}>
           <View style={styles.detailItem}>
             <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
-            <Text style={styles.detailText}>{formatDate(booking.service_date)}</Text>
+            <Text style={styles.detailText}>{formatDate(booking.booking_date)}</Text>
           </View>
           <View style={styles.detailItem}>
             <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
             <Text style={styles.detailText}>
-  {booking.service_time ? formatTime(booking.service_time) : 'N/A'}
-</Text>
+              {booking.booking_time ? formatTime(booking.booking_time) : 'N/A'}
+            </Text>
           </View>
         </View>
 
         {/* Location */}
-        {booking.location && (
+        {booking.address && (
           <View style={styles.locationRow}>
             <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
             <Text style={styles.locationText} numberOfLines={1}>
-              {booking.location}
+              {booking.address}
             </Text>
           </View>
         )}
@@ -139,7 +175,7 @@ const formatTime = (timeString?: string) => {
         <View style={styles.cardFooter}>
           <View style={styles.priceContainer}>
             <Text style={styles.priceLabel}>Total</Text>
-            <Text style={styles.priceValue}>₹{booking.total_price ? booking.total_price.toFixed(2) : '0.00'}</Text>
+            <Text style={styles.priceValue}>₹{(booking.total_amount || 0).toFixed(2)}</Text>
           </View>
           <View style={styles.arrowButton}>
             <Ionicons name="arrow-forward" size={20} color={colors.primary} />
@@ -408,11 +444,35 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textLight,
   },
+  servicePreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    marginBottom: spacing.sm,
+  },
+  serviceImage: {
+    width: 60,
+    height: 60,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.border,
+  },
+  serviceInfo: {
+    flex: 1,
+  },
   serviceName: {
     ...typography.h4,
     color: colors.text,
     fontWeight: '600',
     marginBottom: spacing.sm,
+  },
+  serviceDuration: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   detailsRow: {
     flexDirection: 'row',
