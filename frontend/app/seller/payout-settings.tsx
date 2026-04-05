@@ -20,7 +20,7 @@ import { Input } from '../../src/components/ui/Input';
 export default function PayoutSettingsScreen() {
   const router = useRouter();
   const { seller } = useSellerStore();
-  const { bankAccounts, payouts, fetchBankAccounts, fetchPayouts, addBankAccount, deleteBankAccount, validateIFSC, validateAccountNumber, validatePAN, loading } = useBankAccountStore();
+ const { bankAccounts, payouts, fetchBankAccounts, fetchPayouts, addBankAccount, deleteBankAccount, setPrimaryAccount, validateIFSC, validateAccountNumber, validatePAN, loading } = useBankAccountStore();
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [accountHolderName, setAccountHolderName] = useState('');
@@ -132,6 +132,32 @@ export default function PayoutSettingsScreen() {
               Alert.alert('Success', 'Bank account removed successfully');
             } else {
               Alert.alert('Error', result.error || 'Failed to delete account');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+
+
+  const handleSetPrimaryAccount = async (accountId: string, bankName: string) => {
+    if (!seller?.id) return;
+    
+    Alert.alert(
+      'Set Primary Account',
+      `Set ${bankName} as your primary payout account?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Set as Primary',
+          onPress: async () => {
+            const result = await setPrimaryAccount(accountId, seller.id);
+            if (result.success) {
+              Alert.alert('Success', 'Primary account updated successfully');
+              fetchBankAccounts(seller.id); // Refresh the list
+            } else {
+              Alert.alert('Error', result.error || 'Failed to set primary account');
             }
           },
         },
@@ -396,6 +422,18 @@ export default function PayoutSettingsScreen() {
                       </View>
                     </View>
                   </View>
+                  
+                  {/* Mark as Primary Button - Only show if not already primary */}
+                  {!account.is_primary && account.verification_status === 'verified' && (
+                    <TouchableOpacity
+                      style={styles.primaryButton}
+                      onPress={() => handleSetPrimaryAccount(account.id, account.bank_name)}
+                      data-testid="set-primary-button"
+                    >
+                      <Ionicons name="star-outline" size={18} color={colors.primary} />
+                      <Text style={styles.primaryButtonText}>Set as Primary</Text>
+                    </TouchableOpacity>
+                  )}
 
                   <TouchableOpacity
                     style={styles.deleteButton}
@@ -724,6 +762,23 @@ const styles = StyleSheet.create({
   },
   failedText: {
     color: colors.error,
+  },
+    primaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.primary + '15',
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  primaryButtonText: {
+    ...typography.body,
+    color: colors.primary,
+    fontWeight: '600',
   },
   deleteButton: {
     flexDirection: 'row',

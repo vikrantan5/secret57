@@ -1,29 +1,15 @@
-// Add Cashfree Beneficiary (Seller Bank Account)
-// Deno Edge Function
+// add-cashfree-beneficiary/index.ts - SIMPLE VERSION
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
-const CASHFREE_PAYOUT_CLIENT_ID = Deno.env.get('CASHFREE_PAYOUT_CLIENT_ID') ;
-const CASHFREE_PAYOUT_CLIENT_SECRET = Deno.env.get('CASHFREE_PAYOUT_CLIENT_SECRET') ;
-const CASHFREE_PAYOUT_API_URL = 'https://payout-gamma.cashfree.com/payout/v1'; // Sandbox
+const CASHFREE_PAYOUT_CLIENT_ID = Deno.env.get('CASHFREE_PAYOUT_CLIENT_ID');
+const CASHFREE_PAYOUT_CLIENT_SECRET = Deno.env.get('CASHFREE_PAYOUT_CLIENT_SECRET');
+const CASHFREE_PAYOUT_API_URL = 'https://payout-gamma.cashfree.com/payout/v2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-interface BeneficiaryRequest {
-  bene_id: string; // Unique beneficiary ID
-  name: string;
-  email: string;
-  phone: string;
-  bank_account: string;
-  ifsc: string;
-  address1?: string;
-  city?: string;
-  state?: string;
-  pincode?: string;
-}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -31,30 +17,35 @@ serve(async (req) => {
   }
 
   try {
-    const {
-      bene_id,
-      name,
-      email,
-      phone,
-      bank_account,
-      ifsc,
-      address1,
-      city,
-      state,
-      pincode
-    }: BeneficiaryRequest = await req.json();
+    const { bene_id, name, email, phone, bank_account, ifsc, address1, city, state, pincode } = await req.json();
 
-    // Validate required fields
-    if (!bene_id || !name || !email || !phone || !bank_account || !ifsc) {
+    console.log('Adding beneficiary:', bene_id);
+
+    // Simple auth without signature (requires IP whitelist)
+    const authResponse = await fetch(`${CASHFREE_PAYOUT_API_URL}/authorize`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Client-Id': CASHFREE_PAYOUT_CLIENT_ID!,
+        'X-Client-Secret': CASHFREE_PAYOUT_CLIENT_SECRET!
+      }
+    });
+
+    const authData = await authResponse.json();
+    console.log('Auth status:', authResponse.status);
+    console.log('Auth response:', JSON.stringify(authData, null, 2));
+
+    if (!authResponse.ok) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Missing required fields' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: authData.message || 'Auth failed' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Adding Cashfree beneficiary:', bene_id);
+    const token = authData.token || authData.data?.token;
+    console.log('Auth successful, token obtained');
 
-    // Create beneficiary payload
+    // Add beneficiary
     const beneficiaryPayload = {
       beneId: bene_id,
       name: name,
@@ -68,86 +59,46 @@ serve(async (req) => {
       pincode: pincode || '000000'
     };
 
-    // Get authorization token
-    const authResponse = await fetch(`${CASHFREE_PAYOUT_API_URL}/authorize`, {
+    console.log('Payload:', JSON.stringify(beneficiaryPayload, null, 2));
+
+    const addResponse = await fetch(`${CASHFREE_PAYOUT_API_URL}/beneficiary`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Client-Id': CASHFREE_PAYOUT_CLIENT_ID,
-        'X-Client-Secret': CASHFREE_PAYOUT_CLIENT_SECRET
-      }
-    });
-
-    const authData = await authResponse.json();
-
-    if (!authResponse.ok || authData.status !== 'SUCCESS') {
-      console.error('Failed to authorize:', authData);
-      
-      // Check if it's IP whitelist error
-      const errorMsg = authData.message || '';
-      if (errorMsg.includes('IP not whitelisted') || errorMsg.includes('ip is')) {
-        const ipMatch = errorMsg.match(/ip is (\d+\.\d+\.\d+\.\d+)/i);
-        const currentIp = ipMatch ? ipMatch[1] : 'unknown';
-        
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: `IP Whitelist Required: Please whitelist IP ${currentIp} in Cashfree Payout Dashboard (Settings → IP Whitelist)`,
-            error_type: 'ip_whitelist_required',
-            current_ip: currentIp
-          }),
-          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      return new Response(
-        JSON.stringify({ success: false, error: authData.message || 'Authorization failed' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const token = authData.data.token;
-
-    // Add beneficiary
-    const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/addBeneficiary`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${token}`,
+        'X-Client-Id': CASHFREE_PAYOUT_CLIENT_ID!
       },
       body: JSON.stringify(beneficiaryPayload)
     });
 
-    const responseData = await response.json();
+    const responseData = await addResponse.json();
+    console.log('Add beneficiary status:', addResponse.status);
+    console.log('Response:', JSON.stringify(responseData, null, 2));
 
-    if (!response.ok || responseData.status !== 'SUCCESS') {
-      console.error('Failed to add beneficiary:', responseData);
+    if (!addResponse.ok) {
       return new Response(
-        JSON.stringify({
-          success: false,
-          error: responseData.message || 'Failed to add beneficiary'
-        }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: responseData.message || 'Failed to add beneficiary' }),
+        { status: addResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     console.log('Beneficiary added successfully:', bene_id);
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        data: {
-          bene_id: responseData.data.beneId,
-          status: responseData.status,
-          message: responseData.message
-        }
+      JSON.stringify({ 
+        success: true, 
+        data: { 
+          bene_id: responseData.beneId || responseData.data?.beneId,
+          message: 'Beneficiary added successfully' 
+        } 
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
-    console.error('Error in add-cashfree-beneficiary:', error);
+    console.error('Error:', error.message);
+    console.error('Stack:', error.stack);
     return new Response(
-      JSON.stringify({ success: false, error: error.message || 'Internal server error' }),
+      JSON.stringify({ success: false, error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

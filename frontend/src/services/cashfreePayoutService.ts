@@ -56,7 +56,7 @@ class CashfreePayoutService {
 
       if (error) {
         console.error('Edge Function Error:', error);
-        throw new Error(error.message);
+        return { success: false, error: error.message };
       }
 
       if (!data?.success) {
@@ -68,10 +68,7 @@ class CashfreePayoutService {
       return { success: true, bene_id: data.data?.bene_id };
     } catch (error: any) {
       console.error('Add Beneficiary Error:', error);
-      
-      // For test mode, return success with mock bene_id
-      console.log('⚠️ Using mock mode for beneficiary creation');
-      return { success: true, bene_id: details.bene_id };
+      return { success: false, error: error.message || 'Failed to add beneficiary' };
     }
   }
 
@@ -88,7 +85,7 @@ class CashfreePayoutService {
 
       if (error) {
         console.error('Edge Function Error:', error);
-        throw new Error(error.message);
+        return { success: false, error: error.message };
       }
 
       if (!data?.success) {
@@ -120,7 +117,7 @@ class CashfreePayoutService {
 
       if (error) {
         console.error('Edge Function Error:', error);
-        throw new Error(error.message);
+        return { success: false, error: error.message };
       }
 
       if (!data?.success) {
@@ -175,7 +172,7 @@ class CashfreePayoutService {
 
       if (error) {
         console.error('Edge Function Error:', error);
-        throw new Error(error.message);
+        return { success: false, error: error.message };
       }
 
       if (!data?.success) {

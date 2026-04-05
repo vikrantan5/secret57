@@ -114,7 +114,10 @@ export const useOrderStore = create<OrderState>((set, get) => ({
         .from('order_items')
         .select(`
           *,
-          order:orders(*)
+           order:orders(
+            *,
+            customer:users!orders_customer_id_fkey(name, email, phone)
+          )
         `)
         .eq('seller_id', sellerId)
         .order('created_at', { ascending: false });
@@ -241,6 +244,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
         .from('orders')
         .update({
           payment_status: 'paid',
+          status: 'processing', // Auto-update order status to processing when payment is confirmed
           payment_method: paymentData.method,
           razorpay_order_id: paymentData.razorpay_order_id,
           razorpay_payment_id: paymentData.razorpay_payment_id,
@@ -253,6 +257,13 @@ export const useOrderStore = create<OrderState>((set, get) => ({
         console.error('Error updating payment status:', error);
         return { success: false, error: error.message };
       }
+
+      // Update local state
+      set(state => ({
+        orders: state.orders.map(o => 
+          o.id === orderId ? { ...o, payment_status: 'paid', status: 'processing' } : o
+        )
+      }));
 
       return { success: true };
     } catch (error: any) {

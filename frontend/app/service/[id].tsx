@@ -11,7 +11,7 @@ import {
   Dimensions,
   TextInput,
   Alert,
-  Platform,
+  Platform,  Linking,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -519,6 +519,69 @@ const handleBookService = async () => {
               <TouchableOpacity>
                 <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
+            </View>
+          )}
+
+            {/* Contact Seller Card - Prominent placement */}
+          {service.seller?.user && (
+            <View style={[styles.contactSellerCard, shadows.md]}>
+              <View style={styles.contactSellerHeader}>
+                <Ionicons name="chatbubbles" size={24} color={colors.primary} />
+                <View style={{ flex: 1, marginLeft: spacing.md }}>
+                  <Text style={styles.contactSellerTitle}>Have questions?</Text>
+                  <Text style={styles.contactSellerSubtitle}>
+                    Contact the service provider before booking
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.contactButtonsRow}>
+                {service.seller.user.phone && (
+                  <TouchableOpacity 
+                    style={[styles.contactMethodButton, shadows.sm]}
+                    onPress={() => {
+                      const phoneUrl = `tel:${service.seller.user.phone}`;
+                      Alert.alert(
+                        'Call Service Provider',
+                        `Do you want to call ${service.seller.user.phone}?`,
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { 
+                            text: 'Call', 
+                             onPress: () => Linking.openURL(phoneUrl)
+                          }
+                        ]
+                      );
+                    }}
+                    data-testid="service-contact-phone-button"
+                  >
+                    <Ionicons name="call" size={20} color={colors.primary} />
+                    <Text style={styles.contactMethodText}>Call</Text>
+                  </TouchableOpacity>
+                )}
+                {service.seller.user.email && (
+                  <TouchableOpacity 
+                    style={[styles.contactMethodButton, shadows.sm]}
+                    onPress={() => {
+                      const emailUrl = `mailto:${service.seller.user.email}?subject=Inquiry about ${service.name}`;
+                      Alert.alert(
+                        'Email Service Provider',
+                        `Do you want to send email to ${service.seller.user.email}?`,
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { 
+                            text: 'Email', 
+                            onPress: () => Linking.openURL(emailUrl)
+                          }
+                        ]
+                      );
+                    }}
+                    data-testid="service-contact-email-button"
+                  >
+                    <Ionicons name="mail" size={20} color={colors.primary} />
+                    <Text style={styles.contactMethodText}>Email</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           )}
 
@@ -1096,5 +1159,49 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: colors.primary,
+  },
+  contactSellerCard: {
+    backgroundColor: colors.primary + '08',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.primary + '20',
+  },
+  contactSellerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  contactSellerTitle: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '700',
+  },
+  contactSellerSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs / 2,
+  },
+  contactButtonsRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  contactMethodButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.primary + '30',
+  },
+  contactMethodText: {
+    ...typography.body,
+    color: colors.primary,
+    fontWeight: '600',
   },
 });

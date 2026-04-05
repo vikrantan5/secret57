@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
-    Platform,
+    Platform,  Linking,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -165,11 +165,7 @@ export default function BookingDetailScreen() {
                     [
                       { text: 'Cancel', style: 'cancel' },
                       { text: 'Call', onPress: () => {
-                        if (Platform.OS === 'web') {
-                          window.open(phoneUrl);
-                        } else {
-                          require('react-native').Linking.openURL(phoneUrl);
-                        }
+  Linking.openURL(phoneUrl);
                       }}
                     ]
                   );
@@ -195,11 +191,7 @@ export default function BookingDetailScreen() {
                     [
                       { text: 'Cancel', style: 'cancel' },
                       { text: 'Email', onPress: () => {
-                        if (Platform.OS === 'web') {
-                          window.open(emailUrl);
-                        } else {
-                          require('react-native').Linking.openURL(emailUrl);
-                        }
+                       Linking.openURL(emailUrl);
                       }}
                     ]
                   );

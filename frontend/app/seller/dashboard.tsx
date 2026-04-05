@@ -425,6 +425,25 @@ export default function SellerDashboard() {
                 <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
 
+
+
+              <TouchableOpacity
+                style={[styles.actionCard, shadows.sm]}
+                onPress={() => router.push('/seller/services/edit' as any)}
+                data-testid="edit-service-button"
+              >
+                <View style={[styles.actionIcon, { backgroundColor: '#8B5CF6' + '15' }]}>
+                  <Ionicons name="add-circle" size={28} color="#8B5CF6" />
+                </View>
+                <View style={styles.actionContent}>
+                  <Text style={styles.actionTitle}>Edit Service Package</Text>
+                  <Text style={styles.actionSubtitle}>Update your existing service offering</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+
+
               <TouchableOpacity
                 style={[styles.actionCard, shadows.sm]}
                 onPress={() => router.push('/seller/bookings' as any)}

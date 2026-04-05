@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   SafeAreaView,
   ActivityIndicator,
+    RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,12 +19,33 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { notifications, unreadCount, loading, fetchNotifications, markAsRead, markAllAsRead } = useNotificationStore();
+   const [refreshing, setRefreshing] = useState(false);
+
 
   useEffect(() => {
     if (user?.id) {
       fetchNotifications(user.id);
     }
   }, [user]);
+
+
+   // Polling for new notifications every 30 seconds
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const interval = setInterval(() => {
+      fetchNotifications(user.id);
+    }, 30000); // Poll every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [user?.id]);
+
+  const onRefresh = async () => {
+    if (!user?.id) return;
+    setRefreshing(true);
+    await fetchNotifications(user.id);
+    setRefreshing(false);
+  };
 
   const handleNotificationPress = async (notification: any) => {
     if (!notification.is_read) {
@@ -164,6 +186,15 @@ export default function NotificationsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
+
+             refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
+            />
+          }
         />
       )}
     </SafeAreaView>

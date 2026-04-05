@@ -140,7 +140,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         .select(`
           *,
           service:services(*),
-          customer:users(name, email, phone)
+           customer:users!bookings_customer_id_fkey(name, email, phone)
         `)
         .eq('seller_id', sellerId)
         .order('booking_date', { ascending: false });
@@ -337,9 +337,9 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     try {
       set({ loading: true });
       
-      let newStatus = 'pending';
+      let newStatus = 'pending'; // Default to pending (awaiting seller confirmation)
       if (paymentStatus === 'success') {
-        newStatus = 'pending'; // Waiting for seller confirmation
+        newStatus = 'confirmed'; // Auto-confirm booking after successful payment
       } else if (paymentStatus === 'failed') {
         newStatus = 'cancelled';
       }
@@ -366,7 +366,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         .insert([{
           booking_id: id,
           status: paymentStatus === 'success' ? 'payment_received' : 'payment_failed',
-          notes: paymentStatus === 'success' ? 'Payment received successfully' : 'Payment failed',
+          notes: paymentStatus === 'success' ? 'Payment received successfully, booking confirmed' : 'Payment failed',
           created_at: new Date().toISOString(),
         }]);
 
