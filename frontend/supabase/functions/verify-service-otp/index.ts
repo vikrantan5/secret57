@@ -90,6 +90,7 @@ serve(async (req) => {
         otp_verified_at: new Date().toISOString(),
         otp_verified_by: user_id,
         status: 'completed',
+            payment_status: 'paid', // Ensure payment_status is set
         payout_status: 'processing'
       })
       .eq('id', booking_id);

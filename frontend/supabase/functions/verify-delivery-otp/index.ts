@@ -92,6 +92,7 @@ serve(async (req) => {
         otp_verified_at: new Date().toISOString(),
         delivery_verified_by: user_id,
         status: 'delivered',
+         payment_status: 'paid', // Ensure payment_status is set
         actual_delivery_date: new Date().toISOString(),
         payout_status: 'processing'
       })
