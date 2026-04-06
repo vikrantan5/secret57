@@ -142,7 +142,7 @@ const handleBookService = async () => {
   setProcessingPayment(true);
 
   try {
-    // Step 1: Create booking
+     // Step 1: Create booking with customer information
     const result = await createBooking({
       customer_id: user.id,
       seller_id: selectedService?.seller_id,
@@ -160,7 +160,6 @@ const handleBookService = async () => {
       customer_email: user.email || '',
       customer_phone: user.phone || '',
     });
-
     if (!result.success || !result.booking) {
       throw new Error(result.error || 'Failed to create booking');
     }

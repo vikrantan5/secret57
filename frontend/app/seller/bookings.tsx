@@ -240,7 +240,7 @@ export default function SellerBookingsScreen() {
               >
                 <Ionicons name="person-outline" size={14} color="#a78bfa" />
               </LinearGradient>
-              <Text style={styles.infoText}>{booking.customer_name || booking.customer?.name || 'N/A'}</Text>
+               <Text style={styles.infoText}>{booking.customer_name || 'N/A'}</Text>
             </View>
             
             {/* Payment Status Indicator */}

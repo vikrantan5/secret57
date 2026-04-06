@@ -28,6 +28,9 @@ export interface Booking {
   payout_status?: string;
   status: 'pending_payment' | 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'rejected';
   cancellation_reason: string | null;
+  customer_name?: string;
+  customer_email?: string;
+  customer_phone?: string;
   created_at: string;
   updated_at: string;
   // Joined data
@@ -96,7 +99,8 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   fetchBookingById: async (id: string) => {
     try {
       set({ loading: true, error: null });
-      
+       // Fetch booking with service and seller info
+      // Customer info is stored directly in bookings table (denormalized)
       const { data: bookingData, error: bookingError } = await supabase
         .from('bookings')
         .select(`
@@ -105,8 +109,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
           seller:sellers(
             *,
              user:users!sellers_user_id_fkey(name, email, phone, avatar_url)
-          ),
-          customer:users!bookings_customer_id_fkey(id, name, email, phone, avatar_url)
+        )
         `)
         .eq('id', id)
         .single();
@@ -137,13 +140,13 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   fetchSellerBookings: async (sellerId: string) => {
     try {
       set({ loading: true, error: null });
-      
+       // Select customer info directly from bookings table (denormalized)
+      // This avoids RLS issues with joining users table
       const { data, error } = await supabase
         .from('bookings')
         .select(`
           *,
-          service:services(*),
-          customer:users!bookings_customer_id_fkey(name, email, phone)
+          service:services(*)
         `)
         .eq('seller_id', sellerId)
         .order('booking_date', { ascending: false });
@@ -154,14 +157,9 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         return;
       }
 
-      const bookingsWithCustomer = data?.map(booking => ({
-        ...booking,
-        customer_name: booking.customer?.name || 'N/A',
-        customer_email: booking.customer?.email || '',
-        customer_phone: booking.customer?.phone || '',
-      })) || [];
-
-      set({ bookings: bookingsWithCustomer, loading: false });
+      // Customer data is now stored directly in bookings table
+      // No need to map from joined customer data
+      set({ bookings: data || [], loading: false });
     } catch (error: any) {
       console.error('Error in fetchSellerBookings:', error);
       set({ error: error.message, loading: false });
