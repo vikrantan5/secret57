@@ -7,8 +7,8 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const CASHFREE_PAYOUT_CLIENT_ID = Deno.env.get('CASHFREE_PAYOUT_CLIENT_ID');
 const CASHFREE_PAYOUT_CLIENT_SECRET = Deno.env.get('CASHFREE_PAYOUT_CLIENT_SECRET');
-const CASHFREE_PUBLIC_KEY = Deno.env.get('CASHFREE_PUBLIC_KEY');
-const CASHFREE_PAYOUT_API_URL = 'https://payout-gamma.cashfree.com/payout/v1';
+const CASHFREE_PAYOUT_API_URL = 'https://payout-api.cashfree.com/payout';
+const CASHFREE_API_VERSION = '2024-01-01';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,82 +20,10 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 // Configuration - ZERO commission (subscription-only model)
 const PLATFORM_COMMISSION_RATE = 0.00; // 0% - Sellers pay subscription, not commission
-const HOLD_PERIOD_DAYS = 7; // 7-day escrow hold period
+const HOLD_PERIOD_DAYS = 0; // 7-day escrow hold period
 
 /**
- * Generate RSA signature for Cashfree authentication
- */
-async function generateRSASignature(clientId: string, publicKeyPem: string): Promise<string> {
-  const timestamp = Math.floor(Date.now() / 1000);
-  const message = `${clientId}.${timestamp}`;
-  
-  const pemContents = publicKeyPem
-    .replace(/-----BEGIN PUBLIC KEY-----/g, '')
-    .replace(/-----END PUBLIC KEY-----/g, '')
-    .replace(/\s/g, '');
-
-  const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
-
-  const publicKey = await crypto.subtle.importKey(
-    'spki',
-    binaryDer,
-    { name: 'RSA-OAEP', hash: 'SHA-1' },  // Cashfree uses SHA-1, not SHA-256
-    false,
-    ['encrypt']
-  );
-
-  const encoder = new TextEncoder();
-  const messageData = encoder.encode(message);
-
-  const encryptedData = await crypto.subtle.encrypt(
-    { name: 'RSA-OAEP' },
-    publicKey,
-    messageData
-  );
-
-  return btoa(String.fromCharCode(...new Uint8Array(encryptedData)));
-}
-
-/**
- * Get Bearer Token from Cashfree Authorize API
- */
-async function getBearerToken(): Promise<{ success: boolean; token?: string; error?: string }> {
-  try {
-    if (!CASHFREE_PAYOUT_CLIENT_ID || !CASHFREE_PAYOUT_CLIENT_SECRET || !CASHFREE_PUBLIC_KEY) {
-      return { success: false, error: 'Cashfree credentials not configured' };
-    }
-
-    console.log('🔑 Getting Bearer token from Cashfree...');
-
-    const signature = await generateRSASignature(CASHFREE_PAYOUT_CLIENT_ID, CASHFREE_PUBLIC_KEY);
-
-    const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/authorize`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Client-Id': CASHFREE_PAYOUT_CLIENT_ID,
-        'X-Client-Secret': CASHFREE_PAYOUT_CLIENT_SECRET,
-        'X-Cf-Signature': signature
-      }
-    });
-
-    const data = await response.json();
-
-    if (response.ok && data.status === 'SUCCESS' && data.data?.token) {
-      console.log('✅ Bearer token obtained successfully');
-      return { success: true, token: data.data.token };
-    }
-
-    console.error('❌ Failed to get Bearer token:', data);
-    return { success: false, error: data.message || 'Failed to get authorization token' };
-  } catch (error: any) {
-    console.error('❌ Exception in getBearerToken:', error.message);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Create Cashfree transfer (Bearer Token Auth)
+ * Create Cashfree transfer using v2 API (Direct Auth)
  */
 async function createCashfreeTransfer(
   beneId: string,
@@ -108,55 +36,61 @@ async function createCashfreeTransfer(
       return { success: false, error: 'Cashfree credentials not configured' };
     }
 
-    // Get Bearer Token
-    const authResult = await getBearerToken();
-    if (!authResult.success || !authResult.token) {
-      return { success: false, error: authResult.error || 'Failed to get authorization token' };
-    }
-
-    console.log('✅ Using Bearer token for transfer authentication');
+    console.log('🔑 Using Cashfree Payout API v2 with direct authentication');
 
     const transferPayload = {
-      beneId: beneId,
-      amount: amount.toString(),
-      transferId: transferId,
-      transferMode: 'banktransfer',
+      transfer_id: transferId,
+      transfer_amount: amount,
+      beneficiary_details: {
+        beneficiary_id: beneId
+      },
+      transfer_mode: 'banktransfer',
       remarks: remarks
     };
 
-    const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/requestTransfer`, {
+    console.log('📤 Transfer payload:', JSON.stringify(transferPayload, null, 2));
+
+    const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/transfers`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authResult.token}`
+        'x-api-version': CASHFREE_API_VERSION,
+        'x-client-id': CASHFREE_PAYOUT_CLIENT_ID,
+        'x-client-secret': CASHFREE_PAYOUT_CLIENT_SECRET
       },
       body: JSON.stringify(transferPayload)
     });
 
     const responseData = await response.json();
 
-    if (response.ok && responseData.status === 'SUCCESS') {
+    console.log('📥 Cashfree response:', JSON.stringify(responseData, null, 2));
+
+    // v2 API returns data directly without status wrapper
+    if (response.ok && responseData.data) {
       return {
         success: true,
         data: {
-          transferId: responseData.data?.transferId,
-          referenceId: responseData.data?.referenceId,
-          utr: responseData.data?.utr,
-          status: responseData.data?.status
+          transferId: responseData.data.transfer_id,
+          referenceId: responseData.data.cf_transfer_id,
+          utr: responseData.data.utr || null,
+          status: responseData.data.transfer_status
         }
       };
     }
 
+    // Handle error response
+    const errorMessage = responseData.message || responseData.error?.message || 'Failed to create transfer';
+    console.error('❌ Transfer failed:', errorMessage);
+    
     return {
       success: false,
-      error: responseData.message || 'Failed to create transfer'
+      error: errorMessage
     };
   } catch (error: any) {
-    console.error('Transfer error:', error.message);
+    console.error('❌ Transfer exception:', error.message);
     return { success: false, error: error.message };
   }
 }
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -193,7 +127,8 @@ serve(async (req) => {
             id,
             company_name,
             user_id,
-            users(email, phone)
+            users!sellers_user_id_fkey(email, phone)
+          ),
           ),
           product:products(name, price),
           order:orders!inner(
@@ -254,7 +189,7 @@ serve(async (req) => {
             id,
             company_name,
             user_id,
-            users(email, phone)
+           users!sellers_user_id_fkey(email, phone)
           ),
           service:services(name, price)
         `)
@@ -405,6 +340,7 @@ serve(async (req) => {
           status: 'processing',
           payment_method: 'cashfree_payout',
           transaction_reference: transferId,
+            cashfree_bene_id: bankAccount.cashfree_bene_id,
           notes: trigger_type === 'immediate' 
             ? `INSTANT PAYOUT (OTP verified) - ${group.type}` 
             : `${group.type} payout`,
@@ -440,7 +376,9 @@ serve(async (req) => {
           .update({
             status: 'completed',
             processed_at: new Date().toISOString(),
-            transaction_reference: transferResult.data?.referenceId || transferId
+             transaction_reference: transferResult.data?.referenceId || transferId,
+            cashfree_transfer_id: transferResult.data?.transferId || null,
+            cashfree_reference_id: transferResult.data?.referenceId || null
           })
           .eq('id', payout.id);
 
