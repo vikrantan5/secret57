@@ -562,7 +562,7 @@ export default function BookingDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#ffffff',
   },
   loadingContainer: {
     flex: 1,

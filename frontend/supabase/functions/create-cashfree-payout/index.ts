@@ -94,10 +94,10 @@ serve(async (req) => {
 
     console.log('Creating Cashfree payout transfer:', transfer_id);
 
-    // Calculate platform fee (e.g., 5%)
-    const platformFeePercentage = 0.05; // 5%
-    const platformFee = Math.round(amount * platformFeePercentage * 100) / 100;
-    const netAmount = Math.round((amount - platformFee) * 100) / 100;
+      // Calculate platform fee - ZERO for subscription-only model
+    const platformFeePercentage = 0.00; // 0% - Sellers pay subscription fees instead
+    const platformFee = 0;
+    const netAmount = amount; // 100% to seller
 
     // Create transfer request
     const transferPayload = {

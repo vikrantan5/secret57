@@ -18,9 +18,9 @@ const corsHeaders = {
 // Initialize Supabase client
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-// Configuration
-const PLATFORM_COMMISSION_RATE = 0.10; // 10%
-const HOLD_PERIOD_DAYS = 7;
+// Configuration - ZERO commission (subscription-only model)
+const PLATFORM_COMMISSION_RATE = 0.00; // 0% - Sellers pay subscription, not commission
+const HOLD_PERIOD_DAYS = 7; // 7-day escrow hold period
 
 /**
  * Generate RSA signature for Cashfree authentication
@@ -163,80 +163,127 @@ serve(async (req) => {
   }
 
   try {
-    const { order_id, trigger_type } = await req.json();
+    const { order_id, booking_id, trigger_type } = await req.json();
 
     console.log('=== Auto-Payout Trigger ===');
     console.log('Order ID:', order_id);
+    console.log('Booking ID:', booking_id);
     console.log('Trigger Type:', trigger_type);
 
-    if (!order_id) {
+    if (!order_id && !booking_id) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Order ID is required' }),
+        JSON.stringify({ success: false, error: 'Order ID or Booking ID is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Fetch order with items and seller details
-    const { data: orderItems, error: orderError } = await supabase
-      .from('order_items')
-      .select(`
-        *,
-        seller:sellers!inner(
-          id,
-          business_name,
-          users(email, phone)
-        ),
-        product:products(name, price),
-        order:orders!inner(
-          id,
-          order_number,
-          payment_status,
-          status,
-          actual_delivery_date,
-          created_at,
-          total_amount
-        )
-      `)
-      .eq('order_id', order_id)
-      .eq('order.payment_status', 'paid');
+    // Handle either ORDER or BOOKING
+    let sellerGroups = new Map();
+    let payoutResults = [];
 
-    if (orderError || !orderItems || orderItems.length === 0) {
-      console.log('No eligible order items found for payout');
+    // PROCESS ORDER (Products - Delivery OTP)
+    if (order_id) {
+      const { data: orderItems, error: orderError } = await supabase
+        .from('order_items')
+        .select(`
+          *,
+          seller:sellers!inner(
+            id,
+            company_name,
+            user_id,
+            users(email, phone)
+          ),
+          product:products(name, price),
+          order:orders!inner(
+            id,
+            order_number,
+            payment_status,
+            status,
+            actual_delivery_date,
+            created_at,
+            total_amount
+          )
+        `)
+        .eq('order_id', order_id)
+        .eq('order.payment_status', 'paid');
+
+      if (!orderError && orderItems && orderItems.length > 0) {
+        // Group items by seller
+        for (const item of orderItems) {
+          const sellerId = item.seller_id;
+          if (!sellerGroups.has(sellerId)) {
+            sellerGroups.set(sellerId, {
+              seller: item.seller,
+              items: [],
+              totalAmount: 0,
+              type: 'order',
+              order_id: order_id
+            });
+          }
+          const group = sellerGroups.get(sellerId);
+          group.items.push(item);
+          group.totalAmount += item.total_price || item.total || 0;
+        }
+      }
+    }
+
+    // PROCESS BOOKING (Services - Completion OTP)
+    if (booking_id) {
+      const { data: booking, error: bookingError } = await supabase
+        .from('bookings')
+        .select(`
+          *,
+          seller:sellers!inner(
+            id,
+            company_name,
+            user_id,
+            users(email, phone)
+          ),
+          service:services(name, price)
+        `)
+        .eq('id', booking_id)
+        .eq('payment_status', 'paid')
+        .single();
+
+      if (!bookingError && booking) {
+        const sellerId = booking.seller_id;
+        if (!sellerGroups.has(sellerId)) {
+          sellerGroups.set(sellerId, {
+            seller: booking.seller,
+            items: [booking],
+            totalAmount: booking.total_amount || 0,
+            type: 'booking',
+            booking_id: booking_id
+          });
+        }
+      }
+    }
+
+    if (sellerGroups.size === 0) {
+      console.log('No eligible items found for payout');
       return new Response(
-        JSON.stringify({ success: false, error: 'Order not found or not paid' }),
+        JSON.stringify({ success: false, error: 'No paid orders or bookings found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Group items by seller
-    const sellerGroups = new Map();
-    for (const item of orderItems) {
-      const sellerId = item.seller_id;
-      if (!sellerGroups.has(sellerId)) {
-        sellerGroups.set(sellerId, {
-          seller: item.seller,
-          items: [],
-          totalAmount: 0
-        });
-      }
-      const group = sellerGroups.get(sellerId);
-      group.items.push(item);
-      group.totalAmount += item.total_price;
-    }
-
-    const payoutResults = [];
-
-    // Process payout for each seller
+      // Process payout for each seller
     for (const [sellerId, group] of sellerGroups) {
-      console.log(`Processing payout for seller: ${sellerId}`);
+      console.log(`Processing ${group.type} payout for seller: ${sellerId}`);
 
-      // Check hold period (skip for immediate trigger type)
-      if (trigger_type !== 'immediate') {
-        const deliveryDate = new Date(orderItems[0].order.actual_delivery_date || orderItems[0].order.created_at);
-        const daysSinceDelivery = (Date.now() - deliveryDate.getTime()) / (1000 * 60 * 60 * 24);
+      // INSTANT PAYOUT: Skip hold period check for 'immediate' trigger type (OTP verified)
+      if (trigger_type === 'immediate') {
+        console.log(`⚡ INSTANT PAYOUT: Skipping hold period for seller ${sellerId} (OTP verified)`);
+      } else {
+        // For non-immediate triggers, check hold period
+        const referenceDate = group.type === 'order' 
+          ? new Date(group.items[0].order?.actual_delivery_date || group.items[0].order?.created_at)
+          : new Date(group.items[0].booking_date || group.items[0].created_at);
         
-        if (daysSinceDelivery < HOLD_PERIOD_DAYS) {
-          console.log(`Hold period not met for seller ${sellerId} (${daysSinceDelivery.toFixed(1)} days)`);
+        const daysSince = (Date.now() - referenceDate.getTime()) / (1000 * 60 * 60 * 24);
+        
+        if (daysSince < HOLD_PERIOD_DAYS) {
+          console.log(`Hold period not met for seller ${sellerId} (${daysSince.toFixed(1)} days)`);
           payoutResults.push({
             seller_id: sellerId,
             success: false,
@@ -265,10 +312,10 @@ serve(async (req) => {
         continue;
       }
 
-      // Calculate payout amount
+      // Calculate payout amount - NO COMMISSION (subscription model)
       const grossAmount = group.totalAmount;
-      const commission = grossAmount * PLATFORM_COMMISSION_RATE;
-      const netAmount = grossAmount - commission;
+      const commission = 0; // No commission - sellers pay subscription instead
+      const netAmount = grossAmount; // 100% to seller
 
       // Check minimum payout amount
       if (netAmount < 1) {
@@ -291,12 +338,17 @@ serve(async (req) => {
           seller_id: sellerId,
           bank_account_id: bankAccount.id,
           amount: netAmount,
-          order_ids: [order_id],
-          booking_ids: [],
+          platform_fee: 0, // ZERO commission
+          net_amount: netAmount,
+          order_ids: group.type === 'order' ? [group.order_id] : [],
+          booking_ids: group.type === 'booking' ? [group.booking_id] : [],
           status: 'processing',
           payment_method: 'cashfree_payout',
           transaction_reference: transferId,
-          notes: `Order ${orderItems[0].order.order_number} - Commission: ₹${commission.toFixed(2)}`
+          notes: trigger_type === 'immediate' 
+            ? `INSTANT PAYOUT (OTP verified) - ${group.type}` 
+            : `${group.type} payout`,
+          created_at: new Date().toISOString()
         })
         .select()
         .single();
@@ -316,7 +368,9 @@ serve(async (req) => {
         bankAccount.cashfree_bene_id,
         Math.round(netAmount * 100) / 100,
         transferId,
-        `Payout for order ${orderItems[0].order.order_number}`
+        trigger_type === 'immediate' 
+          ? `INSTANT PAYOUT - ${group.type} (OTP verified)`
+          : `Payout for ${group.type}`
       );
 
       if (transferResult.success) {
@@ -360,8 +414,11 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        data: {
-          order_id: order_id,
+               data: {
+          order_id: order_id || null,
+          booking_id: booking_id || null,
+          trigger_type: trigger_type || 'manual',
+          instant_payout: trigger_type === 'immediate',
           payouts: payoutResults,
           total_sellers: sellerGroups.size,
           successful_payouts: payoutResults.filter(p => p.success).length
