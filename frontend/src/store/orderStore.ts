@@ -428,7 +428,66 @@ export const useOrderStore = create<OrderState>((set, get) => ({
     try {
       set({ loading: true });
       
-   
+      // ✅ STEP 1: Generate OTP FIRST if marking as delivered
+      let generatedOTP: string | null = null;
+      
+      if (sellerStatus === 'delivered') {
+        console.log('🔐 Generating delivery OTP via edge function BEFORE updating status...');
+        
+        try {
+          // Use service role key for better authentication
+          const serviceRoleKey = process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
+          
+          const response = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/generate-otp`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${serviceRoleKey}`
+            },
+            body: JSON.stringify({
+              type: 'order',
+              id: orderId
+            })
+          });
+
+          console.log('OTP Generation Response Status:', response.status);
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ OTP API Error Response:', errorText);
+            set({ loading: false });
+            return { 
+              success: false, 
+              error: `Failed to generate OTP: ${response.status} - ${errorText}` 
+            };
+          }
+
+          const otpResult = await response.json();
+          console.log('OTP Generation Result:', JSON.stringify(otpResult, null, 2));
+
+          if (otpResult.success && otpResult.otp) {
+            generatedOTP = otpResult.otp;
+            console.log('✅ Delivery OTP generated successfully:', generatedOTP);
+          } else {
+            console.error('❌ Failed to generate delivery OTP:', otpResult.error || 'Unknown error');
+            set({ loading: false });
+            return { 
+              success: false, 
+              error: 'Failed to generate delivery OTP: ' + (otpResult.error || 'No OTP returned') 
+            };
+          }
+        } catch (otpError: any) {
+          console.error('❌ Exception generating delivery OTP:', otpError);
+          console.error('Error stack:', otpError.stack);
+          set({ loading: false });
+          return { 
+            success: false, 
+            error: 'Failed to generate delivery OTP: ' + (otpError.message || 'Network error') 
+          };
+        }
+      }
+
+      // ✅ STEP 2: Now update the order status
       const updateData: any = {
         seller_status: sellerStatus,
         seller_status_updated_at: new Date().toISOString(),
@@ -439,7 +498,8 @@ export const useOrderStore = create<OrderState>((set, get) => ({
         updateData.seller_notes = notes;
       }
 
-    
+      // If OTP was generated, it's already in the database (edge function did it)
+      // No need to add it here
 
       const { error } = await supabase
         .from('orders')
@@ -463,52 +523,18 @@ export const useOrderStore = create<OrderState>((set, get) => ({
           created_at: new Date().toISOString(),
         }]);
 
-
-
-           // ✅ CRITICAL FIX: Generate OTP via edge function when marking as delivered
-      if (sellerStatus === 'delivered') {
-        console.log('🔐 Generating delivery OTP via edge function...');
-        
-        try {
-          const response = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/generate-otp`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-            },
-            body: JSON.stringify({
-              type: 'order',
-              id: orderId
-            })
-          });
-
-          const otpResult = await response.json();
-
-          if (otpResult.success) {
-            console.log('✅ Delivery OTP generated and sent to customer:', otpResult.otp);
-            // Update local state with OTP info
-            updateData.delivery_otp = otpResult.otp;
-            updateData.otp_generated_at = new Date().toISOString();
-          } else {
-            console.error('❌ Failed to generate delivery OTP:', otpResult.error);
-            set({ loading: false });
-            return { success: false, error: 'Failed to generate delivery OTP: ' + otpResult.error };
-          }
-        } catch (otpError: any) {
-          console.error('❌ Exception generating delivery OTP:', otpError.message);
-          set({ loading: false });
-          return { success: false, error: 'Failed to generate delivery OTP: ' + otpError.message };
-        }
+      console.log('✅ Seller status updated to:', sellerStatus);
+      if (generatedOTP) {
+        console.log('✅ OTP sent to customer:', generatedOTP);
       }
 
-
-      // Update local state
+      // Update local state (OTP is already in DB from edge function)
       set(state => ({
         orders: state.orders.map(o =>
-          o.id === orderId ? { ...o, ...updateData } : o
+          o.id === orderId ? { ...o, ...updateData, delivery_otp: generatedOTP || o.delivery_otp } : o
         ),
         selectedOrder: state.selectedOrder?.id === orderId
-          ? { ...state.selectedOrder, ...updateData }
+          ? { ...state.selectedOrder, ...updateData, delivery_otp: generatedOTP || state.selectedOrder.delivery_otp }
           : state.selectedOrder,
         loading: false
       }));
