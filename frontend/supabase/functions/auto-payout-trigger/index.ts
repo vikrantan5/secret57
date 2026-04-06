@@ -1,4 +1,6 @@
 // supabase/functions/auto-payout-trigger/index.ts
+// FIXED VERSION v3 - Direct authentication without token/signature
+// For Cashfree Payout API with cfsk credentials
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
@@ -7,78 +9,23 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const CASHFREE_PAYOUT_CLIENT_ID = Deno.env.get('CASHFREE_PAYOUT_CLIENT_ID');
 const CASHFREE_PAYOUT_CLIENT_SECRET = Deno.env.get('CASHFREE_PAYOUT_CLIENT_SECRET');
-// Use SANDBOX API URL - credentials with \"test\" are for sandbox environment
-const CASHFREE_PAYOUT_API_URL = 'https://payout-gamma.cashfree.com/payout/v1';
-const CASHFREE_API_VERSION = '2024-01-01';
+
+// Try BOTH API endpoints - v1 and Standard
+const CASHFREE_API_V1 = 'https://payout-gamma.cashfree.com/payout/v1';
+const CASHFREE_API_STANDARD = 'https://payout-gamma.cashfree.com/payout/v1.2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Initialize Supabase client
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-// Configuration - ZERO commission (subscription-only model)
-const PLATFORM_COMMISSION_RATE = 0.00; // 0% - Sellers pay subscription, not commission
-const HOLD_PERIOD_DAYS = 0; // 7-day escrow hold period
-
-
-
-// Cache for Cashfree authorization token
-let cachedToken: string | null = null;
-let tokenExpiryTime: number = 0;
+const PLATFORM_COMMISSION_RATE = 0.00;
+const HOLD_PERIOD_DAYS = 0;
 
 /**
- * Get Cashfree authorization token
- * Token is valid for 5 minutes, we cache it for 4 minutes
- */
-async function getCashfreeToken(): Promise<{ success: boolean; token?: string; error?: string }> {
-  try {
-    // Return cached token if still valid
-    if (cachedToken && Date.now() < tokenExpiryTime) {
-      console.log('🔑 Using cached Cashfree token');
-      return { success: true, token: cachedToken };
-    }
-
-    if (!CASHFREE_PAYOUT_CLIENT_ID || !CASHFREE_PAYOUT_CLIENT_SECRET) {
-      return { success: false, error: 'Cashfree credentials not configured' };
-    }
-
-    console.log('🔑 Requesting new Cashfree authorization token...');
-
-    const authResponse = await fetch(`${CASHFREE_PAYOUT_API_URL}/authorize`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Client-Id': CASHFREE_PAYOUT_CLIENT_ID,
-        'X-Client-Secret': CASHFREE_PAYOUT_CLIENT_SECRET
-      }
-    });
-
-    const authData = await authResponse.json();
-
-    console.log('🔑 Auth response:', JSON.stringify(authData, null, 2));
-
-    if (authData.status === 'SUCCESS' && authData.data?.token) {
-      cachedToken = authData.data.token;
-      // Cache token for 4 minutes (token is valid for 5 minutes)
-      tokenExpiryTime = Date.now() + (4 * 60 * 1000);
-      console.log('✅ Authorization token obtained');
-      return { success: true, token: cachedToken };
-    }
-
-    const errorMessage = authData.message || 'Failed to get authorization token';
-    console.error('❌ Authorization failed:', errorMessage);
-    return { success: false, error: errorMessage };
-  } catch (error: any) {
-    console.error('❌ Authorization exception:', error.message);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Create Cashfree transfer using v1 API with Token Authorization
+ * Create Cashfree transfer - Try multiple API versions
  */
 async function createCashfreeTransfer(
   beneId: string,
@@ -87,42 +34,43 @@ async function createCashfreeTransfer(
   remarks: string
 ): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
-    // Step 1: Get authorization token
-    const tokenResult = await getCashfreeToken();
-    if (!tokenResult.success || !tokenResult.token) {
-      return { success: false, error: tokenResult.error || 'Failed to get authorization token' };
+    if (!CASHFREE_PAYOUT_CLIENT_ID || !CASHFREE_PAYOUT_CLIENT_SECRET) {
+      return { success: false, error: 'Cashfree credentials not configured' };
     }
 
-    console.log('🔑 Using Cashfree Payout API v1 (SANDBOX) with token auth');
-    console.log('🔑 API URL:', CASHFREE_PAYOUT_API_URL);
+    console.log('💸 Creating Cashfree transfer');
+    console.log('💸 Beneficiary ID:', beneId);
+    console.log('💸 Amount:', amount);
+    console.log('💸 Transfer ID:', transferId);
 
-    // V1 API uses different payload structure
-    const transferPayload = {
+    // METHOD 1: Try Standard API v1.2 with direct credentials
+    console.log('🔄 Trying Standard API v1.2...');
+    
+    const payload = {
       beneId: beneId,
-      amount: amount.toString(),
+      amount: amount.toFixed(2),
       transferId: transferId,
+      transferMode: 'banktransfer',
       remarks: remarks
     };
 
-    console.log('📤 Transfer payload:', JSON.stringify(transferPayload, null, 2));
+    console.log('📤 Payload:', JSON.stringify(payload, null, 2));
 
-    // Step 2: Make transfer request with token
-    const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/requestTransfer`, {
+    const response1 = await fetch(`${CASHFREE_API_STANDARD}/requestTransfer`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${tokenResult.token}`
+        'X-Client-Id': CASHFREE_PAYOUT_CLIENT_ID,
+        'X-Client-Secret': CASHFREE_PAYOUT_CLIENT_SECRET,
       },
-      body: JSON.stringify(transferPayload)
+      body: JSON.stringify(payload)
     });
-    const responseData = await response.json();
 
-    console.log('📥 Cashfree HTTP status:', response.status);
-    console.log('📥 Cashfree response:', JSON.stringify(responseData, null, 2));
+    const responseData1 = await response1.json();
+    console.log('📥 v1.2 Response:', JSON.stringify(responseData1, null, 2));
 
-    // v1 API returns { status: 'SUCCESS', subCode: '200', message: '...', data: { transfer: {...} } }
-    if (responseData.status === 'SUCCESS' && responseData.data?.transfer) {
-      const transfer = responseData.data.transfer;
+    if (responseData1.status === 'SUCCESS' || responseData1.status === 'success') {
+      const transfer = responseData1.data?.transfer || responseData1.data;
       return {
         success: true,
         data: {
@@ -134,20 +82,74 @@ async function createCashfreeTransfer(
       };
     }
 
-    // Handle error response
-    const errorMessage = responseData.message || responseData.subCode || 'Failed to create transfer';
-    console.error('❌ Transfer failed:', errorMessage);
-    console.error('❌ Full error response:', JSON.stringify(responseData, null, 2));
+    // METHOD 2: Try v1 API
+    console.log('🔄 v1.2 failed, trying v1 API...');
+    
+    const response2 = await fetch(`${CASHFREE_API_V1}/requestTransfer`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Client-Id': CASHFREE_PAYOUT_CLIENT_ID,
+        'X-Client-Secret': CASHFREE_PAYOUT_CLIENT_SECRET,
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const responseData2 = await response2.json();
+    console.log('📥 v1 Response:', JSON.stringify(responseData2, null, 2));
+
+    if (responseData2.status === 'SUCCESS' || responseData2.status === 'success') {
+      const transfer = responseData2.data?.transfer || responseData2.data;
+      return {
+        success: true,
+        data: {
+          transferId: transfer.transferId || transferId,
+          referenceId: transfer.referenceId || transfer.utr,
+          utr: transfer.utr || null,
+          status: transfer.status || 'SUCCESS'
+        }
+      };
+    }
+
+    // METHOD 3: Try with addBeneficiary endpoint (if beneficiary doesn't exist)
+    if (responseData2.message?.includes('Beneficiary') || responseData2.message?.includes('beneficiary')) {
+      console.log('⚠️ Beneficiary issue detected, checking if bene exists...');
+      
+      const getBeneResponse = await fetch(`${CASHFREE_API_STANDARD}/getBeneficiary/${beneId}`, {
+        method: 'GET',
+        headers: {
+          'X-Client-Id': CASHFREE_PAYOUT_CLIENT_ID,
+          'X-Client-Secret': CASHFREE_PAYOUT_CLIENT_SECRET,
+        }
+      });
+
+      const beneData = await getBeneResponse.json();
+      console.log('📥 Beneficiary check:', JSON.stringify(beneData, null, 2));
+
+      if (beneData.status === 'ERROR') {
+        return {
+          success: false,
+          error: `Beneficiary not found in Cashfree. Please add bank account first. BeneID: ${beneId}`
+        };
+      }
+    }
+
+    // All methods failed
+    const errorMessage = responseData2.message || responseData1.message || 'Failed to create transfer';
+    console.error('❌ All API methods failed');
+    console.error('❌ Error:', errorMessage);
     
     return {
       success: false,
-      error: errorMessage
+      error: `${errorMessage} | v1.2 error: ${responseData1.message} | v1 error: ${responseData2.message}`
     };
+
   } catch (error: any) {
     console.error('❌ Transfer exception:', error.message);
     return { success: false, error: error.message };
   }
 }
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -168,11 +170,10 @@ serve(async (req) => {
       );
     }
 
-    // Handle either ORDER or BOOKING
     let sellerGroups = new Map();
     let payoutResults = [];
 
-     // PROCESS ORDER (Products - Delivery OTP)
+    // PROCESS ORDER
     if (order_id) {
       console.log('🔍 Fetching order:', order_id);
       
@@ -184,7 +185,7 @@ serve(async (req) => {
             id,
             company_name,
             user_id,
-           seller_user:users!sellers_user_id_fkey(email, phone)
+            seller_user:users!sellers_user_id_fkey(email, phone)
           ),
           product:products(name, price),
           order:orders!inner(
@@ -206,13 +207,10 @@ serve(async (req) => {
       } else {
         console.log('✅ Order items found:', orderItems.length);
         
-        // Group items by seller - only include if order is paid and delivered
         for (const item of orderItems) {
           const order = item.order;
           const isPaid = order?.payment_status === 'paid';
           const isDelivered = order?.status === 'delivered' || order?.status === 'completed';
-          
-          console.log(`Order ${order?.order_number}: paid=${isPaid}, delivered=${isDelivered}`);
           
           if (isPaid && isDelivered) {
             const sellerId = item.seller_id;
@@ -222,18 +220,20 @@ serve(async (req) => {
                 items: [],
                 totalAmount: 0,
                 type: 'order',
-                order_id: order_id
+                order_id: order_id,
+                cashfree_bene_id: item.cashfree_bene_id,
+                seller_bank_account_id: item.seller_bank_account_id
               });
             }
             const group = sellerGroups.get(sellerId);
             group.items.push(item);
-            group.totalAmount += item.total_price || item.total || 0;
+            group.totalAmount += item.seller_payout_amount || item.total_price || item.total || 0;
           }
         }
       }
     }
 
-     // PROCESS BOOKING (Services - Completion OTP)
+    // PROCESS BOOKING
     if (booking_id) {
       console.log('🔍 Fetching booking:', booking_id);
       
@@ -257,12 +257,11 @@ serve(async (req) => {
       } else if (!booking) {
         console.error('❌ Booking not found');
       } else {
-           console.log('✅ Booking found:', booking.id);
+        console.log('✅ Booking found:', booking.id);
         console.log('Payment status:', booking.payment_status);
-        console.log('Status:', booking.status);
         console.log('OTP Verified:', booking.otp_verified);
+        console.log('Stored Cashfree Bene ID:', booking.cashfree_bene_id);
         
-        // Check if booking is PAID AND completed/otp_verified
         const isPaid = booking.payment_status === 'paid';
         const isCompleted = booking.status === 'completed' || booking.otp_verified === true;
         
@@ -273,13 +272,15 @@ serve(async (req) => {
             sellerGroups.set(sellerId, {
               seller: booking.seller,
               items: [booking],
-              totalAmount: booking.total_amount || 0,
+              totalAmount: booking.seller_payout_amount || booking.total_amount || 0,
               type: 'booking',
-              booking_id: booking_id
+              booking_id: booking_id,
+              cashfree_bene_id: booking.cashfree_bene_id,
+              seller_bank_account_id: booking.seller_bank_account_id
             });
           }
         } else {
-            console.log('❌ Booking not eligible:', { isPaid, isCompleted, payment_status: booking.payment_status });
+          console.log('❌ Booking not eligible:', { isPaid, isCompleted });
         }
       }
     }
@@ -292,85 +293,59 @@ serve(async (req) => {
       );
     }
 
-      // Process payout for each seller
+    // Process payout for each seller
     for (const [sellerId, group] of sellerGroups) {
       console.log(`Processing ${group.type} payout for seller: ${sellerId}`);
 
-      // INSTANT PAYOUT: Skip hold period check for 'immediate' trigger type (OTP verified)
       if (trigger_type === 'immediate') {
-        console.log(`⚡ INSTANT PAYOUT: Skipping hold period for seller ${sellerId} (OTP verified)`);
-      } else {
-        // For non-immediate triggers, check hold period
-        const referenceDate = group.type === 'order' 
-          ? new Date(group.items[0].order?.actual_delivery_date || group.items[0].order?.created_at)
-          : new Date(group.items[0].booking_date || group.items[0].created_at);
+        console.log(`⚡ INSTANT PAYOUT: Skipping hold period (OTP verified)`);
+      }
+
+      // Get beneficiary ID
+      let cashfree_bene_id = group.cashfree_bene_id;
+      let bank_account_id = group.seller_bank_account_id;
+
+      if (!cashfree_bene_id) {
+        console.log(`🏦 Fetching bank account for seller: ${sellerId} (fallback)`);
         
-        const daysSince = (Date.now() - referenceDate.getTime()) / (1000 * 60 * 60 * 24);
-        
-        if (daysSince < HOLD_PERIOD_DAYS) {
-          console.log(`Hold period not met for seller ${sellerId} (${daysSince.toFixed(1)} days)`);
+        const { data: bankAccounts, error: bankError } = await supabase
+          .from('seller_bank_accounts')
+          .select('*')
+          .eq('seller_id', sellerId)
+          .eq('is_primary', true)
+          .eq('verification_status', 'verified');
+
+        if (bankError || !bankAccounts || bankAccounts.length === 0) {
+          console.error(`❌ No verified bank account for seller ${sellerId}`);
           payoutResults.push({
             seller_id: sellerId,
             success: false,
-            error: `Hold period not met (${HOLD_PERIOD_DAYS} days required)`
+            error: 'No verified bank account found'
           });
           continue;
         }
+
+        const bankAccount = bankAccounts[0];
+        cashfree_bene_id = bankAccount.cashfree_bene_id;
+        bank_account_id = bankAccount.id;
+      } else {
+        console.log(`✅ Using stored beneficiary ID: ${cashfree_bene_id}`);
       }
 
-      // Get seller's primary bank account
-      console.log(`🏦 Fetching bank account for seller: ${sellerId}`);
-      
-      const { data: bankAccounts, error: bankError } = await supabase
-        .from('seller_bank_accounts')
-        .select('*')
-        .eq('seller_id', sellerId)
-        .eq('is_primary', true)
-        .eq('verification_status', 'verified');
-
-      if (bankError) {
-        console.error(`❌ Bank account query error for seller ${sellerId}:`, bankError);
-        payoutResults.push({
-          seller_id: sellerId,
-          success: false,
-          error: 'Error fetching bank account'
-        });
-        continue;
-      }
-
-      if (!bankAccounts || bankAccounts.length === 0) {
-        console.error(`❌ No verified bank account for seller ${sellerId}`);
-        payoutResults.push({
-          seller_id: sellerId,
-          success: false,
-          error: 'No verified bank account found'
-        });
-        continue;
-      }
-
-      // Take the first verified primary account
-      const bankAccount = bankAccounts[0];
-      
-      if (!bankAccount.cashfree_bene_id) {
+      if (!cashfree_bene_id) {
         console.error(`❌ Missing cashfree_bene_id for seller ${sellerId}`);
         payoutResults.push({
           seller_id: sellerId,
           success: false,
-          error: 'Bank account missing Cashfree beneficiary ID'
+          error: 'Missing Cashfree beneficiary ID'
         });
         continue;
       }
 
-      console.log(`✅ Bank account found: ${bankAccount.cashfree_bene_id}`);
-
-      // Calculate payout amount - NO COMMISSION (subscription model)
       const grossAmount = group.totalAmount;
-      const commission = 0; // No commission - sellers pay subscription instead
-      const netAmount = grossAmount; // 100% to seller
+      const netAmount = grossAmount;
 
-      // Check minimum payout amount
       if (netAmount < 1) {
-        console.log(`Payout amount too low for seller ${sellerId}: ₹${netAmount}`);
         payoutResults.push({
           seller_id: sellerId,
           success: false,
@@ -379,24 +354,23 @@ serve(async (req) => {
         continue;
       }
 
-      // Generate unique transfer ID
       const transferId = `PAYOUT_${sellerId.substring(0, 8)}_${Date.now()}`;
 
-      // Create payout record in database
+      // Create payout record
       const { data: payout, error: payoutError } = await supabase
         .from('payouts')
         .insert({
           seller_id: sellerId,
-          bank_account_id: bankAccount.id,
+          bank_account_id: bank_account_id,
           amount: netAmount,
-          platform_fee: 0, // ZERO commission
+          platform_fee: 0,
           net_amount: netAmount,
           order_ids: group.type === 'order' ? [group.order_id] : [],
           booking_ids: group.type === 'booking' ? [group.booking_id] : [],
           status: 'processing',
           payment_method: 'cashfree_payout',
           transaction_reference: transferId,
-            cashfree_bene_id: bankAccount.cashfree_bene_id,
+          cashfree_bene_id: cashfree_bene_id,
           notes: trigger_type === 'immediate' 
             ? `INSTANT PAYOUT (OTP verified) - ${group.type}` 
             : `${group.type} payout`,
@@ -406,7 +380,7 @@ serve(async (req) => {
         .single();
 
       if (payoutError) {
-        console.error(`Failed to create payout record for seller ${sellerId}:`, payoutError);
+        console.error(`Failed to create payout record:`, payoutError);
         payoutResults.push({
           seller_id: sellerId,
           success: false,
@@ -417,8 +391,8 @@ serve(async (req) => {
 
       // Initiate Cashfree transfer
       const transferResult = await createCashfreeTransfer(
-        bankAccount.cashfree_bene_id,
-        Math.round(netAmount * 100) / 100,
+        cashfree_bene_id,
+        netAmount,
         transferId,
         trigger_type === 'immediate' 
           ? `INSTANT PAYOUT - ${group.type} (OTP verified)`
@@ -426,20 +400,17 @@ serve(async (req) => {
       );
 
       if (transferResult.success) {
-        // Update payout status to completed
         await supabase
           .from('payouts')
           .update({
             status: 'completed',
             processed_at: new Date().toISOString(),
-             transaction_reference: transferResult.data?.referenceId || transferId,
+            transaction_reference: transferResult.data?.referenceId || transferId,
             cashfree_transfer_id: transferResult.data?.transferId || null,
             cashfree_reference_id: transferResult.data?.referenceId || null
           })
           .eq('id', payout.id);
 
-
-               // Update booking/order payout_status to completed
         if (group.type === 'booking') {
           await supabase
             .from('bookings')
@@ -452,7 +423,7 @@ serve(async (req) => {
             .eq('id', group.order_id);
         }
 
-        console.log(`✅ Payout successful for seller ${sellerId}: ₹${netAmount}`);
+        console.log(`✅ Payout successful: ₹${netAmount}`);
         payoutResults.push({
           seller_id: sellerId,
           success: true,
@@ -461,7 +432,6 @@ serve(async (req) => {
           utr: transferResult.data?.utr
         });
       } else {
-        // Mark payout as failed
         await supabase
           .from('payouts')
           .update({
@@ -470,8 +440,6 @@ serve(async (req) => {
           })
           .eq('id', payout.id);
 
-
-                // Update booking/order payout_status to failed
         if (group.type === 'booking') {
           await supabase
             .from('bookings')
@@ -484,7 +452,7 @@ serve(async (req) => {
             .eq('id', group.order_id);
         }
 
-        console.error(`❌ Payout failed for seller ${sellerId}:`, transferResult.error);
+        console.error(`❌ Payout failed:`, transferResult.error);
         payoutResults.push({
           seller_id: sellerId,
           success: false,
@@ -496,7 +464,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-               data: {
+        data: {
           order_id: order_id || null,
           booking_id: booking_id || null,
           trigger_type: trigger_type || 'manual',
@@ -510,8 +478,7 @@ serve(async (req) => {
     );
 
   } catch (error: any) {
-    console.error('❌ Exception in auto-payout-trigger:', error.message);
-    console.error('Stack:', error.stack);
+    console.error('❌ Exception:', error.message);
     return new Response(
       JSON.stringify({
         success: false,
