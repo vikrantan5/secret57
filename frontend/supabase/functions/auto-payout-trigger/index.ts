@@ -181,8 +181,10 @@ serve(async (req) => {
     let sellerGroups = new Map();
     let payoutResults = [];
 
-    // PROCESS ORDER (Products - Delivery OTP)
+     // PROCESS ORDER (Products - Delivery OTP)
     if (order_id) {
+      console.log('🔍 Fetching order:', order_id);
+      
       const { data: orderItems, error: orderError } = await supabase
         .from('order_items')
         .select(`
@@ -204,31 +206,46 @@ serve(async (req) => {
             total_amount
           )
         `)
-        .eq('order_id', order_id)
-        .eq('order.payment_status', 'paid');
+        .eq('order_id', order_id);
 
-      if (!orderError && orderItems && orderItems.length > 0) {
-        // Group items by seller
+      if (orderError) {
+        console.error('❌ Error fetching order items:', orderError);
+      } else if (!orderItems || orderItems.length === 0) {
+        console.error('❌ No order items found');
+      } else {
+        console.log('✅ Order items found:', orderItems.length);
+        
+        // Group items by seller - only include if order is paid and delivered
         for (const item of orderItems) {
-          const sellerId = item.seller_id;
-          if (!sellerGroups.has(sellerId)) {
-            sellerGroups.set(sellerId, {
-              seller: item.seller,
-              items: [],
-              totalAmount: 0,
-              type: 'order',
-              order_id: order_id
-            });
+          const order = item.order;
+          const isPaid = order?.payment_status === 'paid';
+          const isDelivered = order?.status === 'delivered' || order?.status === 'completed';
+          
+          console.log(`Order ${order?.order_number}: paid=${isPaid}, delivered=${isDelivered}`);
+          
+          if (isPaid && isDelivered) {
+            const sellerId = item.seller_id;
+            if (!sellerGroups.has(sellerId)) {
+              sellerGroups.set(sellerId, {
+                seller: item.seller,
+                items: [],
+                totalAmount: 0,
+                type: 'order',
+                order_id: order_id
+              });
+            }
+            const group = sellerGroups.get(sellerId);
+            group.items.push(item);
+            group.totalAmount += item.total_price || item.total || 0;
           }
-          const group = sellerGroups.get(sellerId);
-          group.items.push(item);
-          group.totalAmount += item.total_price || item.total || 0;
         }
       }
     }
 
-    // PROCESS BOOKING (Services - Completion OTP)
+     // PROCESS BOOKING (Services - Completion OTP)
     if (booking_id) {
+      console.log('🔍 Fetching booking:', booking_id);
+      
       const { data: booking, error: bookingError } = await supabase
         .from('bookings')
         .select(`
@@ -242,19 +259,36 @@ serve(async (req) => {
           service:services(name, price)
         `)
         .eq('id', booking_id)
-        .eq('payment_status', 'paid')
         .single();
 
-      if (!bookingError && booking) {
-        const sellerId = booking.seller_id;
-        if (!sellerGroups.has(sellerId)) {
-          sellerGroups.set(sellerId, {
-            seller: booking.seller,
-            items: [booking],
-            totalAmount: booking.total_amount || 0,
-            type: 'booking',
-            booking_id: booking_id
-          });
+      if (bookingError) {
+        console.error('❌ Error fetching booking:', bookingError);
+      } else if (!booking) {
+        console.error('❌ Booking not found');
+      } else {
+        console.log('✅ Booking found:', booking.id);
+        console.log('Payment method:', booking.payment_method);
+        console.log('Status:', booking.status);
+        console.log('OTP Verified:', booking.otp_verified);
+        
+        // Check if booking has payment AND is completed/otp_verified
+        const hasPayment = booking.payment_method || booking.cashfree_order_id || booking.payment_id;
+        const isCompleted = booking.status === 'completed' || booking.otp_verified;
+        
+        if (hasPayment && isCompleted) {
+          console.log('✅ Booking eligible for payout');
+          const sellerId = booking.seller_id;
+          if (!sellerGroups.has(sellerId)) {
+            sellerGroups.set(sellerId, {
+              seller: booking.seller,
+              items: [booking],
+              totalAmount: booking.total_amount || 0,
+              type: 'booking',
+              booking_id: booking_id
+            });
+          }
+        } else {
+          console.log('❌ Booking not eligible:', { hasPayment, isCompleted });
         }
       }
     }
@@ -294,16 +328,27 @@ serve(async (req) => {
       }
 
       // Get seller's primary bank account
-      const { data: bankAccount, error: bankError } = await supabase
+      console.log(`🏦 Fetching bank account for seller: ${sellerId}`);
+      
+      const { data: bankAccounts, error: bankError } = await supabase
         .from('seller_bank_accounts')
         .select('*')
         .eq('seller_id', sellerId)
         .eq('is_primary', true)
-        .eq('verification_status', 'verified')
-        .single();
+        .eq('verification_status', 'verified');
 
-      if (bankError || !bankAccount || !bankAccount.cashfree_bene_id) {
-        console.error(`No verified bank account for seller ${sellerId}`);
+      if (bankError) {
+        console.error(`❌ Bank account query error for seller ${sellerId}:`, bankError);
+        payoutResults.push({
+          seller_id: sellerId,
+          success: false,
+          error: 'Error fetching bank account'
+        });
+        continue;
+      }
+
+      if (!bankAccounts || bankAccounts.length === 0) {
+        console.error(`❌ No verified bank account for seller ${sellerId}`);
         payoutResults.push({
           seller_id: sellerId,
           success: false,
@@ -311,6 +356,21 @@ serve(async (req) => {
         });
         continue;
       }
+
+      // Take the first verified primary account
+      const bankAccount = bankAccounts[0];
+      
+      if (!bankAccount.cashfree_bene_id) {
+        console.error(`❌ Missing cashfree_bene_id for seller ${sellerId}`);
+        payoutResults.push({
+          seller_id: sellerId,
+          success: false,
+          error: 'Bank account missing Cashfree beneficiary ID'
+        });
+        continue;
+      }
+
+      console.log(`✅ Bank account found: ${bankAccount.cashfree_bene_id}`);
 
       // Calculate payout amount - NO COMMISSION (subscription model)
       const grossAmount = group.totalAmount;
