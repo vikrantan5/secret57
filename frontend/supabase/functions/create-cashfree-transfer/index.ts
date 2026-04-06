@@ -1,4 +1,4 @@
-// Cashfree Payout API v1 - Create Transfer (Fixed: Bearer Token with RSA Signature)
+// Cashfree Payout API v1 - Create Transfer (Bearer Token with RSA Signature)
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const CASHFREE_PAYOUT_CLIENT_ID = Deno.env.get('CASHFREE_PAYOUT_CLIENT_ID');
@@ -20,36 +20,58 @@ interface TransferRequest {
 
 /**
  * Generate RSA signature for Cashfree authentication
+ * Format: RSA-OAEP encrypt(client_id.timestamp, public_key) → base64
  */
 async function generateRSASignature(clientId: string, publicKeyPem: string): Promise<string> {
-  const timestamp = Math.floor(Date.now() / 1000);
-  const message = `${clientId}.${timestamp}`;
-  
-  const pemContents = publicKeyPem
-    .replace(/-----BEGIN PUBLIC KEY-----/g, '')
-    .replace(/-----END PUBLIC KEY-----/g, '')
-    .replace(/\s/g, '');
+  try {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const message = `${clientId}.${timestamp}`;
+    
+    console.log('🔐 Generating RSA signature for:', message);
 
-  const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+    // Remove PEM headers/footers and whitespace
+    const pemContents = publicKeyPem
+      .replace(/-----BEGIN PUBLIC KEY-----/g, '')
+      .replace(/-----END PUBLIC KEY-----/g, '')
+      .replace(/\s/g, '');
 
-  const publicKey = await crypto.subtle.importKey(
-    'spki',
-    binaryDer,
-    { name: 'RSA-OAEP', hash: 'SHA-1' },  // Cashfree uses SHA-1, not SHA-256
-    false,
-    ['encrypt']
-  );
+    // Decode base64 to binary
+    const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
 
-  const encoder = new TextEncoder();
-  const messageData = encoder.encode(message);
+    // Import the RSA public key (using SHA-1 for OAEP, matching Cashfree's implementation)
+    const publicKey = await crypto.subtle.importKey(
+      'spki',
+      binaryDer,
+      {
+        name: 'RSA-OAEP',
+        hash: 'SHA-1'  // Cashfree uses SHA-1
+      },
+      false,
+      ['encrypt']
+    );
 
-  const encryptedData = await crypto.subtle.encrypt(
-    { name: 'RSA-OAEP' },
-    publicKey,
-    messageData
-  );
+    // Encode message to Uint8Array
+    const encoder = new TextEncoder();
+    const messageData = encoder.encode(message);
 
-  return btoa(String.fromCharCode(...new Uint8Array(encryptedData)));
+    // Encrypt with RSA-OAEP
+    const encryptedData = await crypto.subtle.encrypt(
+      {
+        name: 'RSA-OAEP'
+      },
+      publicKey,
+      messageData
+    );
+
+    // Convert to base64
+    const base64Signature = btoa(String.fromCharCode(...new Uint8Array(encryptedData)));
+    
+    console.log('✅ RSA signature generated successfully');
+    return base64Signature;
+  } catch (error: any) {
+    console.error('❌ RSA signature generation failed:', error.message);
+    throw new Error(`Failed to generate RSA signature: ${error.message}`);
+  }
 }
 
 /**
@@ -57,10 +79,17 @@ async function generateRSASignature(clientId: string, publicKeyPem: string): Pro
  */
 async function getBearerToken(): Promise<{ success: boolean; token?: string; error?: string }> {
   try {
-    if (!CASHFREE_PAYOUT_CLIENT_ID || !CASHFREE_PAYOUT_CLIENT_SECRET || !CASHFREE_PUBLIC_KEY) {
+    if (!CASHFREE_PAYOUT_CLIENT_ID || !CASHFREE_PAYOUT_CLIENT_SECRET) {
       return { success: false, error: 'Cashfree credentials not configured' };
     }
 
+    if (!CASHFREE_PUBLIC_KEY) {
+      return { success: false, error: 'Cashfree public key not configured' };
+    }
+
+    console.log('🔑 Getting Bearer token from Cashfree...');
+
+    // Generate RSA signature
     const signature = await generateRSASignature(CASHFREE_PAYOUT_CLIENT_ID, CASHFREE_PUBLIC_KEY);
 
     const response = await fetch(`${CASHFREE_PAYOUT_API_URL}/authorize`, {
@@ -74,13 +103,17 @@ async function getBearerToken(): Promise<{ success: boolean; token?: string; err
     });
 
     const data = await response.json();
+    console.log('📥 Authorize Response:', JSON.stringify(data, null, 2));
 
     if (response.ok && data.status === 'SUCCESS' && data.data?.token) {
+      console.log('✅ Bearer token obtained successfully');
       return { success: true, token: data.data.token };
     }
 
+    console.error('❌ Failed to get Bearer token:', data);
     return { success: false, error: data.message || 'Failed to get authorization token' };
   } catch (error: any) {
+    console.error('❌ Exception in getBearerToken:', error.message);
     return { success: false, error: error.message };
   }
 }

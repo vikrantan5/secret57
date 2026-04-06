@@ -1,6 +1,5 @@
 // supabase/functions/auto-payout-trigger/index.ts
-// FIXED VERSION v3 - Direct authentication without token/signature
-// For Cashfree Payout API with cfsk credentials
+// VERSION v5 - Cashfree Payout API V2 (using X-Cf-Signature authentication)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
@@ -9,10 +8,11 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const CASHFREE_PAYOUT_CLIENT_ID = Deno.env.get('CASHFREE_PAYOUT_CLIENT_ID');
 const CASHFREE_PAYOUT_CLIENT_SECRET = Deno.env.get('CASHFREE_PAYOUT_CLIENT_SECRET');
+const CASHFREE_PUBLIC_KEY = Deno.env.get('CASHFREE_PUBLIC_KEY');
 
-// Try BOTH API endpoints - v1 and Standard
-const CASHFREE_API_V1 = 'https://payout-gamma.cashfree.com/payout/v1';
-const CASHFREE_API_STANDARD = 'https://payout-gamma.cashfree.com/payout/v1.2';
+// Cashfree Payout API v2 endpoints
+const CASHFREE_API_BASE = 'https://sandbox.cashfree.com/payout';
+const CASHFREE_API_VERSION = '2024-01-01';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,10 +22,66 @@ const corsHeaders = {
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const PLATFORM_COMMISSION_RATE = 0.00;
-const HOLD_PERIOD_DAYS = 0;
 
 /**
- * Create Cashfree transfer - Try multiple API versions
+ * Generate RSA signature for Cashfree authentication (V2)
+ * Format: RSA-OAEP encrypt(client_id.timestamp, public_key) → base64
+ */
+async function generateRSASignature(clientId: string, publicKeyPem: string): Promise<string> {
+  try {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const message = `${clientId}.${timestamp}`;
+    
+    console.log('🔐 Generating RSA signature for:', message);
+
+    // Remove PEM headers/footers and whitespace
+    const pemContents = publicKeyPem
+      .replace(/-----BEGIN PUBLIC KEY-----/g, '')
+      .replace(/-----END PUBLIC KEY-----/g, '')
+      .replace(/\s/g, '');
+
+    // Decode base64 to binary
+    const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+
+    // Import the RSA public key (using SHA-1 for OAEP, matching Cashfree's implementation)
+    const publicKey = await crypto.subtle.importKey(
+      'spki',
+      binaryDer,
+      {
+        name: 'RSA-OAEP',
+        hash: 'SHA-1'  // Cashfree uses SHA-1
+      },
+      false,
+      ['encrypt']
+    );
+
+    // Encode message to Uint8Array
+    const encoder = new TextEncoder();
+    const messageData = encoder.encode(message);
+
+    // Encrypt with RSA-OAEP
+    const encryptedData = await crypto.subtle.encrypt(
+      {
+        name: 'RSA-OAEP'
+      },
+      publicKey,
+      messageData
+    );
+
+    // Convert to base64
+    const base64Signature = btoa(String.fromCharCode(...new Uint8Array(encryptedData)));
+    
+    console.log('✅ RSA signature generated successfully');
+    return base64Signature;
+  } catch (error: any) {
+    console.error('❌ RSA signature generation failed:', error.message);
+    throw new Error(`Failed to generate RSA signature: ${error.message}`);
+  }
+}
+
+/**
+ * Create Cashfree transfer using V2 API
+ * V2 uses direct X-Cf-Signature auth (no Bearer token needed)
  */
 async function createCashfreeTransfer(
   beneId: string,
@@ -38,110 +94,97 @@ async function createCashfreeTransfer(
       return { success: false, error: 'Cashfree credentials not configured' };
     }
 
-    console.log('💸 Creating Cashfree transfer');
+    if (!CASHFREE_PUBLIC_KEY) {
+      return { success: false, error: 'Cashfree public key not configured' };
+    }
+
+    console.log('💸 Creating Cashfree transfer (V2 API)');
     console.log('💸 Beneficiary ID:', beneId);
     console.log('💸 Amount:', amount);
     console.log('💸 Transfer ID:', transferId);
 
-    // METHOD 1: Try Standard API v1.2 with direct credentials
-    console.log('🔄 Trying Standard API v1.2...');
-    
+    // Generate RSA signature
+    const signature = await generateRSASignature(CASHFREE_PAYOUT_CLIENT_ID, CASHFREE_PUBLIC_KEY);
+
+    // V2 API request format
     const payload = {
-      beneId: beneId,
-      amount: amount.toFixed(2),
-      transferId: transferId,
-      transferMode: 'banktransfer',
+      transfer_id: transferId,
+      transfer_amount: parseFloat(amount.toFixed(2)),
+      beneficiary_details: {
+        beneficiary_id: beneId
+      },
       remarks: remarks
     };
 
-    console.log('📤 Payload:', JSON.stringify(payload, null, 2));
+    console.log('📤 Transfer Payload (V2):', JSON.stringify(payload, null, 2));
 
-    const response1 = await fetch(`${CASHFREE_API_STANDARD}/requestTransfer`, {
+    const response = await fetch(`${CASHFREE_API_BASE}/transfers`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Client-Id': CASHFREE_PAYOUT_CLIENT_ID,
-        'X-Client-Secret': CASHFREE_PAYOUT_CLIENT_SECRET,
+        'x-api-version': CASHFREE_API_VERSION,
+        'x-client-id': CASHFREE_PAYOUT_CLIENT_ID,
+        'x-client-secret': CASHFREE_PAYOUT_CLIENT_SECRET,
+        'X-Cf-Signature': signature
       },
       body: JSON.stringify(payload)
     });
 
-    const responseData1 = await response1.json();
-    console.log('📥 v1.2 Response:', JSON.stringify(responseData1, null, 2));
+    const responseData = await response.json();
+    console.log('📥 Transfer Response Status:', response.status);
+    console.log('📥 Transfer Response (V2):', JSON.stringify(responseData, null, 2));
 
-    if (responseData1.status === 'SUCCESS' || responseData1.status === 'success') {
-      const transfer = responseData1.data?.transfer || responseData1.data;
-      return {
-        success: true,
-        data: {
-          transferId: transfer.transferId || transferId,
-          referenceId: transfer.referenceId || transfer.utr,
-          utr: transfer.utr || null,
-          status: transfer.status || 'SUCCESS'
-        }
-      };
-    }
-
-    // METHOD 2: Try v1 API
-    console.log('🔄 v1.2 failed, trying v1 API...');
-    
-    const response2 = await fetch(`${CASHFREE_API_V1}/requestTransfer`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Client-Id': CASHFREE_PAYOUT_CLIENT_ID,
-        'X-Client-Secret': CASHFREE_PAYOUT_CLIENT_SECRET,
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const responseData2 = await response2.json();
-    console.log('📥 v1 Response:', JSON.stringify(responseData2, null, 2));
-
-    if (responseData2.status === 'SUCCESS' || responseData2.status === 'success') {
-      const transfer = responseData2.data?.transfer || responseData2.data;
-      return {
-        success: true,
-        data: {
-          transferId: transfer.transferId || transferId,
-          referenceId: transfer.referenceId || transfer.utr,
-          utr: transfer.utr || null,
-          status: transfer.status || 'SUCCESS'
-        }
-      };
-    }
-
-    // METHOD 3: Try with addBeneficiary endpoint (if beneficiary doesn't exist)
-    if (responseData2.message?.includes('Beneficiary') || responseData2.message?.includes('beneficiary')) {
-      console.log('⚠️ Beneficiary issue detected, checking if bene exists...');
+    // ✅ FIXED: Accept 'RECEIVED' as success status
+    if (response.ok) {
+      const successStatuses = ['RECEIVED', 'SUCCESS', 'PENDING'];
       
-      const getBeneResponse = await fetch(`${CASHFREE_API_STANDARD}/getBeneficiary/${beneId}`, {
-        method: 'GET',
-        headers: {
-          'X-Client-Id': CASHFREE_PAYOUT_CLIENT_ID,
-          'X-Client-Secret': CASHFREE_PAYOUT_CLIENT_SECRET,
-        }
-      });
-
-      const beneData = await getBeneResponse.json();
-      console.log('📥 Beneficiary check:', JSON.stringify(beneData, null, 2));
-
-      if (beneData.status === 'ERROR') {
+      if (successStatuses.includes(responseData.status)) {
+        const data = responseData.data || responseData;
+        console.log(`✅ Transfer ${responseData.status} by Cashfree (V2)`);
         return {
-          success: false,
-          error: `Beneficiary not found in Cashfree. Please add bank account first. BeneID: ${beneId}`
+          success: true,
+          data: {
+            transferId: data.transfer_id || transferId,
+            referenceId: data.cf_transfer_id || data.reference_id,
+            utr: data.utr || null,
+            status: responseData.status,
+            cfTransferId: data.cf_transfer_id
+          }
         };
       }
     }
 
-    // All methods failed
-    const errorMessage = responseData2.message || responseData1.message || 'Failed to create transfer';
-    console.error('❌ All API methods failed');
-    console.error('❌ Error:', errorMessage);
+    // Handle specific errors
+    if (responseData.subCode === 'BENEFICIARY_NOT_FOUND' || responseData.message?.includes('Beneficiary')) {
+      console.error('❌ Beneficiary not found:', beneId);
+      return {
+        success: false,
+        error: `Beneficiary not found in Cashfree. BeneID: ${beneId}`
+      };
+    }
+
+    if (responseData.subCode === 'INSUFFICIENT_BALANCE' || responseData.message?.includes('balance')) {
+      console.error('❌ Insufficient balance in Cashfree account');
+      return {
+        success: false,
+        error: 'Insufficient balance in payout account'
+      };
+    }
+
+    if (responseData.subCode === 'DUPLICATE_TRANSFER' || responseData.message?.includes('duplicate')) {
+      console.log('⚠️ Duplicate transfer:', transferId);
+      return {
+        success: false,
+        error: 'Transfer with this ID already exists'
+      };
+    }
+
+    const errorMessage = responseData.message || 'Failed to create transfer';
+    console.error('❌ Transfer failed:', errorMessage);
     
     return {
       success: false,
-      error: `${errorMessage} | v1.2 error: ${responseData1.message} | v1 error: ${responseData2.message}`
+      error: errorMessage
     };
 
   } catch (error: any) {
@@ -158,7 +201,7 @@ serve(async (req) => {
   try {
     const { order_id, booking_id, trigger_type } = await req.json();
 
-    console.log('=== Auto-Payout Trigger ===');
+    console.log('=== Auto-Payout Trigger (V2 API) ===');
     console.log('Order ID:', order_id);
     console.log('Booking ID:', booking_id);
     console.log('Trigger Type:', trigger_type);
@@ -479,6 +522,7 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error('❌ Exception:', error.message);
+    console.error('Stack:', error.stack);
     return new Response(
       JSON.stringify({
         success: false,

@@ -32,13 +32,13 @@ async function generateRSASignature(clientId: string, publicKeyPem: string): Pro
     // Decode base64 to binary
     const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
 
-    // Import the RSA public key (using SHA-1 to match Cashfree's PHP implementation)
+    // Import the RSA public key (using SHA-1 for OAEP, matching Cashfree's implementation)
     const publicKey = await crypto.subtle.importKey(
       'spki',
       binaryDer,
       {
         name: 'RSA-OAEP',
-        hash: 'SHA-1'  // Cashfree uses SHA-1, not SHA-256
+        hash: 'SHA-1'  // Cashfree uses SHA-1
       },
       false,
       ['encrypt']
