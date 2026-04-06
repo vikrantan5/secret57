@@ -377,50 +377,36 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     set({ loading: true, error: null });
 
     try {
-      const { data: booking, error: fetchError } = await supabase
-        .from('bookings')
-        .select('*, seller:sellers(id, user_id)')
-        .eq('id', bookingId)
-        .single();
-
-      if (fetchError) throw fetchError;
-      if (!booking) throw new Error('Booking not found');
-
-      if (booking.otp !== otp) {
-        set({ loading: false, error: 'Invalid OTP' });
-        return { success: false, error: 'Invalid OTP. Please check and try again.' };
+      // Get current user ID
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
       }
 
-      if (booking.otp_verified) {
-        set({ loading: false });
-        return { success: false, error: 'OTP has already been verified.' };
-      }
-
-      const { error: updateError } = await supabase
-        .from('bookings')
-        .update({
-          status: 'completed',
-          otp_verified: true,
-          updated_at: new Date().toISOString()
+      // Call the verify-service-otp edge function
+      const response = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/verify-service-otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({
+          booking_id: bookingId,
+          otp: otp,
+          user_id: user.id
         })
-        .eq('id', bookingId);
+      });
 
-      if (updateError) throw updateError;
+      const result = await response.json();
 
-      await supabase
-        .from('notifications')
-        .insert({
-          user_id: booking.customer_id,
-          type: 'booking',
-          title: 'Service Completed',
-          message: 'Your service has been completed successfully. Thank you for using our platform!',
-          data: { booking_id: bookingId }
-        });
+      if (!result.success) {
+        set({ loading: false, error: result.error });
+        return { success: false, error: result.error };
+      }
 
-      // ✅ FIXED: Payout will be handled by backend database trigger or webhook
-      // Removed frontend payout trigger to prevent JWT errors
-      console.log('✅ Service completed. Payout will be processed by backend.');
+      console.log('✅ OTP verified successfully. Payout triggered:', result.payout_triggered);
 
+      // Refresh booking data
       await get().fetchBookingById(bookingId);
 
       set({ loading: false });
