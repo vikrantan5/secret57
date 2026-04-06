@@ -343,6 +343,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
           status: newStatus,
           payment_id: paymentId,
           payment_method: 'cashfree',
+           payment_status: paymentStatus === 'success' || paymentStatus === 'paid' ? 'paid' : 'failed',
           updated_at: new Date().toISOString(),
         })
         .eq('id', id);
@@ -363,6 +364,39 @@ export const useBookingStore = create<BookingState>((set, get) => ({
           notes: paymentStatus === 'success' || paymentStatus === 'paid' ? 'Payment received successfully, awaiting seller confirmation' : 'Payment failed',
           created_at: new Date().toISOString(),
         }]);
+
+
+
+            // ✅ CRITICAL FIX: Generate OTP after successful payment
+      if (paymentStatus === 'success' || paymentStatus === 'paid') {
+        console.log('🔐 Generating OTP for booking after successful payment...');
+        
+        try {
+          const response = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/generate-otp`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+            },
+            body: JSON.stringify({
+              type: 'booking',
+              id: id
+            })
+          });
+
+          const otpResult = await response.json();
+
+          if (otpResult.success) {
+            console.log('✅ OTP generated and sent to customer:', otpResult.otp);
+          } else {
+            console.error('❌ Failed to generate OTP:', otpResult.error);
+            // Don't fail the payment update, just log the error
+          }
+        } catch (otpError: any) {
+          console.error('❌ Exception generating OTP:', otpError.message);
+          // Don't fail the payment update, just log the error
+        }
+      }
 
       set({ loading: false });
       return { success: true };

@@ -428,7 +428,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
     try {
       set({ loading: true });
       
-      // Generate OTP if status is 'delivered'
+   
       const updateData: any = {
         seller_status: sellerStatus,
         seller_status_updated_at: new Date().toISOString(),
@@ -439,14 +439,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
         updateData.seller_notes = notes;
       }
 
-      // Generate OTP when marking as delivered
-      if (sellerStatus === 'delivered') {
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        updateData.delivery_otp = otp;
-        updateData.otp_verified = false;
-        updateData.otp_attempts = 0;
-        updateData.otp_generated_at = new Date().toISOString();
-      }
+    
 
       const { error } = await supabase
         .from('orders')
@@ -469,6 +462,45 @@ export const useOrderStore = create<OrderState>((set, get) => ({
           notes: notes || `Order status updated to ${sellerStatus}`,
           created_at: new Date().toISOString(),
         }]);
+
+
+
+           // ✅ CRITICAL FIX: Generate OTP via edge function when marking as delivered
+      if (sellerStatus === 'delivered') {
+        console.log('🔐 Generating delivery OTP via edge function...');
+        
+        try {
+          const response = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/generate-otp`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+            },
+            body: JSON.stringify({
+              type: 'order',
+              id: orderId
+            })
+          });
+
+          const otpResult = await response.json();
+
+          if (otpResult.success) {
+            console.log('✅ Delivery OTP generated and sent to customer:', otpResult.otp);
+            // Update local state with OTP info
+            updateData.delivery_otp = otpResult.otp;
+            updateData.otp_generated_at = new Date().toISOString();
+          } else {
+            console.error('❌ Failed to generate delivery OTP:', otpResult.error);
+            set({ loading: false });
+            return { success: false, error: 'Failed to generate delivery OTP: ' + otpResult.error };
+          }
+        } catch (otpError: any) {
+          console.error('❌ Exception generating delivery OTP:', otpError.message);
+          set({ loading: false });
+          return { success: false, error: 'Failed to generate delivery OTP: ' + otpError.message };
+        }
+      }
+
 
       // Update local state
       set(state => ({
@@ -493,57 +525,39 @@ export const useOrderStore = create<OrderState>((set, get) => ({
     try {
       set({ loading: true, error: null });
 
-      // Fetch the order
-      const { data: order, error: fetchError } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('id', orderId)
-        .single();
+      // ✅ CRITICAL FIX: Call verify-delivery-otp edge function instead of local verification
+      // This edge function handles BOTH OTP verification AND payout triggering
+      console.log('🔐 Verifying delivery OTP via edge function...');
 
-      if (fetchError) throw fetchError;
-      if (!order) throw new Error('Order not found');
-
-      // Check OTP
-      if (order.delivery_otp !== otp) {
-        // Increment OTP attempts
-        await supabase
-          .from('orders')
-          .update({ otp_attempts: (order.otp_attempts || 0) + 1 })
-          .eq('id', orderId);
-
-        set({ loading: false, error: 'Invalid OTP' });
-        return { success: false, error: 'Invalid OTP. Please check and try again.' };
+      // Get current user ID
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
       }
 
-      if (order.otp_verified) {
-        set({ loading: false });
-        return { success: false, error: 'OTP has already been verified.' };
-      }
-
-      // Verify OTP and mark order as completed
-      const { error: updateError } = await supabase
-        .from('orders')
-        .update({
-          status: 'delivered',
-          seller_status: 'delivered',
-          otp_verified: true,
-          otp_verified_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', orderId);
-
-      if (updateError) throw updateError;
-
-      // Add to timeline
-      await supabase
-        .from('order_timeline')
-        .insert({
+      const response = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/verify-delivery-otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({
           order_id: orderId,
-          status: 'delivered',
-          seller_status: 'delivered',
-          notes: 'Order delivered and OTP verified successfully',
-          created_at: new Date().toISOString()
-        });
+          otp: otp,
+          user_id: user.id
+        })
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        set({ loading: false, error: result.error });
+        return { success: false, error: result.error };
+      }
+
+      console.log('✅ Delivery OTP verified successfully');
+      console.log('💸 Payout triggered:', result.payout_triggered);
+      console.log('Payout data:', result.payout_data);
 
       // Refresh order data
       await get().fetchOrderById(orderId);
