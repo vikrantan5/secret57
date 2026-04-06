@@ -170,14 +170,43 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     try {
       set({ loading: true, error: null });
       
+      // ✅ CRITICAL FIX: Fetch service with beneficiary info for payout
+      const { data: serviceData, error: serviceError } = await supabase
+        .from('services')
+        .select('id, seller_id, seller_bank_account_id, cashfree_bene_id, price')
+        .eq('id', booking.service_id)
+        .single();
+
+      if (serviceError || !serviceData) {
+        console.error('Error fetching service for booking:', serviceError);
+        set({ loading: false, error: 'Service not found' });
+        return { success: false, error: 'Service not found' };
+      }
+
+      // Prepare booking data with beneficiary info from service
+      const bookingData: any = {
+        ...booking,
+        status: 'pending_payment',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      // ✅ CRITICAL FIX: Copy beneficiary info from service to booking
+      if (serviceData.cashfree_bene_id && serviceData.seller_bank_account_id) {
+        bookingData.cashfree_bene_id = serviceData.cashfree_bene_id;
+        bookingData.seller_bank_account_id = serviceData.seller_bank_account_id;
+        bookingData.seller_payout_amount = booking.total_amount || serviceData.price;
+        console.log('✅ Booking created with payout info from service:', {
+          cashfree_bene_id: serviceData.cashfree_bene_id,
+          seller_bank_account_id: serviceData.seller_bank_account_id
+        });
+      } else {
+        console.warn('⚠️ Service missing beneficiary info. Payout will be fetched during payment.');
+      }
+
       const { data, error } = await supabase
         .from('bookings')
-        .insert([{
-          ...booking,
-          status: 'pending_payment',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }])
+        .insert([bookingData])
         .select()
         .single();
 

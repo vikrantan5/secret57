@@ -190,18 +190,52 @@ export const useOrderStore = create<OrderState>((set, get) => ({
         return { success: false, error: orderError.message };
       }
 
-      // Create order items
-      const orderItems = items.map(item => ({
-        order_id: orderData.id,
-        product_id: item.productId,
-        seller_id: item.sellerId,
-        product_name: item.name,
-        product_image: item.image,
-        quantity: item.quantity,
-        price: item.price,
-        total: item.price * item.quantity,
-        created_at: new Date().toISOString(),
-      }));
+      // ✅ CRITICAL FIX: Fetch product details with beneficiary info for payouts
+      const productIds = items.map(item => item.productId);
+      const { data: productsData, error: productsError } = await supabase
+        .from('products')
+        .select('id, seller_id, seller_bank_account_id, cashfree_bene_id, price')
+        .in('id', productIds);
+
+      if (productsError) {
+        console.error('Error fetching products for order:', productsError);
+      }
+
+      // Create a map for quick product lookup
+      const productMap = new Map();
+      productsData?.forEach(product => {
+        productMap.set(product.id, product);
+      });
+
+      // ✅ CRITICAL FIX: Create order items WITH beneficiary info from products
+      const orderItems = items.map(item => {
+        const product = productMap.get(item.productId);
+        const totalPrice = item.price * item.quantity;
+        
+        const orderItem: any = {
+          order_id: orderData.id,
+          product_id: item.productId,
+          seller_id: item.sellerId,
+          product_name: item.name,
+          product_image: item.image,
+          quantity: item.quantity,
+          price: item.price,
+          total_price: totalPrice,
+          created_at: new Date().toISOString(),
+        };
+
+        // Copy beneficiary info from product to order_item
+        if (product?.cashfree_bene_id && product?.seller_bank_account_id) {
+          orderItem.cashfree_bene_id = product.cashfree_bene_id;
+          orderItem.seller_bank_account_id = product.seller_bank_account_id;
+          orderItem.seller_payout_amount = totalPrice; // Full amount to seller (adjust if commission needed)
+          console.log(`✅ Order item created with payout info for product ${item.productId}`);
+        } else {
+          console.warn(`⚠️ Product ${item.productId} missing beneficiary info`);
+        }
+
+        return orderItem;
+      });
 
       const { error: itemsError } = await supabase
         .from('order_items')

@@ -125,7 +125,7 @@ export const useServiceStore = create<ServiceState>((set, get) => ({
     }
   },
 
-   createService: async (service) => {
+  createService: async (service) => {
     try {
       // Check active subscription
       if (service.seller_id) {
@@ -137,11 +137,10 @@ export const useServiceStore = create<ServiceState>((set, get) => ({
           };
         }
 
-        // Check bank account and get primary bank account ID
-        // Fetch fresh data from database to ensure we have latest bank accounts
+        // ✅ CRITICAL FIX: Fetch bank account WITH cashfree_bene_id for payouts
         const { data: bankAccounts, error: bankError } = await supabase
           .from('seller_bank_accounts')
-          .select('id, verification_status, is_primary')
+          .select('id, cashfree_bene_id, verification_status, is_primary')
           .eq('seller_id', service.seller_id)
           .eq('verification_status', 'verified')
           .eq('is_primary', true)
@@ -154,15 +153,31 @@ export const useServiceStore = create<ServiceState>((set, get) => ({
           };
         }
 
-        // Add seller's bank account ID for direct payment settlements
+        if (!bankAccounts.cashfree_bene_id) {
+          return { 
+            success: false, 
+            error: 'Bank account not verified with Cashfree. Please complete bank verification in Payout Settings.' 
+          };
+        }
+
+        // ✅ CRITICAL FIX: Store both bank account ID AND cashfree_bene_id for instant payouts
         const serviceData = {
           ...service,
-          seller_settlement_account_id: bankAccounts.id, // Store bank account ID (UUID)
+          seller_bank_account_id: bankAccounts.id,
+          cashfree_bene_id: bankAccounts.cashfree_bene_id, // CRITICAL: Store beneficiary ID
+          seller_payout_percentage: 100.00, // Full amount to seller (adjust if commission needed)
+          platform_commission_percentage: 0.00,
           cashfree_enabled: true,
           requires_subscription: true,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
+
+        console.log('✅ Creating service with payout details:', {
+          seller_id: service.seller_id,
+          bank_account_id: bankAccounts.id,
+          cashfree_bene_id: bankAccounts.cashfree_bene_id
+        });
 
         const { data, error } = await supabase
           .from('services')
