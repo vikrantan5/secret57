@@ -269,14 +269,49 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     try {
       set({ loading: true });
       
-      const { error } = await supabase
-        .from('bookings')
-        .update({
+            // ✅ CRITICAL FIX: Fetch seller's bank account details for payout
+      let updateData: any = {
           booking_date: newDate,
           booking_time: newTime,
           updated_at: new Date().toISOString(),
           status: 'pending',
-        })
+            };
+
+      if (paymentStatus === 'success' || paymentStatus === 'paid') {
+        console.log('💰 Fetching seller bank account for future payout...');
+        
+        // Get booking to find seller_id
+        const { data: bookingData, error: fetchError } = await supabase
+          .from('bookings')
+          .select('seller_id, total_amount')
+          .eq('id', id)
+          .single();
+
+        if (!fetchError && bookingData) {
+          // Get seller's primary verified bank account
+          const { data: bankAccounts, error: bankError } = await supabase
+            .from('seller_bank_accounts')
+            .select('id, cashfree_bene_id')
+            .eq('seller_id', bookingData.seller_id)
+            .eq('is_primary', true)
+            .eq('verification_status', 'verified')
+            .limit(1);
+
+          if (!bankError && bankAccounts && bankAccounts.length > 0) {
+            const bankAccount = bankAccounts[0];
+            updateData.cashfree_bene_id = bankAccount.cashfree_bene_id;
+            updateData.seller_bank_account_id = bankAccount.id;
+            updateData.seller_payout_amount = bookingData.total_amount; // Full amount for now, adjust if commission needed
+            console.log('✅ Seller bank account stored for payout:', bankAccount.cashfree_bene_id);
+          } else {
+            console.warn('⚠️ No verified bank account found for seller. Payout will need manual setup.');
+          }
+        }
+      }
+
+      const { error } = await supabase
+        .from('bookings')
+        .update(updateData)
         .eq('id', id);
 
       if (error) {
@@ -330,22 +365,58 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     try {
       set({ loading: true });
       
+      // ✅ FIX: After payment, booking should be auto-confirmed (no seller confirmation needed)
       let newStatus = 'pending_payment';
       if (paymentStatus === 'success' || paymentStatus === 'paid') {
-        newStatus = 'pending';
+        newStatus = 'confirmed'; // Changed from 'pending' to 'confirmed'
       } else if (paymentStatus === 'failed') {
         newStatus = 'cancelled';
       }
 
+      // ✅ CRITICAL FIX: Fetch seller's bank account details for payout
+      let updateData: any = {
+        status: newStatus,
+        payment_id: paymentId,
+        payment_method: 'cashfree',
+        payment_status: paymentStatus === 'success' || paymentStatus === 'paid' ? 'paid' : 'failed',
+        updated_at: new Date().toISOString(),
+      };
+
+      if (paymentStatus === 'success' || paymentStatus === 'paid') {
+        console.log('💰 Fetching seller bank account for future payout...');
+        
+        // Get booking to find seller_id
+        const { data: bookingData, error: fetchError } = await supabase
+          .from('bookings')
+          .select('seller_id, total_amount')
+          .eq('id', id)
+          .single();
+
+        if (!fetchError && bookingData) {
+          // Get seller's primary verified bank account
+          const { data: bankAccounts, error: bankError } = await supabase
+            .from('seller_bank_accounts')
+            .select('id, cashfree_bene_id')
+            .eq('seller_id', bookingData.seller_id)
+            .eq('is_primary', true)
+            .eq('verification_status', 'verified')
+            .limit(1);
+
+          if (!bankError && bankAccounts && bankAccounts.length > 0) {
+            const bankAccount = bankAccounts[0];
+            updateData.cashfree_bene_id = bankAccount.cashfree_bene_id;
+            updateData.seller_bank_account_id = bankAccount.id;
+            updateData.seller_payout_amount = bookingData.total_amount; // Full amount for now, adjust if commission needed
+            console.log('✅ Seller bank account stored for payout:', bankAccount.cashfree_bene_id);
+          } else {
+            console.warn('⚠️ No verified bank account found for seller. Payout will need manual setup.');
+          }
+        }
+      }
+
       const { error } = await supabase
         .from('bookings')
-        .update({
-          status: newStatus,
-          payment_id: paymentId,
-          payment_method: 'cashfree',
-           payment_status: paymentStatus === 'success' || paymentStatus === 'paid' ? 'paid' : 'failed',
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', id);
 
       if (error) {

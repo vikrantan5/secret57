@@ -108,32 +108,60 @@ serve(async (req) => {
     // TRIGGER INSTANT PAYOUT
     console.log('🚀 Triggering instant payout...');
     
-    const payoutResponse = await fetch(`${SUPABASE_URL}/functions/v1/auto-payout-trigger`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
-      },
-      body: JSON.stringify({
-        booking_id: booking_id,
-        trigger_type: 'immediate' // This skips the 7-day hold period
-      })
-    });
+    let payoutTriggered = false;
+    let payoutData: any = null;
+    let payoutError = null;
 
-    const payoutData = await payoutResponse.json();
-    console.log('Payout response:', payoutData);
+    try {
+      const payoutResponse = await fetch(`${SUPABASE_URL}/functions/v1/auto-payout-trigger`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        },
+        body: JSON.stringify({
+          booking_id: booking_id,
+          trigger_type: 'immediate' // This skips the 7-day hold period
+        })
+      });
 
-    if (!payoutData.success) {
-      console.error('Payout trigger failed:', payoutData.error);
-      // Don't fail the OTP verification, just log the error
+      console.log('Payout response status:', payoutResponse.status);
+      
+      if (!payoutResponse.ok) {
+        const errorText = await payoutResponse.text();
+        console.error('❌ Payout API error response:', errorText);
+        payoutError = `Payout API returned ${payoutResponse.status}: ${errorText}`;
+      } else {
+        const result = await payoutResponse.json();
+        console.log('✅ Payout response:', JSON.stringify(result, null, 2));
+        
+        payoutData = result.data;
+        payoutTriggered = result.success === true;
+        
+        if (!payoutTriggered) {
+          payoutError = result.error || 'Payout failed for unknown reason';
+          console.error('❌ Payout trigger failed:', payoutError);
+          console.error('Full payout result:', result);
+        } else {
+          console.log('💰 Payout successfully triggered!');
+          console.log('Payouts processed:', payoutData?.successful_payouts || 0);
+        }
+      }
+    } catch (payoutErr: any) {
+      console.error('❌ Exception calling payout trigger:', payoutErr.message);
+      console.error('Stack:', payoutErr.stack);
+      payoutError = `Exception: ${payoutErr.message}`;
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Service completion verified. Payout is being processed.',
-        payout_triggered: payoutData.success,
-        payout_data: payoutData.data
+        message: payoutTriggered 
+          ? 'Service completion verified. Payout has been triggered successfully!' 
+          : 'Service completion verified. Payout could not be processed automatically.',
+        payout_triggered: payoutTriggered,
+        payout_data: payoutData,
+        payout_error: payoutError
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
