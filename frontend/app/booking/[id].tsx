@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+// app/booking/[id].tsx
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,12 +10,19 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
-    Platform,  Linking,
+  Platform,
+  Linking,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { useBookingStore } from '../../src/store/bookingStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
+
+const { width, height } = Dimensions.get('window');
 
 export default function BookingDetailScreen() {
   const router = useRouter();
@@ -24,6 +32,32 @@ export default function BookingDetailScreen() {
   const { selectedBooking, loading, fetchBookingById, cancelBooking } = useBookingStore();
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancellationReason, setCancellationReason] = useState('');
+  
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   useEffect(() => {
     if (bookingId) {
@@ -34,16 +68,35 @@ export default function BookingDetailScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending':
-        return colors.warning;
+        return ['#F59E0B', '#D97706'];
       case 'confirmed':
-        return colors.primary;
+        return ['#8B5CF6', '#7C3AED'];
+      case 'in_progress':
+        return ['#3B82F6', '#2563EB'];
       case 'completed':
-        return colors.success;
+        return ['#10B981', '#059669'];
       case 'cancelled':
       case 'rejected':
-        return colors.error;
+        return ['#EF4444', '#DC2626'];
       default:
-        return colors.textSecondary;
+        return ['#6B7280', '#4B5563'];
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'time-outline';
+      case 'confirmed':
+        return 'checkmark-circle-outline';
+      case 'in_progress':
+        return 'play-circle-outline';
+      case 'completed':
+        return 'checkmark-done-circle-outline';
+      case 'cancelled':
+        return 'close-circle-outline';
+      default:
+        return 'information-circle-outline';
     }
   };
 
@@ -66,6 +119,8 @@ export default function BookingDetailScreen() {
   };
 
   const handleCancelBooking = async () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    
     if (!cancellationReason.trim()) {
       Alert.alert('Error', 'Please provide a reason for cancellation');
       return;
@@ -74,6 +129,7 @@ export default function BookingDetailScreen() {
     const result = await cancelBooking(bookingId, cancellationReason);
     
     if (result.success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowCancelModal(false);
       setCancellationReason('');
       Alert.alert(
@@ -87,6 +143,7 @@ export default function BookingDetailScreen() {
         ]
       );
     } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Error', result.error || 'Failed to cancel booking');
     }
   };
@@ -94,303 +151,410 @@ export default function BookingDetailScreen() {
   if (loading || !selectedBooking) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <LinearGradient
+          colors={['#F9FAFB', '#FFFFFF']}
+          style={styles.loadingContainer}
+        >
+          <ActivityIndicator size="large" color="#8B5CF6" />
+          <Text style={styles.loadingText}>Loading booking details...</Text>
+        </LinearGradient>
       </SafeAreaView>
     );
   }
 
   const booking = selectedBooking;
   const canCancel = booking.status === 'pending' || booking.status === 'confirmed';
+  const statusGradient = getStatusColor(booking.status);
+  const statusIcon = getStatusIcon(booking.status);
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Booking Details</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Premium Gradient Header */}
+      <LinearGradient
+        colors={['#1E1B4B', '#312E81', '#4C1D95']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Booking Details</Text>
+          <View style={styles.headerRight} />
+        </View>
+      </LinearGradient>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Status Banner */}
-        <View style={[styles.statusBanner, { backgroundColor: getStatusColor(booking.status) }]}>
+      <Animated.ScrollView
+        showsVerticalScrollIndicator={false}
+        style={{
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        }}
+      >
+        {/* Premium Status Banner */}
+        <LinearGradient
+          colors={statusGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.statusBanner}
+        >
+          <Ionicons name={statusIcon} size={24} color="#FFFFFF" />
           <Text style={styles.statusBannerText}>
             {booking.status.toUpperCase()}
           </Text>
-        </View>
+        </LinearGradient>
 
-        {/* Service Info */}
-        <View style={[styles.card, shadows.sm]}>
-          <Text style={styles.cardTitle}>Service Information</Text>
+        {/* Service Info Card */}
+        <LinearGradient
+          colors={['#FFFFFF', '#F9FAFB']}
+          style={styles.card}
+        >
+          <View style={styles.cardHeader}>
+            <LinearGradient
+              colors={['#8B5CF6', '#7C3AED']}
+              style={styles.cardIcon}
+            >
+              <Ionicons name="briefcase-outline" size={16} color="#FFFFFF" />
+            </LinearGradient>
+            <Text style={styles.cardTitle}>Service Information</Text>
+          </View>
+          
           <View style={styles.infoRow}>
-            <Text style={styles.label}>Service:</Text>
+            <Text style={styles.label}>Service</Text>
             <Text style={styles.value}>{booking.service?.name}</Text>
           </View>
+          
           <View style={styles.infoRow}>
-            <Text style={styles.label}>Provider:</Text>
+            <Text style={styles.label}>Provider</Text>
             <Text style={styles.value}>{booking.seller?.company_name}</Text>
           </View>
+          
           {booking.service?.duration && (
             <View style={styles.infoRow}>
-              <Text style={styles.label}>Duration:</Text>
-              <Text style={styles.value}>{booking.service.duration} minutes</Text>
+              <Text style={styles.label}>Duration</Text>
+              <View style={styles.durationBadge}>
+                <Ionicons name="time-outline" size={12} color="#10B981" />
+                <Text style={styles.durationText}>{booking.service.duration} minutes</Text>
+              </View>
             </View>
           )}
-        </View>
+        </LinearGradient>
 
-
-          {/* Contact Seller - Show after payment */}
+        {/* Contact Seller Card */}
         {booking.payment_method && (booking.status === 'pending' || booking.status === 'confirmed' || booking.status === 'in_progress') && (
-          <View style={[styles.card, shadows.sm, styles.contactCard]}>
-            <View style={styles.contactHeader}>
-              <Ionicons name="chatbubbles" size={24} color={colors.primary} />
-              <Text style={styles.cardTitle}>Contact Service Provider</Text>
+          <LinearGradient
+            colors={['#FFFFFF', '#F9FAFB']}
+            style={styles.contactCard}
+          >
+            <View style={styles.cardHeader}>
+              <LinearGradient
+                colors={['#10B981', '#059669']}
+                style={styles.cardIcon}
+              >
+                <Ionicons name="chatbubbles-outline" size={16} color="#FFFFFF" />
+              </LinearGradient>
+              <Text style={styles.cardTitle}>Contact Provider</Text>
             </View>
+            
             <Text style={styles.contactDescription}>
               Reach out to the service provider for any queries or coordination
             </Text>
+            
             {booking.seller?.user?.phone && (
               <TouchableOpacity 
                 style={styles.contactButton}
                 onPress={() => {
-                  // Open phone dialer
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   const phoneUrl = `tel:${booking.seller.user.phone}`;
                   Alert.alert(
-                    'Call Seller',
+                    'Call Provider',
                     `Do you want to call ${booking.seller.user.phone}?`,
                     [
                       { text: 'Cancel', style: 'cancel' },
-                      { text: 'Call', onPress: () => {
-  Linking.openURL(phoneUrl);
-                      }}
+                      { text: 'Call', onPress: () => Linking.openURL(phoneUrl) }
                     ]
                   );
                 }}
-                data-testid="contact-seller-phone-button"
+                activeOpacity={0.8}
               >
-                <Ionicons name="call" size={20} color={colors.primary} />
-                <View style={styles.contactButtonContent}>
-                  <Text style={styles.contactButtonLabel}>Phone</Text>
-                  <Text style={styles.contactButtonValue}>{booking.seller.user.phone}</Text>
-                </View>
+                <LinearGradient
+                  colors={['#F3F4F6', '#E5E7EB']}
+                  style={styles.contactButtonGradient}
+                >
+                  <Ionicons name="call-outline" size={20} color="#8B5CF6" />
+                  <View style={styles.contactButtonContent}>
+                    <Text style={styles.contactButtonLabel}>Phone</Text>
+                    <Text style={styles.contactButtonValue}>{booking.seller.user.phone}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+                </LinearGradient>
               </TouchableOpacity>
             )}
+            
             {booking.seller?.user?.email && (
               <TouchableOpacity 
                 style={styles.contactButton}
                 onPress={() => {
-                  // Open email client
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   const emailUrl = `mailto:${booking.seller.user.email}?subject=Regarding Booking ${booking.id.slice(0, 8)}`;
                   Alert.alert(
-                    'Email Seller',
+                    'Email Provider',
                     `Do you want to send email to ${booking.seller.user.email}?`,
                     [
                       { text: 'Cancel', style: 'cancel' },
-                      { text: 'Email', onPress: () => {
-                       Linking.openURL(emailUrl);
-                      }}
+                      { text: 'Email', onPress: () => Linking.openURL(emailUrl) }
                     ]
                   );
                 }}
-                data-testid="contact-seller-email-button"
+                activeOpacity={0.8}
               >
-                <Ionicons name="mail" size={20} color={colors.primary} />
-                <View style={styles.contactButtonContent}>
-                  <Text style={styles.contactButtonLabel}>Email</Text>
-                  <Text style={styles.contactButtonValue}>{booking.seller.user.email}</Text>
-                </View>
+                <LinearGradient
+                  colors={['#F3F4F6', '#E5E7EB']}
+                  style={styles.contactButtonGradient}
+                >
+                  <Ionicons name="mail-outline" size={20} color="#8B5CF6" />
+                  <View style={styles.contactButtonContent}>
+                    <Text style={styles.contactButtonLabel}>Email</Text>
+                    <Text style={styles.contactButtonValue}>{booking.seller.user.email}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+                </LinearGradient>
               </TouchableOpacity>
             )}
-          </View>
+          </LinearGradient>
         )}
 
-        {/* Booking Details */}
-        <View style={[styles.card, shadows.sm]}>
-          <Text style={styles.cardTitle}>Booking Details</Text>
-          <View style={styles.detailRow}>
-            <Ionicons name="calendar" size={20} color={colors.primary} />
+        {/* Booking Details Card */}
+        <LinearGradient
+          colors={['#FFFFFF', '#F9FAFB']}
+          style={styles.card}
+        >
+          <View style={styles.cardHeader}>
+            <LinearGradient
+              colors={['#F59E0B', '#D97706']}
+              style={styles.cardIcon}
+            >
+              <Ionicons name="calendar-outline" size={16} color="#FFFFFF" />
+            </LinearGradient>
+            <Text style={styles.cardTitle}>Booking Details</Text>
+          </View>
+          
+          <View style={styles.detailItem}>
+            <LinearGradient
+              colors={['#F3F4F6', '#E5E7EB']}
+              style={styles.detailIcon}
+            >
+              <Ionicons name="calendar" size={18} color="#8B5CF6" />
+            </LinearGradient>
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Date</Text>
               <Text style={styles.detailValue}>{formatDate(booking.booking_date)}</Text>
             </View>
           </View>
-          <View style={styles.detailRow}>
-            <Ionicons name="time" size={20} color={colors.primary} />
+          
+          <View style={styles.detailItem}>
+            <LinearGradient
+              colors={['#F3F4F6', '#E5E7EB']}
+              style={styles.detailIcon}
+            >
+              <Ionicons name="time" size={18} color="#8B5CF6" />
+            </LinearGradient>
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Time</Text>
               <Text style={styles.detailValue}>{formatTime(booking.booking_time)}</Text>
             </View>
           </View>
-          <View style={styles.detailRow}>
-            <Ionicons name="location" size={20} color={colors.primary} />
+          
+          <View style={styles.detailItem}>
+            <LinearGradient
+              colors={['#F3F4F6', '#E5E7EB']}
+              style={styles.detailIcon}
+            >
+              <Ionicons name="location" size={18} color="#8B5CF6" />
+            </LinearGradient>
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Location</Text>
               <Text style={styles.detailValue}>
                 {booking.location_type === 'visit_customer'
-                  ? 'Service provider will visit you'
-                  : 'You will visit service provider'}
+                  ? '🏠 Provider will visit you'
+                  : '📍 You will visit provider'}
               </Text>
             </View>
           </View>
-        </View>
+        </LinearGradient>
 
-        {/* OTP Card - Show to customer after payment */}
+        {/* OTP Card */}
         {booking.payment_method && booking.otp && booking.status !== 'completed' && (
-          <View style={[styles.card, shadows.sm, styles.otpCard]}>
+          <LinearGradient
+            colors={['#8B5CF6', '#7C3AED']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.otpCard}
+          >
             <View style={styles.otpHeader}>
-              <Ionicons name="key" size={28} color={colors.primary} />
-              <Text style={styles.cardTitle}>Service Verification OTP</Text>
+              <Ionicons name="key-outline" size={28} color="#FFFFFF" />
+              <Text style={styles.otpTitle}>Verification OTP</Text>
             </View>
+            
             <Text style={styles.otpDescription}>
               Share this OTP with the service provider when they complete the service
             </Text>
+            
             <View style={styles.otpContainer}>
               <Text style={styles.otpText}>{booking.otp}</Text>
             </View>
+            
             <TouchableOpacity 
               style={styles.copyOtpButton}
               onPress={() => {
-                // Copy OTP to clipboard (you can add Clipboard API here)
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 Alert.alert('OTP Copied', 'OTP has been copied to clipboard');
               }}
-              data-testid="copy-otp-button"
+              activeOpacity={0.8}
             >
-              <Ionicons name="copy-outline" size={20} color={colors.primary} />
-              <Text style={styles.copyOtpText}>Copy OTP</Text>
+              <LinearGradient
+                colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
+                style={styles.copyOtpGradient}
+              >
+                <Ionicons name="copy-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.copyOtpText}>Copy OTP</Text>
+              </LinearGradient>
             </TouchableOpacity>
-          </View>
+          </LinearGradient>
         )}
 
-        {/* OTP Verified Badge */}
-        {booking.otp_verified && (
-          <View style={[styles.card, shadows.sm, { backgroundColor: colors.success + '10' }]}>
-            <View style={styles.verifiedBadge}>
-              <Ionicons name="checkmark-circle" size={32} color={colors.success} />
-              <View style={{ flex: 1, marginLeft: spacing.md }}>
-                <Text style={[styles.cardTitle, { color: colors.success }]}>Service Completed</Text>
-                <Text style={styles.verifiedText}>
-                  OTP verified successfully. Service has been marked as completed.
-                </Text>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Address (if visit_customer) */}
+        {/* Address Card */}
         {booking.location_type === 'visit_customer' && booking.address && (
-          <View style={[styles.card, shadows.sm]}>
-            <Text style={styles.cardTitle}>Service Address</Text>
+          <LinearGradient
+            colors={['#FFFFFF', '#F9FAFB']}
+            style={styles.card}
+          >
+            <View style={styles.cardHeader}>
+              <LinearGradient
+                colors={['#10B981', '#059669']}
+                style={styles.cardIcon}
+              >
+                <Ionicons name="location-outline" size={16} color="#FFFFFF" />
+              </LinearGradient>
+              <Text style={styles.cardTitle}>Service Address</Text>
+            </View>
+            
             <Text style={styles.address}>{booking.address}</Text>
             <Text style={styles.address}>
               {booking.city}, {booking.state} - {booking.pincode}
             </Text>
-          </View>
+          </LinearGradient>
         )}
 
-        {/* Notes */}
-        {booking.notes && (
-          <View style={[styles.card, shadows.sm]}>
-            <Text style={styles.cardTitle}>Notes</Text>
-            <Text style={styles.notes}>{booking.notes}</Text>
+        {/* Payment Card */}
+        <LinearGradient
+          colors={['#FFFFFF', '#F9FAFB']}
+          style={styles.card}
+        >
+          <View style={styles.cardHeader}>
+            <LinearGradient
+              colors={['#10B981', '#059669']}
+              style={styles.cardIcon}
+            >
+              <Ionicons name="card-outline" size={16} color="#FFFFFF" />
+            </LinearGradient>
+            <Text style={styles.cardTitle}>Payment Details</Text>
           </View>
-        )}
-
-        {/* Cancellation Reason */}
-        {booking.cancellation_reason && (
-          <View style={[styles.card, shadows.sm, { backgroundColor: colors.error + '10' }]}>
-            <Text style={[styles.cardTitle, { color: colors.error }]}>Cancellation Reason</Text>
-            <Text style={styles.notes}>{booking.cancellation_reason}</Text>
-          </View>
-        )}
-
-        {/* Payment Info */}
-        <View style={[styles.card, shadows.sm]}>
-          <Text style={styles.cardTitle}>Payment Details</Text>
+          
           <View style={styles.paymentRow}>
             <Text style={styles.paymentLabel}>Total Amount</Text>
             <Text style={styles.paymentValue}>₹{booking.total_amount.toFixed(2)}</Text>
           </View>
+        </LinearGradient>
+
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          {canCancel && !showCancelModal && (
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setShowCancelModal(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#EF4444', '#DC2626']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.cancelButtonGradient}
+              >
+                <Ionicons name="close-circle-outline" size={20} color="#FFFFFF" />
+                <Text style={styles.cancelButtonText}>Cancel Booking</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* Cancel Modal */}
-        {showCancelModal && (
-          <View style={[styles.card, shadows.md, { backgroundColor: colors.surface }]}>
-            <Text style={styles.cardTitle}>Cancel Booking</Text>
-            <Text style={styles.modalSubtitle}>Please provide a reason for cancellation:</Text>
+        <View style={{ height: spacing.xxl }} />
+      </Animated.ScrollView>
+
+      {/* Cancel Modal */}
+      {showCancelModal && (
+        <Animated.View style={[styles.modalOverlay, { opacity: fadeAnim }]}>
+          <LinearGradient
+            colors={['#FFFFFF', '#F9FAFB']}
+            style={styles.modalCard}
+          >
+            <View style={styles.modalHeader}>
+              <LinearGradient
+                colors={['#EF4444', '#DC2626']}
+                style={styles.modalIcon}
+              >
+                <Ionicons name="alert-circle-outline" size={24} color="#FFFFFF" />
+              </LinearGradient>
+              <Text style={styles.modalTitle}>Cancel Booking</Text>
+            </View>
+            
+            <Text style={styles.modalSubtitle}>
+              Please provide a reason for cancellation:
+            </Text>
+            
             <TextInput
               style={styles.textArea}
               placeholder="Enter reason..."
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor="#9CA3AF"
               value={cancellationReason}
               onChangeText={setCancellationReason}
               multiline
               numberOfLines={4}
               textAlignVertical="top"
             />
+            
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelModalButton]}
+                style={styles.modalCancelButton}
                 onPress={() => {
                   setShowCancelModal(false);
                   setCancellationReason('');
                 }}
+                activeOpacity={0.8}
               >
-                <Text style={styles.cancelModalButtonText}>Back</Text>
+                <Text style={styles.modalCancelText}>Go Back</Text>
               </TouchableOpacity>
+              
               <TouchableOpacity
-                style={[styles.modalButton, styles.confirmCancelButton]}
+                style={styles.modalConfirmButton}
                 onPress={handleCancelBooking}
+                activeOpacity={0.8}
               >
-                <Text style={styles.confirmCancelButtonText}>Cancel Booking</Text>
+                <LinearGradient
+                  colors={['#EF4444', '#DC2626']}
+                  style={styles.modalConfirmGradient}
+                >
+                  <Text style={styles.modalConfirmText}>Confirm Cancellation</Text>
+                </LinearGradient>
               </TouchableOpacity>
             </View>
-          </View>
-        )}
-
-        {/* Action Buttons */}
-        <View style={styles.actionButtons}>
-          {canCancel && !showCancelModal && (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.cancelButton]}
-              onPress={() => setShowCancelModal(true)}
-              data-testid="cancel-booking-button"
-            >
-              <Ionicons name="close-circle" size={20} color={colors.surface} />
-              <Text style={styles.cancelButtonText}>Cancel Booking</Text>
-            </TouchableOpacity>
-          )}
-          
-          {/* Report Seller Button */}
-          {booking.status === 'completed' && (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.reportButton]}
-              onPress={() => router.push(`/complaints/create?bookingId=${bookingId}&sellerId=${booking.seller_id}`)}
-              data-testid="report-seller-button"
-            >
-              <Ionicons name="flag-outline" size={20} color={colors.surface} />
-              <Text style={styles.reportButtonText}>Report Issue</Text>
-            </TouchableOpacity>
-          )}
-          
-          {/* Request Refund Button */}
-          {booking.status === 'completed' && (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.refundButton]}
-              onPress={() => router.push(`/booking/${bookingId}/refund`)}
-              data-testid="request-refund-button"
-            >
-              <Ionicons name="return-down-back-outline" size={20} color={colors.surface} />
-              <Text style={styles.refundButtonText}>Request Refund</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <View style={{ height: spacing.xl }} />
-      </ScrollView>
+          </LinearGradient>
+        </Animated.View>
+      )}
     </SafeAreaView>
   );
 }
@@ -398,95 +562,214 @@ export default function BookingDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  backButton: {
-    width: 40,
-  },
-  headerTitle: {
-    ...typography.h3,
-    color: colors.text,
+    backgroundColor: '#F9FAFB',
   },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.md,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  headerGradient: {
+    paddingBottom: spacing.lg,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  headerRight: {
+    width: 40,
   },
   statusBanner: {
-    padding: spacing.md,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+    borderRadius: borderRadius.lg,
   },
   statusBannerText: {
-    ...typography.body,
-    color: colors.surface,
+    fontSize: 16,
     fontWeight: '700',
+    color: '#FFFFFF',
     letterSpacing: 1,
   },
   card: {
-    backgroundColor: colors.surface,
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
     padding: spacing.lg,
     borderRadius: borderRadius.lg,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  cardIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardTitle: {
-    ...typography.h4,
-    color: colors.text,
-    marginBottom: spacing.md,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   label: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#6B7280',
   },
   value: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 14,
     fontWeight: '600',
-    textAlign: 'right',
+    color: '#1F2937',
     flex: 1,
+    textAlign: 'right',
     marginLeft: spacing.md,
   },
-  detailRow: {
+  durationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#10B98115',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+  },
+  durationText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#10B981',
+  },
+  contactCard: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: '#8B5CF620',
+  },
+  contactDescription: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: spacing.md,
+    lineHeight: 20,
+  },
+  contactButton: {
+    marginBottom: spacing.sm,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+  },
+  contactButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+  },
+  contactButtonContent: {
+    flex: 1,
+  },
+  contactButtonLabel: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginBottom: 2,
+  },
+  contactButtonValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  detailItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: spacing.md,
     gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  detailIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   detailContent: {
     flex: 1,
   },
   detailLabel: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginBottom: 2,
   },
   detailValue: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1F2937',
   },
   address: {
-    ...typography.body,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  notes: {
-    ...typography.body,
-    color: colors.text,
-    lineHeight: 22,
+    fontSize: 14,
+    color: '#1F2937',
+    marginBottom: 4,
+    lineHeight: 20,
   },
   paymentRow: {
     flexDirection: 'row',
@@ -494,141 +777,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   paymentLabel: {
-    ...typography.h4,
-    color: colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
   },
   paymentValue: {
-    ...typography.h3,
-    color: colors.primary,
-    fontWeight: '700',
-  },
-  modalSubtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginBottom: spacing.md,
-  },
-  textArea: {
-    ...typography.body,
-    color: colors.text,
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    minHeight: 100,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  modalButton: {
-    flex: 1,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-  },
-  cancelModalButton: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cancelModalButtonText: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  confirmCancelButton: {
-    backgroundColor: colors.error,
-  },
-  confirmCancelButtonText: {
-    ...typography.body,
-    color: colors.surface,
-    fontWeight: '600',
-  },
-  actionButtons: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
-  },
-  cancelButton: {
-    backgroundColor: colors.error,
-  },
-  cancelButtonText: {
-    ...typography.body,
-    color: colors.surface,
-    fontWeight: '600',
-  },
-    reportButton: {
-    backgroundColor: colors.warning,
-    marginTop: spacing.sm,
-  },
-  reportButtonText: {
-    ...typography.body,
-    color: colors.surface,
-    fontWeight: '600',
-  },
-  refundButton: {
-    backgroundColor: colors.info,
-    marginTop: spacing.sm,
-  },
-  refundButtonText: {
-    ...typography.body,
-    color: colors.surface,
-    fontWeight: '600',
-  },
-   contactCard: {
-    backgroundColor: colors.primary + '08',
-    borderWidth: 1,
-    borderColor: colors.primary + '20',
-  },
-  contactHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  contactDescription: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    marginBottom: spacing.md,
-    lineHeight: 20,
-  },
-  contactButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  contactButtonContent: {
-    flex: 1,
-  },
-  contactButtonLabel: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs / 2,
-  },
-   contactButtonValue: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#8B5CF6',
   },
   otpCard: {
-    backgroundColor: colors.primary + '08',
-    borderWidth: 2,
-    borderColor: colors.primary + '30',
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
   },
   otpHeader: {
     flexDirection: 'row',
@@ -636,50 +798,147 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.sm,
   },
+  otpTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
   otpDescription: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    marginBottom: spacing.lg,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.9)',
+    marginBottom: spacing.md,
     lineHeight: 20,
   },
   otpContainer: {
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     padding: spacing.xl,
     borderRadius: borderRadius.md,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: colors.primary + '20',
+    borderColor: 'rgba(255,255,255,0.3)',
     borderStyle: 'dashed',
   },
   otpText: {
     fontSize: 36,
-    fontWeight: '700',
-    color: colors.primary,
+    fontWeight: '800',
+    color: '#FFFFFF',
     letterSpacing: 8,
   },
   copyOtpButton: {
+    marginTop: spacing.md,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+  },
+  copyOtpGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    marginTop: spacing.md,
     padding: spacing.md,
-    backgroundColor: colors.primary + '10',
-    borderRadius: borderRadius.md,
   },
   copyOtpText: {
-    ...typography.body,
-    color: colors.primary,
+    fontSize: 14,
     fontWeight: '600',
+    color: '#FFFFFF',
   },
-  verifiedBadge: {
+  actionButtons: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+  },
+  cancelButton: {
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  cancelButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
   },
-  verifiedText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    lineHeight: 20,
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  modalIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: spacing.md,
+  },
+  textArea: {
+    fontSize: 14,
+    color: '#1F2937',
+    backgroundColor: '#F9FAFB',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    minHeight: 100,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  modalCancelButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  modalCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  modalConfirmButton: {
+    flex: 1,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+  },
+  modalConfirmGradient: {
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

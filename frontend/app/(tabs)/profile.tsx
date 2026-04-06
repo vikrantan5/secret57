@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,11 +7,14 @@ import {
   TouchableOpacity,
   Alert,
   Animated,
+  Dimensions,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons, Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { useAuthStore } from "../../src/store/authStore";
 import { useCartStore } from "../../src/store/cartStore";
@@ -25,6 +28,8 @@ import {
   shadows,
 } from "../../src/constants/theme";
 
+const { width } = Dimensions.get("window");
+
 interface MenuItemProps {
   icon: any;
   title: string;
@@ -32,6 +37,7 @@ interface MenuItemProps {
   onPress: () => void;
   rightElement?: React.ReactNode;
   color?: string;
+  gradient?: string[];
 }
 
 const MenuItem: React.FC<MenuItemProps> = ({
@@ -40,13 +46,15 @@ const MenuItem: React.FC<MenuItemProps> = ({
   subtitle,
   onPress,
   rightElement,
-  color = colors.primary,
+  color = "#8B5CF6",
+  gradient,
 }) => {
-  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
-      toValue: 0.97,
+      toValue: 0.98,
+      friction: 5,
       useNativeDriver: true,
     }).start();
   };
@@ -54,6 +62,7 @@ const MenuItem: React.FC<MenuItemProps> = ({
   const handlePressOut = () => {
     Animated.spring(scaleAnim, {
       toValue: 1,
+      friction: 5,
       useNativeDriver: true,
     }).start();
   };
@@ -70,17 +79,20 @@ const MenuItem: React.FC<MenuItemProps> = ({
         onPressOut={handlePressOut}
         activeOpacity={1}
       >
-        <View
-          style={[styles.menuIconContainer, { backgroundColor: color + "15" }]}
+        <LinearGradient
+          colors={gradient || [`${color}20`, `${color}10`]}
+          style={styles.menuIconContainer}
         >
-          <Ionicons name={icon} size={24} color={color} />
-        </View>
+          <Ionicons name={icon} size={22} color={color} />
+        </LinearGradient>
         <View style={styles.menuContent}>
           <Text style={styles.menuTitle}>{title}</Text>
           {subtitle && <Text style={styles.menuSubtitle}>{subtitle}</Text>}
         </View>
         {rightElement || (
-          <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
+          <View style={styles.chevronCircle}>
+            <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+          </View>
         )}
       </TouchableOpacity>
     </Animated.View>
@@ -92,7 +104,8 @@ interface StatCardProps {
   count: number;
   label: string;
   color: string;
-  onPress?: () => void; // ✅ optional
+  gradient?: string[];
+  onPress?: () => void;
 }
 
 const StatCard: React.FC<StatCardProps> = ({
@@ -100,28 +113,51 @@ const StatCard: React.FC<StatCardProps> = ({
   count,
   label,
   color,
+  gradient,
   onPress,
 }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.95,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  };
+
   return (
-    <TouchableOpacity
-      style={styles.statCard}
-      onPress={() => {
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  onPress?.(); // ✅ safe call
-}}
-      activeOpacity={0.8}
-    >
-      <LinearGradient
-        colors={[color, color + "CC"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.statGradient}
+    <Animated.View style={{ flex: 1, transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity
+        style={styles.statCard}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onPress?.();
+        }}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={1}
       >
-        <Ionicons name={icon} size={28} color={colors.surface} />
-        <Text style={styles.statCount}>{count}</Text>
-        <Text style={styles.statLabel}>{label}</Text>
-      </LinearGradient>
-    </TouchableOpacity>
+        <LinearGradient
+          colors={gradient || [color, `${color}CC`]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.statGradient}
+        >
+          <View style={styles.statIconCircle}>
+            <Ionicons name={icon} size={24} color="#FFFFFF" />
+          </View>
+          <Text style={styles.statCount}>{count}</Text>
+          <Text style={styles.statLabel}>{label}</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    </Animated.View>
   );
 };
 
@@ -131,44 +167,69 @@ export default function ProfileScreen() {
   const { items: cartItems } = useCartStore();
   const { items: wishlistItems } = useWishlistStore();
   const { orders } = useOrderStore();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Logout",
-        style: "destructive",
-        onPress: async () => {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          await logout();
-          router.replace("/auth/role-selection" as any);
+    Alert.alert(
+      "Logout",
+      "Are you sure you want to logout?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Logout",
+          style: "destructive",
+          onPress: async () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            await logout();
+            router.replace("/auth/role-selection" as any);
+          },
         },
-      },
-    ]);
+      ]
+    );
+  };
+
+  const getRoleGradient = () => {
+    switch (user?.role) {
+      case "customer":
+        return ["#8B5CF6", "#7C3AED", "#6D28D9"];
+      case "seller":
+        return ["#10B981", "#059669", "#047857"];
+      case "admin":
+        return ["#EF4444", "#DC2626", "#B91C1C"];
+      default:
+        return ["#8B5CF6", "#7C3AED", "#6D28D9"];
+    }
   };
 
   const getRoleColor = () => {
     switch (user?.role) {
       case "customer":
-        return colors.customer;
+        return "#8B5CF6";
       case "seller":
-        return colors.seller;
+        return "#10B981";
       case "admin":
-        return colors.admin;
+        return "#EF4444";
       default:
-        return colors.primary;
+        return "#8B5CF6";
     }
   };
 
-const getRoleGradient = () => {
-  const roleColor = getRoleColor() || "#4F46E5"; // fallback
-  return [roleColor, `${roleColor}CC`];
-};
+  const getMenuGradient = (color: string) => {
+    return [`${color}15`, `${color}08`];
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Profile Header with Gradient */}
+        {/* Premium Profile Header */}
         <LinearGradient
           colors={getRoleGradient()}
           start={{ x: 0, y: 0 }}
@@ -176,76 +237,98 @@ const getRoleGradient = () => {
           style={styles.headerGradient}
         >
           <View style={styles.profileHeader}>
-            {/* Avatar with Gradient Ring */}
-            <View style={styles.avatarContainer}>
-              <LinearGradient
-                colors={[colors.surface || "#fff", `${colors.surface || "#fff"}CC`]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.avatarRing}
-              >
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
-                  </Text>
+            {/* Animated Avatar with Premium Ring */}
+            <Animated.View style={{ opacity: fadeAnim }}>
+              <View style={styles.avatarContainer}>
+                <LinearGradient
+                  colors={["rgba(255,255,255,0.3)", "rgba(255,255,255,0.1)"]}
+                  style={styles.avatarRing}
+                >
+                  <LinearGradient
+                    colors={["#FFFFFF", "#F3F4F6"]}
+                    style={styles.avatar}
+                  >
+                    <Text style={styles.avatarText}>
+                      {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
+                    </Text>
+                  </LinearGradient>
+                </LinearGradient>
+                <View style={styles.onlineBadge}>
+                  <View style={styles.onlineDot} />
                 </View>
-              </LinearGradient>
-            </View>
+              </View>
+            </Animated.View>
 
             {/* User Info */}
-            <Text style={styles.userName}>{user?.name}</Text>
-            <Text style={styles.userEmail}>{user?.email}</Text>
+            <Animated.Text style={[styles.userName, { opacity: fadeAnim }]}>
+              {user?.name || "Guest User"}
+            </Animated.Text>
+            <Animated.Text style={[styles.userEmail, { opacity: fadeAnim }]}>
+              {user?.email || "guest@example.com"}
+            </Animated.Text>
 
-            {/* Role Badge */}
-            <View style={styles.roleBadge}>
-              <Ionicons
-                name={
-                  user?.role === "seller"
-                    ? "storefront"
-                    : user?.role === "admin"
+            {/* Premium Role Badge */}
+            <Animated.View style={[styles.roleBadge, { opacity: fadeAnim }]}>
+              <LinearGradient
+                colors={["rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)"]}
+                style={styles.roleBadgeGradient}
+              >
+                <Ionicons
+                  name={
+                    user?.role === "seller"
+                      ? "storefront"
+                      : user?.role === "admin"
                       ? "shield-checkmark"
                       : "person"
-                }
-                size={16}
-                color={colors.surface}
-              />
-              <Text style={styles.roleText}>
-                {user?.role?.charAt(0).toUpperCase()}
-                {user?.role?.slice(1)}
-              </Text>
-            </View>
+                  }
+                  size={16}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.roleText}>
+                  {user?.role?.charAt(0).toUpperCase()}
+                  {user?.role?.slice(1)}
+                </Text>
+              </LinearGradient>
+            </Animated.View>
           </View>
         </LinearGradient>
 
-        {/* Stats Cards */}
-        <View style={styles.statsContainer}>
-       <StatCard
-  icon="bag-handle-outline"
-  count={orders?.length || 0}
-  label="Orders"
-  color={colors.primary}
-  onPress={() => router.push("/orders" as any)}
-/>
-
-<StatCard
-  icon="heart-outline"
-  count={wishlistItems?.length || 0}
-  label="Wishlist"
-  color={colors.error}
-  onPress={() => router.push("/wishlist" as any)}
-/>
+        {/* Premium Stats Cards */}
+        <Animated.View style={[styles.statsContainer, { opacity: fadeAnim }]}>
+          <StatCard
+            icon="bag-handle-outline"
+            count={orders?.length || 0}
+            label="Orders"
+            gradient={["#8B5CF6", "#7C3AED"]}
+            onPress={() => router.push("/orders" as any)}
+          />
+          <StatCard
+            icon="heart-outline"
+            count={wishlistItems?.length || 0}
+            label="Wishlist"
+            gradient={["#EF4444", "#DC2626"]}
+            onPress={() => router.push("/wishlist" as any)}
+          />
           <StatCard
             icon="calendar-outline"
             count={0}
             label="Bookings"
-            color={colors.secondary}
+            gradient={["#F59E0B", "#D97706"]}
             onPress={() => router.push("/(tabs)/bookings")}
           />
-        </View>
+        </Animated.View>
 
-        {/* Menu Section */}
-        <View style={styles.menuSection}>
-          <Text style={styles.sectionTitle}>Account</Text>
+        {/* Account Section */}
+        <Animated.View style={[styles.menuSection, { opacity: fadeAnim }]}>
+          <View style={styles.sectionHeader}>
+            <LinearGradient
+              colors={["#1E1B4B", "#312E81"]}
+              style={styles.sectionIcon}
+            >
+              <Ionicons name="person-outline" size={16} color="#FFFFFF" />
+            </LinearGradient>
+            <Text style={styles.sectionTitle}>Account</Text>
+          </View>
 
           <View style={styles.menuCard}>
             <MenuItem
@@ -253,29 +336,40 @@ const getRoleGradient = () => {
               title="Edit Profile"
               subtitle="Update your personal information"
               onPress={() => router.push("/profile/edit" as any)}
-              color={colors.primary}
+              color="#8B5CF6"
+              gradient={getMenuGradient("#8B5CF6")}
             />
             <MenuItem
               icon="location-outline"
               title="Manage Addresses"
               subtitle="Add or edit delivery addresses"
               onPress={() => router.push("/profile/addresses" as any)}
-              color={colors.secondary}
+              color="#10B981"
+              gradient={getMenuGradient("#10B981")}
             />
             <MenuItem
               icon="card-outline"
               title="Payment Methods"
               subtitle="Saved cards and payment options"
               onPress={() => router.push("/profile/payments" as any)}
-              color={colors.success}
+              color="#F59E0B"
+              gradient={getMenuGradient("#F59E0B")}
             />
           </View>
-        </View>
+        </Animated.View>
 
-        {/* Orders & Activity */}
+        {/* Orders & Activity Section */}
         {user?.role === "customer" && (
-          <View style={styles.menuSection}>
-            <Text style={styles.sectionTitle}>Orders & Activity</Text>
+          <Animated.View style={[styles.menuSection, { opacity: fadeAnim }]}>
+            <View style={styles.sectionHeader}>
+              <LinearGradient
+                colors={["#8B5CF6", "#7C3AED"]}
+                style={styles.sectionIcon}
+              >
+                <Ionicons name="bag-handle-outline" size={16} color="#FFFFFF" />
+              </LinearGradient>
+              <Text style={styles.sectionTitle}>Orders & Activity</Text>
+            </View>
 
             <View style={styles.menuCard}>
               <MenuItem
@@ -283,19 +377,17 @@ const getRoleGradient = () => {
                 title="My Orders"
                 subtitle="Track and view your orders"
                 onPress={() => router.push("/orders" as any)}
-                color={colors.primary}
+                color="#8B5CF6"
+                gradient={getMenuGradient("#8B5CF6")}
                 rightElement={
                   (orders?.length || 0) > 0 ? (
-  <View style={styles.badge}>
-    <Text style={styles.badgeText}>{orders?.length || 0}</Text>
-  </View>
-) : (
-                    <Ionicons
-                      name="chevron-forward"
-                      size={20}
-                      color={colors.textLight}
-                    />
-                  )
+                    <LinearGradient
+                      colors={["#8B5CF6", "#7C3AED"]}
+                      style={styles.badge}
+                    >
+                      <Text style={styles.badgeText}>{orders?.length || 0}</Text>
+                    </LinearGradient>
+                  ) : undefined
                 }
               />
               <MenuItem
@@ -303,19 +395,17 @@ const getRoleGradient = () => {
                 title="Wishlist"
                 subtitle="Your saved items"
                 onPress={() => router.push("/wishlist" as any)}
-                color={colors.error}
+                color="#EF4444"
+                gradient={getMenuGradient("#EF4444")}
                 rightElement={
                   (wishlistItems?.length || 0) > 0 ? (
-  <View style={styles.badge}>
-    <Text style={styles.badgeText}>{wishlistItems?.length || 0}</Text>
-  </View>
-) : (
-                    <Ionicons
-                      name="chevron-forward"
-                      size={20}
-                      color={colors.textLight}
-                    />
-                  )
+                    <LinearGradient
+                      colors={["#EF4444", "#DC2626"]}
+                      style={styles.badge}
+                    >
+                      <Text style={styles.badgeText}>{wishlistItems?.length || 0}</Text>
+                    </LinearGradient>
+                  ) : undefined
                 }
               />
               <MenuItem
@@ -323,16 +413,25 @@ const getRoleGradient = () => {
                 title="Reviews & Ratings"
                 subtitle="Your reviews and ratings"
                 onPress={() => router.push("/profile/reviews" as any)}
-                color={colors.warning}
+                color="#F59E0B"
+                gradient={getMenuGradient("#F59E0B")}
               />
             </View>
-          </View>
+          </Animated.View>
         )}
 
-        {/* Seller/Admin Section */}
+        {/* Seller Tools Section */}
         {user?.role === "seller" && (
-          <View style={styles.menuSection}>
-            <Text style={styles.sectionTitle}>Seller Tools</Text>
+          <Animated.View style={[styles.menuSection, { opacity: fadeAnim }]}>
+            <View style={styles.sectionHeader}>
+              <LinearGradient
+                colors={["#10B981", "#059669"]}
+                style={styles.sectionIcon}
+              >
+                <Ionicons name="storefront-outline" size={16} color="#FFFFFF" />
+              </LinearGradient>
+              <Text style={styles.sectionTitle}>Seller Tools</Text>
+            </View>
 
             <View style={styles.menuCard}>
               <MenuItem
@@ -340,15 +439,25 @@ const getRoleGradient = () => {
                 title="Seller Dashboard"
                 subtitle="Manage your products & services"
                 onPress={() => router.push("/seller/dashboard" as any)}
-                color={colors.seller}
+                color="#10B981"
+                gradient={getMenuGradient("#10B981")}
               />
             </View>
-          </View>
+          </Animated.View>
         )}
 
+        {/* Admin Tools Section */}
         {user?.role === "admin" && (
-          <View style={styles.menuSection}>
-            <Text style={styles.sectionTitle}>Admin Tools</Text>
+          <Animated.View style={[styles.menuSection, { opacity: fadeAnim }]}>
+            <View style={styles.sectionHeader}>
+              <LinearGradient
+                colors={["#EF4444", "#DC2626"]}
+                style={styles.sectionIcon}
+              >
+                <Ionicons name="shield-checkmark-outline" size={16} color="#FFFFFF" />
+              </LinearGradient>
+              <Text style={styles.sectionTitle}>Admin Tools</Text>
+            </View>
 
             <View style={styles.menuCard}>
               <MenuItem
@@ -356,15 +465,24 @@ const getRoleGradient = () => {
                 title="Admin Panel"
                 subtitle="Manage platform settings"
                 onPress={() => router.push("/admin/dashboard" as any)}
-                color={colors.admin}
+                color="#EF4444"
+                gradient={getMenuGradient("#EF4444")}
               />
             </View>
-          </View>
+          </Animated.View>
         )}
 
-        {/* Settings & Support */}
-        <View style={styles.menuSection}>
-          <Text style={styles.sectionTitle}>Settings & Support</Text>
+        {/* Settings & Support Section */}
+        <Animated.View style={[styles.menuSection, { opacity: fadeAnim }]}>
+          <View style={styles.sectionHeader}>
+            <LinearGradient
+              colors={["#6B7280", "#4B5563"]}
+              style={styles.sectionIcon}
+            >
+              <Ionicons name="settings-outline" size={16} color="#FFFFFF" />
+            </LinearGradient>
+            <Text style={styles.sectionTitle}>Settings & Support</Text>
+          </View>
 
           <View style={styles.menuCard}>
             <MenuItem
@@ -372,37 +490,47 @@ const getRoleGradient = () => {
               title="Notifications"
               subtitle="Manage notification preferences"
               onPress={() => router.push("/notifications" as any)}
-              color={colors.info}
+              color="#3B82F6"
+              gradient={getMenuGradient("#3B82F6")}
             />
             <MenuItem
               icon="help-circle-outline"
               title="Help & Support"
               subtitle="Get help with your account"
               onPress={() => router.push("/profile/help" as any)}
-              color={colors.warning}
+              color="#F59E0B"
+              gradient={getMenuGradient("#F59E0B")}
             />
             <MenuItem
               icon="settings-outline"
               title="Settings"
               subtitle="App preferences and privacy"
               onPress={() => router.push("/profile/settings" as any)}
-              color={colors.textSecondary}
+              color="#6B7280"
+              gradient={getMenuGradient("#6B7280")}
             />
           </View>
-        </View>
+        </Animated.View>
 
-        {/* Logout Button */}
-        <View style={styles.logoutSection}>
+        {/* Premium Logout Button */}
+        <Animated.View style={[styles.logoutSection, { opacity: fadeAnim }]}>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <View style={styles.logoutButtonContent}>
-              <Ionicons name="log-out-outline" size={24} color={colors.error} />
+            <LinearGradient
+              colors={["#FEE2E2", "#FECACA"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.logoutGradient}
+            >
+              <Ionicons name="log-out-outline" size={22} color="#DC2626" />
               <Text style={styles.logoutText}>Logout</Text>
-            </View>
+            </LinearGradient>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
         {/* App Version */}
-        <Text style={styles.versionText}>Version 1.0.0</Text>
+        <Animated.Text style={[styles.versionText, { opacity: fadeAnim }]}>
+          Version 1.0.0
+        </Animated.Text>
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
@@ -413,64 +541,118 @@ const getRoleGradient = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: "#F9FAFB",
   },
   headerGradient: {
     paddingBottom: spacing.xxl,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#8B5CF6",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   profileHeader: {
     alignItems: "center",
-    paddingTop: spacing.lg,
+    paddingTop: spacing.xl,
     paddingHorizontal: spacing.lg,
   },
   avatarContainer: {
     marginBottom: spacing.md,
+    position: "relative",
   },
   avatarRing: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
     padding: 4,
-    ...shadows.lg,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   avatar: {
-    width: 92,
-    height: 92,
-    borderRadius: 46,
-    backgroundColor: colors.surface,
+    width: 102,
+    height: 102,
+    borderRadius: 51,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: {
-    ...typography.h1,
-    color: colors.primary,
+    fontSize: 44,
     fontWeight: "700",
+    color: "#8B5CF6",
+  },
+  onlineBadge: {
+    position: "absolute",
+    bottom: 5,
+    right: 5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  onlineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#10B981",
   },
   userName: {
-    ...typography.h2,
-    color: colors.surface,
+    fontSize: 24,
     fontWeight: "700",
+    color: "#FFFFFF",
     marginBottom: spacing.xs,
+    letterSpacing: 0.5,
   },
   userEmail: {
-    ...typography.body,
-    color: colors.surface,
-    opacity: 0.9,
+    fontSize: 14,
+    color: "rgba(255,255,255,0.8)",
     marginBottom: spacing.md,
   },
   roleBadge: {
+    borderRadius: borderRadius.xl,
+    overflow: "hidden",
+  },
+  roleBadgeGradient: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.3)",
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: borderRadius.xl,
     gap: spacing.xs,
   },
   roleText: {
-    ...typography.bodySmall,
-    color: colors.surface,
+    fontSize: 13,
     fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
   },
   statsContainer: {
     flexDirection: "row",
@@ -483,39 +665,81 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: borderRadius.lg,
     overflow: "hidden",
-    ...shadows.md,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   statGradient: {
     padding: spacing.md,
     alignItems: "center",
+    gap: spacing.xs,
+  },
+  statIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.xs,
   },
   statCount: {
-    ...typography.h2,
-    color: colors.surface,
-    fontWeight: "700",
-    marginTop: spacing.xs,
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
   statLabel: {
-    ...typography.caption,
-    color: colors.surface,
-    opacity: 0.9,
-    marginTop: spacing.xs,
+    fontSize: 11,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.9)",
+    letterSpacing: 0.5,
   },
   menuSection: {
     marginBottom: spacing.lg,
   },
-  sectionTitle: {
-    ...typography.h4,
-    color: colors.text,
-    fontWeight: "700",
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  sectionIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1F2937",
+    letterSpacing: -0.3,
   },
   menuCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: "#FFFFFF",
     marginHorizontal: spacing.lg,
     borderRadius: borderRadius.lg,
-    ...shadows.sm,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
     overflow: "hidden",
   },
   menuItem: {
@@ -523,11 +747,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: "#F3F4F6",
   },
   menuIconContainer: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: borderRadius.md,
     alignItems: "center",
     justifyContent: "center",
@@ -537,42 +761,56 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   menuTitle: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 15,
     fontWeight: "600",
+    color: "#1F2937",
     marginBottom: 2,
   },
   menuSubtitle: {
-    ...typography.caption,
-    color: colors.textSecondary,
+    fontSize: 12,
+    color: "#9CA3AF",
   },
-  badge: {
-    minWidth: 24,
+  chevronCircle: {
+    width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: colors.error,
+    backgroundColor: "#F3F4F6",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: spacing.xs,
+  },
+  badge: {
+    minWidth: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.sm,
   },
   badgeText: {
-    ...typography.caption,
-    fontSize: 11,
-    color: colors.surface,
+    fontSize: 12,
     fontWeight: "700",
+    color: "#FFFFFF",
   },
   logoutSection: {
     paddingHorizontal: spacing.lg,
     marginTop: spacing.lg,
   },
   logoutButton: {
-    backgroundColor: colors.error + "15",
     borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.error + "30",
     overflow: "hidden",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
-  logoutButtonContent: {
+  logoutGradient: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -580,14 +818,15 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   logoutText: {
-    ...typography.body,
-    color: colors.error,
+    fontSize: 16,
     fontWeight: "700",
+    color: "#DC2626",
   },
   versionText: {
-    ...typography.caption,
-    color: colors.textLight,
+    fontSize: 11,
+    color: "#9CA3AF",
     textAlign: "center",
     marginTop: spacing.lg,
+    letterSpacing: 0.5,
   },
 });

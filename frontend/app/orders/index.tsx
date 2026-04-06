@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,79 +9,56 @@ import {
   ActivityIndicator,
   RefreshControl,
   Image,
+  Animated,
+  Dimensions,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '../../src/store/authStore';
 import { useOrderStore, Order } from '../../src/store/orderStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 
+const { width } = Dimensions.get('window');
+
 type FilterType = 'all' | 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
 
-export default function OrdersScreen() {
-  const router = useRouter();
-  const { user } = useAuthStore();
-  const { orders, loading, fetchOrders } = useOrderStore();
-  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
-  const [refreshing, setRefreshing] = useState(false);
+interface OrderCardProps {
+  item: Order;
+  index: number;
+  onPress: () => void;
+}
 
-  useEffect(() => {
-    if (user?.id) {
-      fetchOrders(user.id);
-    }
-  }, [user]);
-
-   // ✅ FIX: Auto-refresh orders every 10 seconds if there are pending orders
-  useEffect(() => {
-    const hasPendingOrders = orders.some(order => order.payment_status === 'pending');
-    
-    if (hasPendingOrders && user?.id) {
-      const refreshTimer = setInterval(() => {
-        console.log('🔄 Auto-refreshing orders (pending orders detected)...');
-        fetchOrders(user.id);
-      }, 10000); // Refresh every 10 seconds
-
-      return () => clearInterval(refreshTimer);
-    }
-  }, [orders, user?.id]);
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    if (user?.id) {
-      await fetchOrders(user.id);
-    }
-    setRefreshing(false);
-  };
-
-  const filters = [
-    { key: 'all' as FilterType, label: 'All' },
-    { key: 'pending' as FilterType, label: 'Pending' },
-    { key: 'processing' as FilterType, label: 'Processing' },
-    { key: 'shipped' as FilterType, label: 'Shipped' },
-    { key: 'delivered' as FilterType, label: 'Delivered' },
-    { key: 'cancelled' as FilterType, label: 'Cancelled' },
-  ];
-
-  const filteredOrders = orders.filter(order => {
-    if (activeFilter === 'all') return true;
-    return order.status === activeFilter;
-  });
+const OrderCard: React.FC<OrderCardProps> = ({ item, index, onPress }) => {
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const firstProductImage = item.order_items?.[0]?.product_image || item.order_items?.[0]?.product?.images?.[0];
+  const firstProductName = item.order_items?.[0]?.product_name || item.order_items?.[0]?.product?.name || 'Product';
+  const productCount = item.order_items?.length || 0;
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending':
-        return colors.warning;
-      case 'processing':
-        return colors.primary;
-      case 'shipped':
-        return colors.primary;
-      case 'delivered':
-        return colors.success;
+      case 'pending': return '#F59E0B';
+      case 'processing': return '#8B5CF6';
+      case 'shipped': return '#3B82F6';
+      case 'delivered': return '#10B981';
       case 'cancelled':
-      case 'refunded':
-        return colors.error;
-      default:
-        return colors.textSecondary;
+      case 'refunded': return '#EF4444';
+      default: return '#6B7280';
+    }
+  };
+
+  const getStatusGradient = (status: string) => {
+    switch (status) {
+      case 'pending': return ['#FEF3C7', '#FDE68A'];
+      case 'processing': return ['#E0E7FF', '#C7D2FE'];
+      case 'shipped': return ['#DBEAFE', '#BFDBFE'];
+      case 'delivered': return ['#D1FAE5', '#A7F3D0'];
+      case 'cancelled': return ['#FEE2E2', '#FECACA'];
+      default: return ['#F3F4F6', '#E5E7EB'];
     }
   };
 
@@ -99,134 +76,305 @@ export default function OrdersScreen() {
     }
   };
 
-  const renderOrderCard = ({ item }: { item: Order }) => {
-    // ✅ FIX: Get product image and details from order_items
-    const firstProductImage = item.order_items?.[0]?.product_image || item.order_items?.[0]?.product?.images?.[0];
-    const firstProductName = item.order_items?.[0]?.product_name || item.order_items?.[0]?.product?.name || 'Product';
-    const productCount = item.order_items?.length || 0;
+  const filters = [
+    { key: 'pending', icon: 'time-outline' },
+    { key: 'processing', icon: 'refresh-outline' },
+    { key: 'shipped', icon: 'car-outline' },
+    { key: 'delivered', icon: 'checkmark-circle-outline' },
+    { key: 'cancelled', icon: 'close-circle-outline' },
+  ];
 
-    return (
+  const getFilterIcon = (status: string) => {
+    const filter = filters.find(f => f.key === status);
+    return filter?.icon || 'help-circle-outline';
+  };
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 400,
+        delay: index * 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const statusColor = getStatusColor(item.status);
+
+  return (
+    <Animated.View
+      style={{
+        opacity: opacityAnim,
+        transform: [{ scale: scaleAnim }],
+      }}
+    >
       <TouchableOpacity
-        style={[styles.orderCard, shadows.sm]}
-        onPress={() => router.push(`/order/${item.id}`)}
-        data-testid={`order-card-${item.id}`}
+        style={styles.orderCard}
+        onPress={onPress}
+        activeOpacity={0.95}
       >
-        {/* Order Header */}
-        <View style={styles.cardHeader}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.orderNumber}>{item.order_number}</Text>
-            <Text style={styles.orderDate}>{formatDate(item.created_at)}</Text>
-          </View>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-              {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-            </Text>
-          </View>
-        </View>
-
-        {/* ✅ FIX: Product Preview with Image */}
-        {productCount > 0 && (
-          <View style={styles.productPreview}>
-            {firstProductImage && (
-              <Image
-                source={{ uri: firstProductImage }}
-                style={styles.productImage}
-                defaultSource={require('../../assets/images/placeholder.jpg')}
-              />
-            )}
-            <View style={styles.productInfo}>
-              <Text style={styles.productName} numberOfLines={2}>
-                {firstProductName}
+        <LinearGradient
+          colors={['#FFFFFF', '#F9FAFB']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.cardGradient}
+        >
+          {/* Order Header */}
+          <View style={styles.cardHeader}>
+            <View style={styles.headerLeft}>
+              <Text style={styles.orderNumber}>#{item.order_number?.slice(0, 12)}</Text>
+              <View style={styles.dateContainer}>
+                <Ionicons name="calendar-outline" size={12} color="#9CA3AF" />
+                <Text style={styles.orderDate}>{formatDate(item.created_at)}</Text>
+              </View>
+            </View>
+            <LinearGradient
+              colors={getStatusGradient(item.status)}
+              style={styles.statusBadge}
+            >
+              <Ionicons name={getFilterIcon(item.status)} size={14} color={statusColor} />
+              <Text style={[styles.statusText, { color: statusColor }]}>
+                {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
               </Text>
-              {productCount > 1 && (
-                <Text style={styles.moreItems}>+{productCount - 1} more item{productCount - 1 > 1 ? 's' : ''}</Text>
+            </LinearGradient>
+          </View>
+
+          {/* Product Preview */}
+          {productCount > 0 && (
+            <View style={styles.productPreview}>
+              {firstProductImage ? (
+                <View style={styles.productImageContainer}>
+                  <Image
+                    source={{ uri: firstProductImage }}
+                    style={styles.productImage}
+                    defaultSource={require('../../assets/images/placeholder.jpg')}
+                  />
+                  <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.2)']}
+                    style={styles.productImageOverlay}
+                  />
+                </View>
+              ) : (
+                <LinearGradient
+                  colors={['#F3F4F6', '#E5E7EB']}
+                  style={styles.productImagePlaceholder}
+                >
+                  <Ionicons name="cube-outline" size={24} color="#9CA3AF" />
+                </LinearGradient>
               )}
+              <View style={styles.productInfo}>
+                <Text style={styles.productName} numberOfLines={2}>
+                  {firstProductName}
+                </Text>
+                {productCount > 1 && (
+                  <View style={styles.moreItemsBadge}>
+                    <Text style={styles.moreItems}>+{productCount - 1} more item{productCount - 1 > 1 ? 's' : ''}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
+          <View style={styles.divider} />
+
+          {/* Order Info */}
+          <View style={styles.cardBody}>
+            <View style={styles.infoRow}>
+              <LinearGradient
+                colors={['#F3F4F6', '#E5E7EB']}
+                style={styles.infoIconBg}
+              >
+                <Ionicons name="cube-outline" size={14} color="#6B7280" />
+              </LinearGradient>
+              <Text style={styles.infoText}>
+                {productCount} item{productCount !== 1 ? 's' : ''}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <LinearGradient
+                colors={[statusColor + '20', statusColor + '10']}
+                style={styles.paymentIconBg}
+              >
+                <Ionicons 
+                  name={item.payment_status === 'paid' ? 'checkmark-circle' : 'time-outline'} 
+                  size={14} 
+                  color={item.payment_status === 'paid' ? '#10B981' : '#F59E0B'} 
+                />
+              </LinearGradient>
+              <Text style={[styles.infoText, { color: item.payment_status === 'paid' ? '#10B981' : '#F59E0B' }]}>
+                {item.payment_status.charAt(0).toUpperCase() + item.payment_status.slice(1)}
+              </Text>
             </View>
           </View>
-        )}
 
-        <View style={styles.divider} />
+          <View style={styles.divider} />
 
-        <View style={styles.cardBody}>
-          <View style={styles.infoRow}>
-            <Ionicons name="cube" size={18} color={colors.textSecondary} />
-            <Text style={styles.infoText}>
-              {productCount} item{productCount !== 1 ? 's' : ''}
-            </Text>
+          {/* Card Footer */}
+          <View style={styles.cardFooter}>
+            <Text style={styles.totalLabel}>Total Amount</Text>
+            <LinearGradient
+              colors={['#1E1B4B', '#312E81']}
+              style={styles.totalContainer}
+            >
+              <Text style={styles.totalValue}>₹{(item.total_amount || 0).toFixed(2)}</Text>
+            </LinearGradient>
           </View>
-          <View style={styles.infoRow}>
-            <Ionicons 
-              name={item.payment_status === 'paid' ? 'checkmark-circle' : 'time'} 
-              size={18} 
-              color={item.payment_status === 'paid' ? colors.success : colors.warning} 
-            />
-            <Text style={styles.infoText}>
-              {item.payment_status.charAt(0).toUpperCase() + item.payment_status.slice(1)}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.cardFooter}>
-          <Text style={styles.totalLabel}>Total Amount</Text>
-          <Text style={styles.totalValue}>₹{(item.total_amount || 0).toFixed(2)}</Text>
-        </View>
+        </LinearGradient>
       </TouchableOpacity>
-    );
+    </Animated.View>
+  );
+};
+
+export default function OrdersScreen() {
+  const router = useRouter();
+  const { user } = useAuthStore();
+  const { orders, loading, fetchOrders } = useOrderStore();
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const [refreshing, setRefreshing] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchOrders(user.id);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  useEffect(() => {
+    const hasPendingOrders = orders.some(order => order.payment_status === 'pending');
+    
+    if (hasPendingOrders && user?.id) {
+      const refreshTimer = setInterval(() => {
+        console.log('🔄 Auto-refreshing orders (pending orders detected)...');
+        fetchOrders(user.id);
+      }, 10000);
+
+      return () => clearInterval(refreshTimer);
+    }
+  }, [orders, user?.id]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (user?.id) {
+      await fetchOrders(user.id);
+    }
+    setRefreshing(false);
   };
+
+  const filters = [
+    { key: 'all' as FilterType, label: 'All', icon: 'apps-outline', color: '#8B5CF6' },
+    { key: 'pending' as FilterType, label: 'Pending', icon: 'time-outline', color: '#F59E0B' },
+    { key: 'processing' as FilterType, label: 'Processing', icon: 'refresh-outline', color: '#8B5CF6' },
+    { key: 'shipped' as FilterType, label: 'Shipped', icon: 'car-outline', color: '#3B82F6' },
+    { key: 'delivered' as FilterType, label: 'Delivered', icon: 'checkmark-circle-outline', color: '#10B981' },
+    { key: 'cancelled' as FilterType, label: 'Cancelled', icon: 'close-circle-outline', color: '#EF4444' },
+  ];
+
+  const filteredOrders = orders.filter(order => {
+    if (activeFilter === 'all') return true;
+    return order.status === activeFilter;
+  });
 
   if (loading && orders.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        <LinearGradient
+          colors={['#F9FAFB', '#FFFFFF']}
+          style={styles.loadingContainer}
+        >
+          <ActivityIndicator size="large" color="#8B5CF6" />
           <Text style={styles.loadingText}>Loading orders...</Text>
-        </View>
+        </LinearGradient>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.title}>My Orders</Text>
-          <Text style={styles.subtitle}>
-            {filteredOrders.length} {filteredOrders.length === 1 ? 'order' : 'orders'}
-          </Text>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Premium Header */}
+      <LinearGradient
+        colors={['#1E1B4B', '#312E81', '#4C1D95']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Text style={styles.title}>My Orders</Text>
+            <View style={styles.orderCountBadge}>
+              <Text style={styles.subtitle}>
+                {filteredOrders.length} {filteredOrders.length === 1 ? 'Order' : 'Orders'}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.menuButton}>
+            <Ionicons name="options-outline" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
-      </View>
+      </LinearGradient>
 
-      {/* Filters */}
+      {/* Premium Filters */}
       <View style={styles.filtersContainer}>
         <FlatList
           horizontal
           data={filters}
           keyExtractor={(item) => item.key}
-          renderItem={({ item: filter }) => (
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                activeFilter === filter.key && styles.activeFilterButton,
-              ]}
-              onPress={() => setActiveFilter(filter.key)}
-              data-testid={`filter-${filter.key}`}
-            >
-              <Text
-                style={[
-                  styles.filterText,
-                  activeFilter === filter.key && styles.activeFilterText,
-                ]}
+          renderItem={({ item: filter }) => {
+            const isActive = activeFilter === filter.key;
+            return (
+              <TouchableOpacity
+                style={styles.filterWrapper}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setActiveFilter(filter.key);
+                }}
+                activeOpacity={0.8}
               >
-                {filter.label}
-              </Text>
-            </TouchableOpacity>
-          )}
+                {isActive ? (
+                  <LinearGradient
+                    colors={[filter.color, filter.color + 'CC']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.filterButtonActive}
+                  >
+                    <Ionicons name={filter.icon as any} size={14} color="#FFFFFF" />
+                    <Text style={styles.filterTextActive}>{filter.label}</Text>
+                  </LinearGradient>
+                ) : (
+                  <BlurView intensity={5} tint="light" style={styles.filterButton}>
+                    <Ionicons name={filter.icon as any} size={14} color="#6B7280" />
+                    <Text style={styles.filterText}>{filter.label}</Text>
+                  </BlurView>
+                )}
+              </TouchableOpacity>
+            );
+          }}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filtersList}
         />
@@ -234,8 +382,13 @@ export default function OrdersScreen() {
 
       {/* Orders List */}
       {filteredOrders.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="bag-handle-outline" size={80} color={colors.textSecondary} />
+        <Animated.View style={[styles.emptyContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+          <LinearGradient
+            colors={['#F3F4F6', '#E5E7EB']}
+            style={styles.emptyIconContainer}
+          >
+            <Ionicons name="bag-handle-outline" size={48} color="#9CA3AF" />
+          </LinearGradient>
           <Text style={styles.emptyTitle}>No orders found</Text>
           <Text style={styles.emptySubtitle}>
             {activeFilter === 'all'
@@ -245,25 +398,40 @@ export default function OrdersScreen() {
           <TouchableOpacity
             style={styles.browseButton}
             onPress={() => router.push('/(tabs)/categories')}
-            data-testid="browse-products-button"
           >
-            <Text style={styles.browseButtonText}>Browse Products</Text>
+            <LinearGradient
+              colors={['#8B5CF6', '#7C3AED']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.browseGradient}
+            >
+              <Ionicons name="storefront-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.browseButtonText}>Browse Products</Text>
+            </LinearGradient>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       ) : (
-        <FlatList
+        <Animated.FlatList
           data={filteredOrders}
           keyExtractor={(item) => item.id}
-          renderItem={renderOrderCard}
+          renderItem={({ item, index }) => (
+            <OrderCard
+              item={item}
+              index={index}
+              onPress={() => router.push(`/order/${item.id}`)}
+            />
+          )}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={[colors.primary]}
+              tintColor="#8B5CF6"
+              colors={['#8B5CF6']}
             />
           }
+          style={{ opacity: fadeAnim }}
         />
       )}
     </SafeAreaView>
@@ -273,63 +441,141 @@ export default function OrdersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F9FAFB',
+  },
+  headerGradient: {
+    paddingBottom: spacing.lg,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.lg,
-    paddingBottom: spacing.md,
+    justifyContent: 'space-between',
+    paddingTop: spacing.md,
+    paddingHorizontal: spacing.lg,
   },
   backButton: {
-    marginRight: spacing.md,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerContent: {
-    flex: 1,
+    alignItems: 'center',
   },
   title: {
-    ...typography.h2,
-    color: colors.text,
-    marginBottom: spacing.xs,
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  orderCountBadge: {
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: borderRadius.md,
   },
   subtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#FFFFFF',
+  },
+  menuButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filtersContainer: {
-    marginBottom: spacing.md,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
   },
   filtersList: {
     paddingHorizontal: spacing.lg,
     gap: spacing.sm,
   },
-  filterButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
+  filterWrapper: {
     marginRight: spacing.sm,
   },
-  activeFilterButton: {
-    backgroundColor: colors.primary,
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.xl,
+    gap: spacing.xs,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  filterButtonActive: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.xl,
+    gap: spacing.xs,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   filterText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6B7280',
   },
-  activeFilterText: {
-    color: colors.surface,
+  filterTextActive: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   listContent: {
     padding: spacing.lg,
     paddingTop: 0,
   },
   orderCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
     marginBottom: spacing.md,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  cardGradient: {
+    padding: spacing.md,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -341,22 +587,30 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   orderNumber: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1F2937',
     marginBottom: spacing.xs,
   },
+  dateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   orderDate: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
+    fontSize: 11,
+    color: '#9CA3AF',
   },
   statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.md,
+    gap: 4,
   },
   statusText: {
-    ...typography.caption,
+    fontSize: 11,
     fontWeight: '600',
   },
   productPreview: {
@@ -365,43 +619,85 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: '#F3F4F6',
+  },
+  productImageContainer: {
+    position: 'relative',
   },
   productImage: {
-    width: 60,
-    height: 60,
+    width: 65,
+    height: 65,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.border,
+  },
+  productImageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 30,
+    borderBottomLeftRadius: borderRadius.md,
+    borderBottomRightRadius: borderRadius.md,
+  },
+  productImagePlaceholder: {
+    width: 65,
+    height: 65,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   productInfo: {
     flex: 1,
   },
   productName: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '500',
-    marginBottom: spacing.xs / 2,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: spacing.xs,
+    lineHeight: 20,
+  },
+  moreItemsBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
   },
   moreItems: {
-    ...typography.caption,
-    color: colors.textSecondary,
+    fontSize: 11,
+    color: '#6B7280',
   },
   divider: {
     height: 1,
-    backgroundColor: colors.border,
+    backgroundColor: '#F3F4F6',
     marginVertical: spacing.sm,
   },
   cardBody: {
-    gap: spacing.sm,
+    flexDirection: 'row',
+    gap: spacing.md,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
+  },
+  infoIconBg: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paymentIconBg: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   infoText: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#4B5563',
   },
   cardFooter: {
     flexDirection: 'row',
@@ -410,13 +706,18 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   totalLabel: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  totalContainer: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
   },
   totalValue: {
-    ...typography.h4,
-    color: colors.primary,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   loadingContainer: {
     flex: 1,
@@ -425,8 +726,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   loadingText: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#6B7280',
   },
   emptyContainer: {
     flex: 1,
@@ -434,27 +735,51 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.xl,
   },
+  emptyIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+  },
   emptyTitle: {
-    ...typography.h3,
-    color: colors.text,
-    marginTop: spacing.lg,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
     marginBottom: spacing.sm,
   },
   emptySubtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#9CA3AF',
     textAlign: 'center',
     marginBottom: spacing.xl,
   },
   browseButton: {
-    backgroundColor: colors.primary,
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  browseGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
-    borderRadius: borderRadius.lg,
+    gap: spacing.sm,
   },
   browseButtonText: {
-    ...typography.body,
-    color: colors.surface,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

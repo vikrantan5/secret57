@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+import { ActivityIndicator } from 'react-native';
 import {
   View,
   Text,
@@ -7,38 +8,79 @@ import {
   TouchableOpacity,
   RefreshControl,
   Image,
+  Animated,
+  Dimensions,
+    Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { BlurView } from 'expo-blur';
 import { useAuthStore } from '../../src/store/authStore';
 import { useBookingStore, Booking } from '../../src/store/bookingStore';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 
+const { width, height } = Dimensions.get('window');
 type FilterType = 'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled';
 
 interface BookingCardProps {
   booking: Booking;
   onPress: () => void;
+  index: number;
 }
 
-const BookingCard: React.FC<BookingCardProps> = ({ booking, onPress }) => {
+const BookingCard: React.FC<BookingCardProps> = ({ booking, onPress, index }) => {
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 400,
+        delay: index * 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending':
-        return colors.warning;
+        return '#F59E0B';
       case 'confirmed':
-        return colors.primary;
+        return '#8B5CF6';
       case 'completed':
-        return colors.success;
+        return '#10B981';
       case 'cancelled':
       case 'rejected':
-        return colors.error;
+        return '#EF4444';
       default:
-        return colors.textSecondary;
+        return '#6B7280';
+    }
+  };
+
+  const getStatusGradient = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return ['#FEF3C7', '#FDE68A'];
+      case 'confirmed':
+        return ['#E0E7FF', '#C7D2FE'];
+      case 'completed':
+        return ['#D1FAE5', '#A7F3D0'];
+      case 'cancelled':
+        return ['#FEE2E2', '#FECACA'];
+      default:
+        return ['#F3F4F6', '#E5E7EB'];
     }
   };
 
@@ -74,7 +116,6 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking, onPress }) => {
 
   const formatTime = (timeString?: string) => {
     if (!timeString) return 'Time not set';
-
     try {
       const [hours, minutes] = timeString.split(':');
       const hour = parseInt(hours);
@@ -87,102 +128,154 @@ const BookingCard: React.FC<BookingCardProps> = ({ booking, onPress }) => {
   };
 
   const statusColor = getStatusColor(booking.status);
-
-  // ✅ FIX: Get service image
+  const statusGradient = getStatusGradient(booking.status);
   const serviceImage = booking.service?.images?.[0];
   const serviceName = booking.service?.name || 'Service Booking';
 
   return (
-    <TouchableOpacity
-      style={styles.bookingCard}
-      onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        onPress();
-      }}
-      activeOpacity={0.8}
+    <Animated.View
+      style={[
+        styles.bookingCardWrapper,
+        {
+          opacity: opacityAnim,
+          transform: [{ scale: scaleAnim }],
+        },
+      ]}
     >
-      {/* Status Timeline Indicator */}
-      <View style={[styles.statusIndicator, { backgroundColor: statusColor }]} />
-
-      <View style={styles.cardContent}>
-        {/* Booking Header */}
-        <View style={styles.cardHeader}>
-          <View style={styles.cardHeaderLeft}>
-            <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
-              <Ionicons name={getStatusIcon(booking.status)} size={16} color={statusColor} />
-              <Text style={[styles.statusText, { color: statusColor }]}>
+      <TouchableOpacity
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onPress();
+        }}
+        activeOpacity={0.95}
+      >
+        <LinearGradient
+          colors={['#FFFFFF', '#F9FAFB']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.bookingCard}
+        >
+          {/* Premium Status Bar */}
+          <LinearGradient
+            colors={[statusColor, statusColor + 'CC']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.statusBar}
+          >
+            <View style={styles.statusBarContent}>
+              <Ionicons name={getStatusIcon(booking.status)} size={14} color="#FFFFFF" />
+              <Text style={styles.statusBarText}>
                 {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
               </Text>
             </View>
-          </View>
-          <Text style={styles.bookingId}>#{booking.id.slice(0, 8)}</Text>
-        </View>
+            <Text style={styles.bookingIdText}>#{booking.id.slice(0, 8)}</Text>
+          </LinearGradient>
 
-        {/* ✅ FIX: Service Preview with Image */}
-        {serviceImage && (
-          <View style={styles.servicePreview}>
-            <Image
-              source={{ uri: serviceImage }}
-              style={styles.serviceImage}
-              defaultSource={require('../../assets/images/placeholder.jpg')}
-            />
-            <View style={styles.serviceInfo}>
-              <Text style={styles.serviceName} numberOfLines={2}>
-                {serviceName}
-              </Text>
-              {booking.service?.duration && (
-                <Text style={styles.serviceDuration}>
-                  <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
-                  {' '}{booking.service.duration} mins
-                </Text>
+          <View style={styles.cardContent}>
+            {/* Service Image & Info */}
+            <View style={styles.serviceSection}>
+              {serviceImage ? (
+                <View style={styles.imageContainer}>
+                  <Image
+                    source={{ uri: serviceImage }}
+                    style={styles.serviceImage}
+                    defaultSource={require('../../assets/images/placeholder.jpg')}
+                  />
+                  <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.3)']}
+                    style={styles.imageOverlay}
+                  />
+                </View>
+              ) : (
+                <LinearGradient
+                  colors={['#E0E7FF', '#C7D2FE']}
+                  style={styles.imagePlaceholder}
+                >
+                  <Ionicons name="briefcase-outline" size={32} color="#8B5CF6" />
+                </LinearGradient>
               )}
+
+              <View style={styles.serviceDetails}>
+                <Text style={styles.serviceName} numberOfLines={2}>
+                  {serviceName}
+                </Text>
+                {booking.service?.duration && (
+                  <View style={styles.durationBadge}>
+                    <Ionicons name="time-outline" size={12} color="#8B5CF6" />
+                    <Text style={styles.durationText}>{booking.service.duration} mins</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* Date & Time Row */}
+            <View style={styles.infoRow}>
+              <View style={styles.infoItem}>
+                <LinearGradient
+                  colors={['#F3F4F6', '#E5E7EB']}
+                  style={styles.infoIconBg}
+                >
+                  <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+                </LinearGradient>
+                <Text style={styles.infoText}>{formatDate(booking.booking_date)}</Text>
+              </View>
+              <View style={styles.infoDivider} />
+              <View style={styles.infoItem}>
+                <LinearGradient
+                  colors={['#F3F4F6', '#E5E7EB']}
+                  style={styles.infoIconBg}
+                >
+                  <Ionicons name="time-outline" size={16} color="#6B7280" />
+                </LinearGradient>
+                <Text style={styles.infoText}>
+                  {booking.booking_time ? formatTime(booking.booking_time) : 'N/A'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Location */}
+            {booking.address && (
+              <View style={styles.locationContainer}>
+                <LinearGradient
+                  colors={['#F3F4F6', '#E5E7EB']}
+                  style={styles.locationIconBg}
+                >
+                  <Ionicons name="location-outline" size={14} color="#6B7280" />
+                </LinearGradient>
+                <Text style={styles.locationText} numberOfLines={1}>
+                  {booking.address}
+                </Text>
+              </View>
+            )}
+
+            {/* Footer with Price and Action */}
+            <View style={styles.cardFooter}>
+              <View style={styles.priceContainer}>
+                <Text style={styles.priceLabel}>Total Amount</Text>
+                <LinearGradient
+                  colors={['#1E1B4B', '#312E81']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.priceGradient}
+                >
+                  <Text style={styles.priceValue}>₹{(booking.total_amount || 0).toFixed(2)}</Text>
+                </LinearGradient>
+              </View>
+              <TouchableOpacity style={styles.detailsButton}>
+                <LinearGradient
+                  colors={['#8B5CF6', '#7C3AED']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.detailsButtonGradient}
+                >
+                  <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
           </View>
-        )}
-
-        {/* Service Name (if no image) */}
-        {!serviceImage && (
-          <Text style={styles.serviceName} numberOfLines={2}>
-            {serviceName}
-          </Text>
-        )}
-
-        {/* Details Row */}
-        <View style={styles.detailsRow}>
-          <View style={styles.detailItem}>
-            <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
-            <Text style={styles.detailText}>{formatDate(booking.booking_date)}</Text>
-          </View>
-          <View style={styles.detailItem}>
-            <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
-            <Text style={styles.detailText}>
-              {booking.booking_time ? formatTime(booking.booking_time) : 'N/A'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Location */}
-        {booking.address && (
-          <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
-            <Text style={styles.locationText} numberOfLines={1}>
-              {booking.address}
-            </Text>
-          </View>
-        )}
-
-        {/* Footer */}
-        <View style={styles.cardFooter}>
-          <View style={styles.priceContainer}>
-            <Text style={styles.priceLabel}>Total</Text>
-            <Text style={styles.priceValue}>₹{(booking.total_amount || 0).toFixed(2)}</Text>
-          </View>
-          <View style={styles.arrowButton}>
-            <Ionicons name="arrow-forward" size={20} color={colors.primary} />
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
+        </LinearGradient>
+      </TouchableOpacity>
+    </Animated.View>
   );
 };
 
@@ -192,6 +285,7 @@ export default function BookingsScreen() {
   const { bookings, loading, fetchBookings } = useBookingStore();
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [refreshing, setRefreshing] = useState(false);
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (user?.id) {
@@ -209,11 +303,11 @@ export default function BookingsScreen() {
   };
 
   const filters = [
-    { key: 'all' as FilterType, label: 'All', icon: 'list-outline' },
-    { key: 'pending' as FilterType, label: 'Pending', icon: 'time-outline' },
-    { key: 'confirmed' as FilterType, label: 'Confirmed', icon: 'checkmark-circle-outline' },
-    { key: 'completed' as FilterType, label: 'Completed', icon: 'checkmark-done-outline' },
-    { key: 'cancelled' as FilterType, label: 'Cancelled', icon: 'close-circle-outline' },
+    { key: 'all' as FilterType, label: 'All', icon: 'apps-outline', color: '#8B5CF6' },
+    { key: 'pending' as FilterType, label: 'Pending', icon: 'time-outline', color: '#F59E0B' },
+    { key: 'confirmed' as FilterType, label: 'Confirmed', icon: 'checkmark-circle-outline', color: '#8B5CF6' },
+    { key: 'completed' as FilterType, label: 'Completed', icon: 'checkmark-done-outline', color: '#10B981' },
+    { key: 'cancelled' as FilterType, label: 'Cancelled', icon: 'close-circle-outline', color: '#EF4444' },
   ];
 
   const filteredBookings = bookings.filter((booking) => {
@@ -226,41 +320,59 @@ export default function BookingsScreen() {
     setActiveFilter(filter);
   };
 
-  const getFilterColor = (filter: FilterType) => {
-    switch (filter) {
-      case 'pending':
-        return colors.warning;
-      case 'confirmed':
-        return colors.primary;
-      case 'completed':
-        return colors.success;
-      case 'cancelled':
-        return colors.error;
-      default:
-        return colors.primary;
-    }
-  };
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [1, 0.9],
+    extrapolate: 'clamp',
+  });
+
+  const headerTranslateY = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [0, -20],
+    extrapolate: 'clamp',
+  });
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
-      <LinearGradient
-        colors={[colors.primary, colors.secondary]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.headerGradient}
+      {/* Premium Header */}
+      <Animated.View
+        style={[
+          styles.headerWrapper,
+          {
+            opacity: headerOpacity,
+            transform: [{ translateY: headerTranslateY }],
+          },
+        ]}
       >
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>My Bookings</Text>
-            <Text style={styles.subtitle}>
-              {filteredBookings.length} {filteredBookings.length === 1 ? 'booking' : 'bookings'}
-            </Text>
+        <LinearGradient
+          colors={['#1E1B4B', '#312E81', '#4C1D95']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.title}>My Bookings</Text>
+              <View style={styles.bookingCountBadge}>
+                <Text style={styles.bookingCount}>
+                  {filteredBookings.length} {filteredBookings.length === 1 ? 'Booking' : 'Bookings'}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity style={styles.menuButton}>
+              <Ionicons name="options-outline" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
-        </View>
-      </LinearGradient>
+        </LinearGradient>
+      </Animated.View>
 
-      {/* Filter Chips */}
+      {/* Premium Filter Chips */}
       <View style={styles.filterContainer}>
         <FlatList
           horizontal
@@ -268,43 +380,50 @@ export default function BookingsScreen() {
           data={filters}
           keyExtractor={(item) => item.key}
           contentContainerStyle={styles.filterList}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[
-                styles.filterChip,
-                activeFilter === item.key && styles.filterChipActive,
-              ]}
-              onPress={() => handleFilterPress(item.key)}
-            >
-              {activeFilter === item.key ? (
-                <LinearGradient
-                  colors={[getFilterColor(item.key), getFilterColor(item.key) + 'CC']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.filterChipGradient}
-                >
-                  <Ionicons name={item.icon as any} size={18} color={colors.surface} />
-                  <Text style={styles.filterChipTextActive}>{item.label}</Text>
-                </LinearGradient>
-              ) : (
-                <>
-                  <Ionicons name={item.icon as any} size={18} color={colors.textSecondary} />
-                  <Text style={styles.filterChipText}>{item.label}</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          )}
+          renderItem={({ item }) => {
+            const isActive = activeFilter === item.key;
+            return (
+              <TouchableOpacity
+                style={styles.filterChipWrapper}
+                onPress={() => handleFilterPress(item.key)}
+                activeOpacity={0.8}
+              >
+                {isActive ? (
+                  <LinearGradient
+                    colors={[item.color, item.color + 'CC']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.filterChipActive}
+                  >
+                    <Ionicons name={item.icon as any} size={16} color="#FFFFFF" />
+                    <Text style={styles.filterChipTextActive}>{item.label}</Text>
+                  </LinearGradient>
+                ) : (
+                  <BlurView intensity={5} tint="light" style={styles.filterChipInactive}>
+                    <Ionicons name={item.icon as any} size={16} color="#6B7280" />
+                    <Text style={styles.filterChipText}>{item.label}</Text>
+                  </BlurView>
+                )}
+              </TouchableOpacity>
+            );
+          }}
         />
       </View>
 
       {/* Bookings List */}
       {loading && bookings.length === 0 ? (
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading bookings...</Text>
+          <LinearGradient
+            colors={['#F3F4F6', '#E5E7EB']}
+            style={styles.loadingCard}
+          >
+            <ActivityIndicator size="large" color="#8B5CF6" />
+            <Text style={styles.loadingText}>Loading your bookings...</Text>
+          </LinearGradient>
         </View>
       ) : filteredBookings.length === 0 ? (
         <EmptyState
-          title="No bookings found"
+          title="No Bookings Found"
           message={
             activeFilter === 'all'
               ? 'Your bookings will appear here once you book a service'
@@ -313,15 +432,30 @@ export default function BookingsScreen() {
           type="bookings"
         />
       ) : (
-        <FlatList
+        <Animated.FlatList
           data={filteredBookings}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <BookingCard booking={item} onPress={() => router.push(`/booking/${item.id}` as any)} />
+          renderItem={({ item, index }) => (
+            <BookingCard
+              booking={item}
+              index={index}
+              onPress={() => router.push(`/booking/${item.id}` as any)}
+            />
           )}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#8B5CF6"
+              colors={['#8B5CF6']}
+            />
+          }
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+            useNativeDriver: true,
+          })}
+          scrollEventThrottle={16}
         />
       )}
     </SafeAreaView>
@@ -331,173 +465,288 @@ export default function BookingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F9FAFB',
+  },
+  headerWrapper: {
+    position: 'relative',
+    zIndex: 10,
   },
   headerGradient: {
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.xl,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingTop: spacing.md,
     paddingHorizontal: spacing.lg,
   },
-  title: {
-    ...typography.h2,
-    color: colors.surface,
-    fontWeight: '700',
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  subtitle: {
-    ...typography.bodySmall,
-    color: colors.surface,
-    opacity: 0.9,
+  headerTextContainer: {
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  bookingCountBadge: {
     marginTop: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: borderRadius.md,
+  },
+  bookingCount: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '500',
+  },
+  menuButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterContainer: {
     marginTop: spacing.md,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   filterList: {
     paddingHorizontal: spacing.lg,
     gap: spacing.sm,
   },
-  filterChip: {
+  filterChipWrapper: {
+    marginRight: spacing.sm,
+  },
+  filterChipActive: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.xl,
-    backgroundColor: colors.surface,
     gap: spacing.xs,
-    ...shadows.sm,
-    marginRight: spacing.sm,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
-  filterChipActive: {
-    backgroundColor: 'transparent',
-    overflow: 'hidden',
-  },
-  filterChipGradient: {
+  filterChipInactive: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+    borderRadius: borderRadius.xl,
     gap: spacing.xs,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   filterChipText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    fontWeight: '600',
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
   },
   filterChipTextActive: {
-    ...typography.bodySmall,
-    color: colors.surface,
-    fontWeight: '700',
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  loadingCard: {
+    width: 200,
+    padding: spacing.xl,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    gap: spacing.md,
   },
   loadingText: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: spacing.md,
   },
   listContent: {
     padding: spacing.lg,
+    paddingTop: 0,
+  },
+  bookingCardWrapper: {
+    marginBottom: spacing.md,
   },
   bookingCard: {
-    backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
-    marginBottom: spacing.md,
     overflow: 'hidden',
-    ...shadows.md,
-    flexDirection: 'row',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
-  statusIndicator: {
-    width: 4,
-  },
-  cardContent: {
-    flex: 1,
-    padding: spacing.md,
-  },
-  cardHeader: {
+  statusBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
   },
-  cardHeaderLeft: {
-    flex: 1,
-  },
-  statusBadge: {
+  statusBarContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
     gap: spacing.xs,
   },
-  statusText: {
-    ...typography.caption,
-    fontWeight: '700',
+  statusBarText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  bookingId: {
-    ...typography.caption,
-    color: colors.textLight,
+  bookingIdText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.8)',
   },
-  servicePreview: {
+  cardContent: {
+    padding: spacing.md,
+  },
+  serviceSection: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  imageContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
   },
   serviceImage: {
-    width: 60,
-    height: 60,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.border,
+    width: '100%',
+    height: '100%',
   },
-  serviceInfo: {
+  imageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 30,
+  },
+  imagePlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  serviceDetails: {
     flex: 1,
+    justifyContent: 'center',
   },
   serviceName: {
-    ...typography.h4,
-    color: colors.text,
+    fontSize: 16,
     fontWeight: '600',
-    marginBottom: spacing.sm,
+    color: '#1F2937',
+    marginBottom: spacing.xs,
+    lineHeight: 22,
   },
-  serviceDuration: {
-    ...typography.caption,
-    color: colors.textSecondary,
+  durationBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    backgroundColor: '#F3F4F6',
+    borderRadius: borderRadius.sm,
   },
-  detailsRow: {
+  durationText: {
+    fontSize: 11,
+    color: '#6B7280',
+  },
+  infoRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
     gap: spacing.md,
-    marginBottom: spacing.sm,
   },
-  detailItem: {
+  infoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
-  detailText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
+  infoIconBg: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  locationRow: {
+  infoText: {
+    fontSize: 13,
+    color: '#4B5563',
+  },
+  infoDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: '#E5E7EB',
+  },
+  locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  locationIconBg: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   locationText: {
-    ...typography.caption,
-    color: colors.textSecondary,
     flex: 1,
+    fontSize: 12,
+    color: '#6B7280',
   },
   cardFooter: {
     flexDirection: 'row',
@@ -506,7 +755,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: '#F3F4F6',
   },
   priceContainer: {
     flexDirection: 'row',
@@ -514,19 +763,27 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   priceLabel: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  priceGradient: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
   },
   priceValue: {
-    ...typography.h4,
-    color: colors.primary,
+    fontSize: 16,
     fontWeight: '700',
+    color: '#FFFFFF',
   },
-  arrowButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primaryLight + '20',
+  detailsButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  detailsButtonGradient: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },

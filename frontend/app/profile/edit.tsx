@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,15 +9,22 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  Animated,
+  Dimensions,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '../../src/store/authStore';
 import { useUserStore } from '../../src/store/userStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
+
+const { width, height } = Dimensions.get('window');
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -31,6 +38,9 @@ export default function EditProfileScreen() {
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
 
   useEffect(() => {
     if (userData) {
@@ -40,8 +50,35 @@ export default function EditProfileScreen() {
     }
   }, [userData]);
 
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
   const pickImage = async () => {
     try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Needed', 'Please grant permission to access your photos');
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -68,9 +105,9 @@ export default function EditProfileScreen() {
     if (!user?.id) return;
 
     setUploading(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 
     try {
-      // Upload avatar if changed
       if (avatarUri && !avatarUri.startsWith('http')) {
         const uploadResult = await uploadAvatar(user.id, avatarUri);
         if (!uploadResult.success) {
@@ -78,7 +115,6 @@ export default function EditProfileScreen() {
         }
       }
 
-      // Update profile
       const updates: any = {
         name: name.trim(),
         phone: phone.trim(),
@@ -106,146 +142,255 @@ export default function EditProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Profile</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Avatar Section */}
-        <View style={styles.avatarSection}>
-          <TouchableOpacity onPress={pickImage} style={styles.avatarContainer}>
-            {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={styles.avatar} />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarText}>
-                  {name ? name.charAt(0).toUpperCase() : 'U'}
-                </Text>
-              </View>
-            )}
-            <View style={styles.cameraIcon}>
-              <Ionicons name="camera" size={20} color={colors.surface} />
-            </View>
+      {/* Premium Header */}
+      <LinearGradient
+        colors={['#1E1B4B', '#312E81', '#4C1D95']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          <Text style={styles.avatarHint}>Tap to change photo</Text>
+          <Text style={styles.headerTitle}>Edit Profile</Text>
+          <TouchableOpacity style={styles.menuButton}>
+            <Ionicons name="options-outline" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+
+      <Animated.ScrollView
+        showsVerticalScrollIndicator={false}
+        style={[styles.scrollView, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+      >
+        {/* Premium Avatar Section */}
+        <View style={styles.avatarSection}>
+          <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+            <TouchableOpacity onPress={pickImage} style={styles.avatarContainer} activeOpacity={0.9}>
+              {avatarUri ? (
+                <View style={styles.avatarWrapper}>
+                  <Image source={{ uri: avatarUri }} style={styles.avatar} />
+                  <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.3)']}
+                    style={styles.avatarOverlay}
+                  />
+                </View>
+              ) : (
+                <LinearGradient
+                  colors={['#F3F4F6', '#E5E7EB']}
+                  style={styles.avatarPlaceholder}
+                >
+                  <Text style={styles.avatarText}>
+                    {name ? name.charAt(0).toUpperCase() : 'U'}
+                  </Text>
+                </LinearGradient>
+              )}
+              <LinearGradient
+                colors={['#8B5CF6', '#7C3AED']}
+                style={styles.cameraIcon}
+              >
+                <Ionicons name="camera" size={20} color="#FFFFFF" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
+          <Text style={styles.avatarHint}>Tap to change profile photo</Text>
         </View>
 
-        {/* Form */}
+        {/* Premium Form */}
         <View style={styles.form}>
-          {/* Name */}
+          {/* Name Field */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Full Name *</Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="person-outline" size={20} color={colors.textLight} />
+            <View style={styles.labelContainer}>
+              <LinearGradient
+                colors={['#8B5CF6', '#7C3AED']}
+                style={styles.labelIcon}
+              >
+                <Ionicons name="person-outline" size={12} color="#FFFFFF" />
+              </LinearGradient>
+              <Text style={styles.label}>Full Name *</Text>
+            </View>
+            <LinearGradient
+              colors={['#FFFFFF', '#F9FAFB']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.inputContainer}
+            >
+              <Ionicons name="person-outline" size={18} color="#8B5CF6" />
               <TextInput
                 style={styles.input}
                 value={name}
                 onChangeText={setName}
                 placeholder="Enter your name"
-                placeholderTextColor={colors.textLight}
+                placeholderTextColor="#9CA3AF"
               />
-            </View>
+            </LinearGradient>
           </View>
 
-          {/* Email (Read-only) */}
+          {/* Email Field (Read-only) */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
-            <View style={[styles.inputContainer, styles.inputDisabled]}>
-              <Ionicons name="mail-outline" size={20} color={colors.textLight} />
+            <View style={styles.labelContainer}>
+              <LinearGradient
+                colors={['#10B981', '#059669']}
+                style={styles.labelIcon}
+              >
+                <Ionicons name="mail-outline" size={12} color="#FFFFFF" />
+              </LinearGradient>
+              <Text style={styles.label}>Email Address</Text>
+            </View>
+            <LinearGradient
+              colors={['#F3F4F6', '#E5E7EB']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.inputContainer, styles.inputDisabled]}
+            >
+              <Ionicons name="mail-outline" size={18} color="#9CA3AF" />
               <TextInput
                 style={styles.input}
                 value={email}
                 editable={false}
-                placeholderTextColor={colors.textLight}
+                placeholderTextColor="#9CA3AF"
               />
+            </LinearGradient>
+            <View style={styles.hintContainer}>
+              <Ionicons name="information-circle-outline" size={12} color="#9CA3AF" />
+              <Text style={styles.hint}>Email cannot be changed</Text>
             </View>
-            <Text style={styles.hint}>Email cannot be changed</Text>
           </View>
 
-          {/* Phone */}
+          {/* Phone Field */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Phone Number</Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="call-outline" size={20} color={colors.textLight} />
+            <View style={styles.labelContainer}>
+              <LinearGradient
+                colors={['#F59E0B', '#D97706']}
+                style={styles.labelIcon}
+              >
+                <Ionicons name="call-outline" size={12} color="#FFFFFF" />
+              </LinearGradient>
+              <Text style={styles.label}>Phone Number</Text>
+            </View>
+            <LinearGradient
+              colors={['#FFFFFF', '#F9FAFB']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.inputContainer}
+            >
+              <Ionicons name="call-outline" size={18} color="#F59E0B" />
               <TextInput
                 style={styles.input}
                 value={phone}
                 onChangeText={setPhone}
                 placeholder="Enter your phone"
-                placeholderTextColor={colors.textLight}
+                placeholderTextColor="#9CA3AF"
                 keyboardType="phone-pad"
               />
-            </View>
+            </LinearGradient>
           </View>
 
-          {/* Gender */}
+          {/* Gender Selection */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Gender</Text>
+            <View style={styles.labelContainer}>
+              <LinearGradient
+                colors={['#EC4899', '#DB2777']}
+                style={styles.labelIcon}
+              >
+                <Ionicons name="transgender-outline" size={12} color="#FFFFFF" />
+              </LinearGradient>
+              <Text style={styles.label}>Gender</Text>
+            </View>
             <View style={styles.genderContainer}>
-              {(['male', 'female', 'other'] as const).map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[
-                    styles.genderOption,
-                    gender === option && styles.genderOptionActive,
-                  ]}
-                  onPress={() => {
-                    setGender(option);
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.genderText,
-                      gender === option && styles.genderTextActive,
-                    ]}
+              {(['male', 'female', 'other'] as const).map((option) => {
+                const isSelected = gender === option;
+                return (
+                  <TouchableOpacity
+                    key={option}
+                    style={[styles.genderOption, isSelected && styles.genderOptionActive]}
+                    onPress={() => {
+                      setGender(option);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                    activeOpacity={0.8}
                   >
-                    {option.charAt(0).toUpperCase() + option.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <LinearGradient
+                      colors={isSelected ? ['#8B5CF6', '#7C3AED'] : ['#FFFFFF', '#F9FAFB']}
+                      style={styles.genderGradient}
+                    >
+                      <Text
+                        style={[
+                          styles.genderText,
+                          isSelected && styles.genderTextActive,
+                        ]}
+                      >
+                        {option.charAt(0).toUpperCase() + option.slice(1)}
+                      </Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 
-          {/* Date of Birth */}
+          {/* Date of Birth Field */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Date of Birth</Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="calendar-outline" size={20} color={colors.textLight} />
+            <View style={styles.labelContainer}>
+              <LinearGradient
+                colors={['#3B82F6', '#2563EB']}
+                style={styles.labelIcon}
+              >
+                <Ionicons name="calendar-outline" size={12} color="#FFFFFF" />
+              </LinearGradient>
+              <Text style={styles.label}>Date of Birth</Text>
+            </View>
+            <LinearGradient
+              colors={['#FFFFFF', '#F9FAFB']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.inputContainer}
+            >
+              <Ionicons name="calendar-outline" size={18} color="#3B82F6" />
               <TextInput
                 style={styles.input}
                 value={dateOfBirth}
                 onChangeText={setDateOfBirth}
                 placeholder="YYYY-MM-DD"
-                placeholderTextColor={colors.textLight}
+                placeholderTextColor="#9CA3AF"
               />
+            </LinearGradient>
+            <View style={styles.hintContainer}>
+              <Ionicons name="information-circle-outline" size={12} color="#9CA3AF" />
+              <Text style={styles.hint}>Format: YYYY-MM-DD (e.g., 1990-01-15)</Text>
             </View>
-            <Text style={styles.hint}>Format: YYYY-MM-DD (e.g., 1990-01-15)</Text>
           </View>
         </View>
 
-        {/* Save Button */}
+        {/* Premium Save Button */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={[styles.saveButton, (loading || uploading) && styles.saveButtonDisabled]}
             onPress={handleSave}
             disabled={loading || uploading}
+            activeOpacity={0.9}
           >
-            {loading || uploading ? (
-              <ActivityIndicator color={colors.surface} />
-            ) : (
-              <Text style={styles.saveButtonText}>Save Changes</Text>
-            )}
+            <LinearGradient
+              colors={['#8B5CF6', '#7C3AED']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.saveGradient}
+            >
+              {loading || uploading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons name="save-outline" size={20} color="#FFFFFF" />
+                  <Text style={styles.saveButtonText}>Save Changes</Text>
+                </>
+              )}
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
         <View style={{ height: spacing.xxl }} />
-      </ScrollView>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 }
@@ -253,70 +398,119 @@ export default function EditProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F9FAFB',
+  },
+  headerGradient: {
+    paddingBottom: spacing.lg,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingTop: spacing.md,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   backButton: {
     width: 40,
     height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    ...typography.h3,
-    color: colors.text,
+    fontSize: 20,
     fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  menuButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrollView: {
+    flex: 1,
   },
   avatarSection: {
     alignItems: 'center',
-    paddingVertical: spacing.xxl,
+    paddingVertical: spacing.xl,
   },
   avatarContainer: {
     position: 'relative',
+  },
+  avatarWrapper: {
+    position: 'relative',
+    borderRadius: 70,
+    overflow: 'hidden',
   },
   avatar: {
     width: 120,
     height: 120,
     borderRadius: 60,
   },
+  avatarOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 40,
+  },
   avatarPlaceholder: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: colors.primary + '20',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    ...typography.h1,
-    color: colors.primary,
+    fontSize: 48,
     fontWeight: '700',
+    color: '#8B5CF6',
   },
   cameraIcon: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
+    bottom: 4,
+    right: 4,
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: colors.surface,
+    borderColor: '#FFFFFF',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   avatarHint: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: spacing.md,
   },
   form: {
     paddingHorizontal: spacing.lg,
@@ -324,36 +518,51 @@ const styles = StyleSheet.create({
   inputGroup: {
     marginBottom: spacing.lg,
   },
-  label: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
+  labelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     marginBottom: spacing.sm,
+  },
+  labelIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.sm,
+    borderColor: '#E5E7EB',
+    gap: spacing.sm,
   },
   inputDisabled: {
-    backgroundColor: colors.background,
+    opacity: 0.7,
   },
   input: {
     flex: 1,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    ...typography.body,
-    color: colors.text,
+    fontSize: 14,
+    color: '#1F2937',
+  },
+  hintContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: spacing.xs,
   },
   hint: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
+    fontSize: 11,
+    color: '#9CA3AF',
   },
   genderContainer: {
     flexDirection: 'row',
@@ -361,42 +570,61 @@ const styles = StyleSheet.create({
   },
   genderOption: {
     flex: 1,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    overflow: 'hidden',
   },
   genderOptionActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    borderWidth: 0,
+  },
+  genderGradient: {
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   genderText: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 14,
     fontWeight: '600',
+    color: '#6B7280',
   },
   genderTextActive: {
-    color: colors.surface,
+    color: '#FFFFFF',
   },
   buttonContainer: {
     paddingHorizontal: spacing.lg,
     marginTop: spacing.lg,
+    marginBottom: spacing.md,
   },
   saveButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  saveGradient: {
+    flexDirection: 'row',
     alignItems: 'center',
-    ...shadows.md,
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
   },
   saveButtonDisabled: {
     opacity: 0.6,
   },
   saveButtonText: {
-    ...typography.body,
-    color: colors.surface,
+    fontSize: 16,
     fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
 });

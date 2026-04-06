@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // Added useRef here
 import {
   View,
   Text,
@@ -9,9 +9,14 @@ import {
   SafeAreaView,
   Alert,
   ActivityIndicator,
+  Animated,
+  Platform,
+  Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '../src/store/authStore';
 import { useCartStore } from '../src/store/cartStore';
 import { useOrderStore } from '../src/store/orderStore';
@@ -22,6 +27,8 @@ import CashfreePayment from '../src/components/CashfreePayment';
 import CashfreeService from '../src/services/cashfreeService';
 import CashfreePayoutService from '../src/services/cashfreePayoutService';
 import { supabase } from '../src/services/supabase';
+
+const { width, height } = Dimensions.get('window');
 
 export default function CheckoutScreen() {
   const router = useRouter();
@@ -35,7 +42,7 @@ export default function CheckoutScreen() {
   const [processingPayment, setProcessingPayment] = useState(false);
   const [showCashfree, setShowCashfree] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
-   const [cashfreePaymentSessionId, setCashfreePaymentSessionId] = useState<string>('');
+  const [cashfreePaymentSessionId, setCashfreePaymentSessionId] = useState<string>('');
   const [cashfreeOrderId, setCashfreeOrderId] = useState<string>('');
   const [shippingInfo, setShippingInfo] = useState({
     name: user?.name || '',
@@ -45,6 +52,25 @@ export default function CheckoutScreen() {
     state: '',
     pincode: '',
   });
+
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   // Load user addresses and auto-fill with default address
   useEffect(() => {
@@ -65,14 +91,14 @@ export default function CheckoutScreen() {
     }
   }, [user]);
 
-  const deliveryCharges = 0; // FREE delivery
+  const deliveryCharges = 0;
   const discount = 0;
   const finalTotal = total + deliveryCharges - discount;
 
   const handlePayment = async () => {
-    // Validate shipping info
     if (!shippingInfo.name || !shippingInfo.phone || !shippingInfo.address || 
         !shippingInfo.city || !shippingInfo.state || !shippingInfo.pincode) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Error', 'Please fill all shipping details');
       return;
     }
@@ -83,17 +109,16 @@ export default function CheckoutScreen() {
       return;
     }
 
-    // Prevent duplicate order creation
     if (loading || processingPayment) {
       Alert.alert('Please Wait', 'Your order is being processed. Please do not press back or refresh.');
       return;
     }
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     setProcessingPayment(true);
 
     try {
-      // Step 1: Create order in database
       const orderData = {
         customer_id: user.id,
         subtotal: total,
@@ -117,10 +142,6 @@ export default function CheckoutScreen() {
       const orderId = result.order.id;
       setCurrentOrderId(orderId);
 
-      console.log('Order created, ID:', orderId);
-
-      // Step 2: Create Cashfree order via Service
-      console.log('Creating Cashfree order for amount:', finalTotal);
       const cashfreeOrderResult = await CashfreeService.createOrder({
         amount: finalTotal,
         currency: 'INR',
@@ -132,14 +153,11 @@ export default function CheckoutScreen() {
         return_url: 'https://hybrid-bazaar.preview.emergentagent.com/payment-success',
       });
 
-      console.log('Cashfree order result:', cashfreeOrderResult);
-
       if (!cashfreeOrderResult.success || !cashfreeOrderResult.data) {
         throw new Error(cashfreeOrderResult.error || 'Failed to create Cashfree order');
       }
 
-      
-  const cfOrderId = cashfreeOrderResult.data.order_id;
+      const cfOrderId = cashfreeOrderResult.data.order_id;
       const cfPaymentSessionId = cashfreeOrderResult.data.payment_session_id;
       
       if (!cfPaymentSessionId) {
@@ -148,15 +166,7 @@ export default function CheckoutScreen() {
       
       setCashfreeOrderId(cfOrderId);
       setCashfreePaymentSessionId(cfPaymentSessionId);
-      
-      console.log('Cashfree order created successfully:', cfOrderId);
-      console.log('Payment Session ID:', cfPaymentSessionId);
 
-
-
-          // ✅ FIX: Store Cashfree order ID in Supabase order IMMEDIATELY
-      // This links the internal order with Cashfree order so webhook can find it
-      console.log('Linking Cashfree order to Supabase order...');
       const { error: updateError } = await supabase
         .from('orders')
         .update({
@@ -167,246 +177,177 @@ export default function CheckoutScreen() {
         .eq('id', orderId);
 
       if (updateError) {
-        console.error('Failed to link Cashfree order:', updateError);
         throw new Error('Failed to link payment gateway. Please try again.');
       }
 
-      console.log('✅ Cashfree order linked to Supabase order successfully');
-
-      // Step 3: Open Cashfree payment gateway
       setLoading(false);
       setShowCashfree(true);
 
     } catch (error: any) {
       console.error('Checkout error:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Error', error.message || 'Failed to process checkout');
       setLoading(false);
       setProcessingPayment(false);
     }
   };
 
-const handlePaymentSuccess = async (paymentId: string, orderId: string) => {
-  console.log('Payment successful:', { paymentId, orderId });
-  setShowCashfree(false);
-  setLoading(true);
+  const handlePaymentSuccess = async (paymentId: string, orderId: string) => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setShowCashfree(false);
+    setLoading(true);
 
-  try {
-    // Step 1: Verify payment via Cashfree
-    console.log('Verifying payment...');
-    const verificationResult = await CashfreeService.verifyPayment(orderId);
+    try {
+      const verificationResult = await CashfreeService.verifyPayment(orderId);
 
-    console.log('Verification result:', verificationResult);
+      if (!verificationResult.success || !verificationResult.data) {
+        throw new Error(verificationResult.error || 'Payment verification failed');
+      }
 
-    if (!verificationResult.success || !verificationResult.data) {
-      throw new Error(verificationResult.error || 'Payment verification failed');
-    }
-
-    const paymentStatus = verificationResult.data.payment_status || verificationResult.data.order_status;
-    
-    // ✅ FIX: Accept 'SUCCESS', 'PAID', 'ACTIVE', and 'success' as successful
-    // Cashfree sandbox/test mode returns 'ACTIVE' for successful test payments
-    // Production returns 'PAID' for actual successful payments
-    // Some responses return lowercase 'success'
-    const paymentStatusUpper = paymentStatus?.toUpperCase();
-    const isSuccess = paymentStatusUpper === 'SUCCESS' || 
-                      paymentStatusUpper === 'PAID' || 
-                      paymentStatusUpper === 'ACTIVE';
-    
-    if (!isSuccess) {
-      console.warn(`Payment status not successful: ${paymentStatus}`);
-      throw new Error(`Payment not confirmed. Status: ${paymentStatus}`);
-    }
-
-    console.log('Payment verified successfully!');
-
-    // Step 2: Create payment record
-    console.log('Creating payment record for order:', currentOrderId);
-    const paymentResult = await createPayment({
-      order_id: currentOrderId,
-      amount: finalTotal,
-      payment_method: 'cashfree',
-    });
-
-    if (paymentResult.success && paymentResult.payment) {
-      console.log('Payment record created:', paymentResult.payment.id);
+      const paymentStatus = verificationResult.data.payment_status || verificationResult.data.order_status;
+      const paymentStatusUpper = paymentStatus?.toUpperCase();
+      const isSuccess = paymentStatusUpper === 'SUCCESS' || 
+                        paymentStatusUpper === 'PAID' || 
+                        paymentStatusUpper === 'ACTIVE';
       
-      // Step 3: Update payment status with Cashfree details
-      await updatePaymentStatusInStore(
-        paymentResult.payment.id,
-        'success',
-        {
-          cashfree_order_id: orderId,
-          cashfree_payment_id: paymentId || verificationResult.data.cf_payment_id,
-          payment_status: paymentStatus,
-        }
-      );
-      console.log('Payment status updated to success');
+      if (!isSuccess) {
+        throw new Error(`Payment not confirmed. Status: ${paymentStatus}`);
+      }
 
-        // Step 4: Update order payment status
+      const paymentResult = await createPayment({
+        order_id: currentOrderId,
+        amount: finalTotal,
+        payment_method: 'cashfree',
+      });
+
+      if (paymentResult.success && paymentResult.payment) {
+        await updatePaymentStatusInStore(
+          paymentResult.payment.id,
+          'success',
+          {
+            cashfree_order_id: orderId,
+            cashfree_payment_id: paymentId || verificationResult.data.cf_payment_id,
+            payment_status: paymentStatus,
+          }
+        );
+
         const paymentData = {
           method: 'cashfree',
           cashfree_order_id: orderId,
           cashfree_payment_id: paymentId || verificationResult.data.cf_payment_id,
         };
         await updatePaymentStatus(currentOrderId, paymentData);
-        console.log('Order payment status updated to paid');
 
-        // Step 4.5: Update order status to processing (confirmed)
         const { updateOrderStatus: updateStatus } = require('../src/store/orderStore').useOrderStore.getState();
         await updateStatus(currentOrderId, 'processing');
-        console.log('Order status updated to processing');
 
-        // Step 4.6: Send notifications to admin and sellers
-        console.log('📧 Sending notifications...');
-        try {
-          // ✅ FIX: Get order items first, then fetch seller details separately
-          const { data: orderItems, error: itemsError } = await supabase
-            .from('order_items')
-            .select('id, seller_id, product_name, quantity, price')
-            .eq('order_id', currentOrderId);
+        // Send notifications
+        const { data: orderItems, error: itemsError } = await supabase
+          .from('order_items')
+          .select('id, seller_id, product_name, quantity, price')
+          .eq('order_id', currentOrderId);
 
-          console.log('📦 Order items found:', orderItems?.length || 0);
+        if (orderItems && orderItems.length > 0) {
+          const { data: adminUsers } = await supabase
+            .from('users')
+            .select('id')
+            .eq('role', 'admin');
+
+          if (adminUsers && adminUsers.length > 0) {
+            for (const admin of adminUsers) {
+              await supabase.from('notifications').insert({
+                user_id: admin.id,
+                title: '🛒 New Product Order',
+                message: `New order #${currentOrderId.substring(0, 8)} placed. Total: ₹${finalTotal}. Customer: ${shippingInfo.name}`,
+                type: 'new_order',
+                reference_id: currentOrderId,
+                reference_type: 'order',
+                created_at: new Date().toISOString(),
+              });
+            }
+          }
+
+          const sellerIds = [...new Set(orderItems.map(item => item.seller_id).filter(Boolean))];
           
-          if (itemsError) {
-            console.error('❌ Error fetching order items:', itemsError);
-          }
+          for (const sellerId of sellerIds) {
+            const { data: sellers } = await supabase
+              .from('sellers')
+              .select('id, user_id, company_name')
+              .eq('id', sellerId)
+              .limit(1);
 
-          if (orderItems && orderItems.length > 0) {
-            // Notify Admin
-            const { data: adminUsers } = await supabase
-              .from('users')
-              .select('id')
-              .eq('role', 'admin');
-
-            if (adminUsers && adminUsers.length > 0) {
-              for (const admin of adminUsers) {
-                await supabase.from('notifications').insert({
-                  user_id: admin.id,
-                  title: '🛒 New Product Order',
-                  message: `New order #${currentOrderId.substring(0, 8)} placed. Total: ₹${finalTotal}. Customer: ${shippingInfo.name}`,
-                  type: 'new_order',
-                  reference_id: currentOrderId,
-                  reference_type: 'order',
-                  created_at: new Date().toISOString(),
-                });
-              }
-              console.log('✅ Admin notified');
+            if (sellers && sellers.length > 0 && sellers[0].user_id) {
+              await supabase.from('notifications').insert({
+                user_id: sellers[0].user_id,
+                title: '🎉 New Order Received!',
+                message: `You have a new order #${currentOrderId.substring(0, 8)}. Payment received: ₹${finalTotal}`,
+                type: 'new_order',
+                reference_id: currentOrderId,
+                reference_type: 'order',
+                created_at: new Date().toISOString(),
+              });
             }
-
-            // Get unique seller IDs
-            const sellerIds = [...new Set(orderItems.map(item => item.seller_id).filter(Boolean))];
-            console.log('👥 Unique seller IDs:', sellerIds);
-
-            // Fetch seller details for each unique seller
-            for (const sellerId of sellerIds) {
-              const { data: sellers, error: sellerError } = await supabase
-                .from('sellers')
-                .select('id, user_id, company_name')
-                .eq('id', sellerId)
-                .limit(1);
-
-              // ✅ FIX: Check if seller exists before accessing
-              if (!sellerError && sellers && sellers.length > 0) {
-                const seller = sellers[0];
-                if (seller.user_id) {
-                  await supabase.from('notifications').insert({
-                    user_id: seller.user_id,
-                    title: '🎉 New Order Received!',
-                    message: `You have a new order #${currentOrderId.substring(0, 8)}. Payment received: ₹${finalTotal}`,
-                    type: 'new_order',
-                    reference_id: currentOrderId,
-                    reference_type: 'order',
-                    created_at: new Date().toISOString(),
-                  });
-                  console.log(`✅ Seller ${seller.company_name} notified (user_id: ${seller.user_id})`);
-                } else {
-                  console.warn(`⚠️ Seller ${sellerId} has no user_id`);
-                }
-              } else {
-                console.error(`❌ Seller ${sellerId} not found:`, sellerError);
-              }
-            }
-            console.log(`✅ ${sellerIds.length} seller(s) processed`);
-          } else {
-            console.warn('⚠️ No order items found for order:', currentOrderId);
           }
-        } catch (notifError: any) {
-          console.error('❌ Notification error:', notifError);
-          // Don't fail the order
         }
 
-      // Rest of your code for payouts, clearing cart, etc...
-      // ... (keep your existing payout code here)
+        clearCart();
 
-      // Step 6: Clear cart
-      clearCart();
-
-        // ✅ FIX: Refresh orders so the updated status appears immediately
-      const { fetchOrders } = require('../src/store/orderStore').useOrderStore.getState();
-      if (user?.id) {
-        await fetchOrders(user.id);
-        console.log('✅ Orders refreshed in store');
+        const { fetchOrders } = require('../src/store/orderStore').useOrderStore.getState();
+        if (user?.id) {
+          await fetchOrders(user.id);
+        }
+        
+        setLoading(false);
+        setProcessingPayment(false);
+        
+        Alert.alert(
+          '🎉 Order Placed Successfully!',
+          'Your order has been placed and payment confirmed',
+          [
+            {
+              text: 'View Orders',
+              onPress: () => router.replace('/orders'),
+            },
+            {
+              text: 'Continue Shopping',
+              onPress: () => router.replace('/(tabs)/home'),
+            },
+          ]
+        );
+      } else {
+        throw new Error(paymentResult.error || 'Failed to record payment');
       }
-      
-      
+    } catch (error: any) {
+      console.error('Payment record error:', error);
       setLoading(false);
       setProcessingPayment(false);
       
-      Alert.alert(
-        'Order Placed Successfully!',
-        'Your order has been placed and payment confirmed',
-        [
-          {
-            text: 'View Orders',
-            onPress: () => router.replace('/orders'),
-          },
-          {
-            text: 'Continue Shopping',
-            onPress: () => router.replace('/(tabs)/home'),
-          },
-        ]
-      );
-    } else {
-      throw new Error(paymentResult.error || 'Failed to record payment');
+      if (error.message?.includes('pending')) {
+        Alert.alert(
+          'Order Placed!',
+          'Your order has been placed successfully. Payment is being processed.',
+          [
+            {
+              text: 'View Orders',
+              onPress: () => router.replace('/orders'),
+            },
+          ]
+        );
+        clearCart();
+      } else {
+        Alert.alert(
+          'Payment Verification Error',
+          error.message || 'Payment successful but verification failed. Please contact support.'
+        );
+      }
     }
-  } catch (error: any) {
-    console.error('Payment record error:', error);
-    setLoading(false);
-    setProcessingPayment(false);
-    
-    // ✅ If payment was actually successful but verification shows pending,
-    // still allow order placement
-    if (error.message?.includes('pending')) {
-      Alert.alert(
-        'Order Placed!',
-        'Your order has been placed successfully. Payment is being processed.',
-        [
-          {
-            text: 'View Orders',
-            onPress: () => router.replace('/orders'),
-          },
-        ]
-      );
-      clearCart();
-    } else {
-      Alert.alert(
-        'Payment Verification Error',
-        error.message || 'Payment successful but verification failed. Please contact support.'
-      );
-    }
-  }
-};
+  };
 
   const handlePaymentFailure = (error: string) => {
-    console.error('Payment failed:', error);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     setShowCashfree(false);
     setLoading(false);
     setProcessingPayment(false);
-     
-    // Notify seller about payment cancellation
-    if (currentOrderId) {
-      notifySellerOfCancellation(currentOrderId, 'order');
-    }
     
     Alert.alert(
       'Payment Failed', 
@@ -428,15 +369,10 @@ const handlePaymentSuccess = async (paymentId: string, orderId: string) => {
   };
 
   const handlePaymentCancel = () => {
-    console.log('Payment cancelled by user');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setShowCashfree(false);
     setLoading(false);
     setProcessingPayment(false);
-     
-    // Notify seller about payment cancellation
-    if (currentOrderId) {
-      notifySellerOfCancellation(currentOrderId, 'order');
-    }
     
     Alert.alert(
       'Payment Cancelled',
@@ -455,212 +391,293 @@ const handlePaymentSuccess = async (paymentId: string, orderId: string) => {
     );
   };
 
-
-  const notifySellerOfCancellation = async (orderId: string, type: 'order' | 'booking') => {
-    try {
-      // Get order/booking details and seller info
-      const { data: orderItems, error } = await supabase
-        .from('order_items')
-        .select(`
-          seller_id,
-          seller:sellers!inner(
-            id,
-            company_name,
-            user_id
-          )
-        `)
-        .eq('order_id', orderId);
-
-      if (error || !orderItems || orderItems.length === 0) {
-        console.error('Failed to fetch order items for notification:', error);
-        return;
-      }
-
-      // Get unique sellers
-      const uniqueSellers = Array.from(
-        new Map(orderItems.map(item => [item.seller_id, item.seller])).values()
-      );
-
-      // Create notification for each seller
-      for (const seller of uniqueSellers) {
-        await supabase.from('notifications').insert({
-          user_id: seller.user_id,
-          title: 'Payment Cancelled',
-          message: `Customer cancelled payment for order #${orderId.substring(0, 8)}. The order is still pending.`,
-          type: 'payment_cancelled',
-          reference_id: orderId,
-          reference_type: type,
-          created_at: new Date().toISOString(),
-        });
-      }
-
-      console.log(`Sent cancellation notifications to ${uniqueSellers.length} seller(s)`);
-    } catch (error) {
-      console.error('Error sending cancellation notification:', error);
-    }
-  };
-
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Checkout</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Premium Gradient Header */}
+      <LinearGradient
+        colors={['#1E1B4B', '#312E81', '#4C1D95']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Checkout</Text>
+          <View style={styles.menuButton}>
+            <Ionicons name="cart-outline" size={22} color="#FFFFFF" />
+            {items.length > 0 && (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>{items.length}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </LinearGradient>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Shipping Information */}
-        <View style={[styles.card, shadows.sm]}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Shipping Information</Text>
+      <Animated.ScrollView
+        showsVerticalScrollIndicator={false}
+        style={[styles.scrollView, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+      >
+        {/* Shipping Information Card */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <LinearGradient
+              colors={['#8B5CF6', '#7C3AED']}
+              style={styles.sectionIcon}
+            >
+              <Ionicons name="location-outline" size={16} color="#FFFFFF" />
+            </LinearGradient>
+            <Text style={styles.sectionTitle}>Shipping Information</Text>
             <TouchableOpacity 
               onPress={() => router.push('/profile/addresses')}
-              style={styles.manageAddressButton}
+              style={styles.manageButton}
             >
-              <Ionicons name="location" size={16} color={colors.primary} />
-              <Text style={styles.manageAddressText}>Manage</Text>
+              <Ionicons name="create-outline" size={14} color="#8B5CF6" />
+              <Text style={styles.manageButtonText}>Manage</Text>
             </TouchableOpacity>
           </View>
           
-          <Text style={styles.inputLabel}>Full Name *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your full name"
-            placeholderTextColor={colors.textSecondary}
-            value={shippingInfo.name}
-            onChangeText={(text) => setShippingInfo({ ...shippingInfo, name: text })}
-          />
-
-          <Text style={styles.inputLabel}>Phone Number *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter phone number"
-            placeholderTextColor={colors.textSecondary}
-            value={shippingInfo.phone}
-            onChangeText={(text) => setShippingInfo({ ...shippingInfo, phone: text })}
-            keyboardType="phone-pad"
-          />
-
-          <Text style={styles.inputLabel}>Address *</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="House no., Street, Landmark"
-            placeholderTextColor={colors.textSecondary}
-            value={shippingInfo.address}
-            onChangeText={(text) => setShippingInfo({ ...shippingInfo, address: text })}
-            multiline
-            numberOfLines={3}
-          />
-
-          <View style={styles.row}>
-            <View style={styles.halfInput}>
-              <Text style={styles.inputLabel}>City *</Text>
+          <LinearGradient
+            colors={['#FFFFFF', '#F9FAFB']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.card}
+          >
+            <View style={styles.inputWrapper}>
+              <Ionicons name="person-outline" size={18} color="#8B5CF6" style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="City"
-                placeholderTextColor={colors.textSecondary}
-                value={shippingInfo.city}
-                onChangeText={(text) => setShippingInfo({ ...shippingInfo, city: text })}
+                placeholder="Full Name"
+                placeholderTextColor="#9CA3AF"
+                value={shippingInfo.name}
+                onChangeText={(text) => setShippingInfo({ ...shippingInfo, name: text })}
               />
             </View>
-            <View style={styles.halfInput}>
-              <Text style={styles.inputLabel}>State *</Text>
+
+            <View style={styles.inputWrapper}>
+              <Ionicons name="call-outline" size={18} color="#8B5CF6" style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="State"
-                placeholderTextColor={colors.textSecondary}
-                value={shippingInfo.state}
-                onChangeText={(text) => setShippingInfo({ ...shippingInfo, state: text })}
+                placeholder="Phone Number"
+                placeholderTextColor="#9CA3AF"
+                value={shippingInfo.phone}
+                onChangeText={(text) => setShippingInfo({ ...shippingInfo, phone: text })}
+                keyboardType="phone-pad"
               />
             </View>
-          </View>
 
-          <Text style={styles.inputLabel}>Pincode *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Pincode"
-            placeholderTextColor={colors.textSecondary}
-            value={shippingInfo.pincode}
-            onChangeText={(text) => setShippingInfo({ ...shippingInfo, pincode: text })}
-            keyboardType="number-pad"
-          />
+            <View style={styles.inputWrapper}>
+              <Ionicons name="home-outline" size={18} color="#8B5CF6" style={styles.inputIcon} />
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Address (House no., Street, Landmark)"
+                placeholderTextColor="#9CA3AF"
+                value={shippingInfo.address}
+                onChangeText={(text) => setShippingInfo({ ...shippingInfo, address: text })}
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+
+            <View style={styles.row}>
+              <View style={styles.halfInputWrapper}>
+                <Ionicons name="business-outline" size={18} color="#8B5CF6" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="City"
+                  placeholderTextColor="#9CA3AF"
+                  value={shippingInfo.city}
+                  onChangeText={(text) => setShippingInfo({ ...shippingInfo, city: text })}
+                />
+              </View>
+              <View style={styles.halfInputWrapper}>
+                <Ionicons name="map-outline" size={18} color="#8B5CF6" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="State"
+                  placeholderTextColor="#9CA3AF"
+                  value={shippingInfo.state}
+                  onChangeText={(text) => setShippingInfo({ ...shippingInfo, state: text })}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputWrapper}>
+              <Ionicons name="mail-outline" size={18} color="#8B5CF6" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Pincode"
+                placeholderTextColor="#9CA3AF"
+                value={shippingInfo.pincode}
+                onChangeText={(text) => setShippingInfo({ ...shippingInfo, pincode: text })}
+                keyboardType="number-pad"
+              />
+            </View>
+          </LinearGradient>
         </View>
 
-        {/* Order Summary */}
-        <View style={[styles.card, shadows.sm]}>
-          <Text style={styles.cardTitle}>Order Summary</Text>
-          
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Items ({items.length})</Text>
-            <Text style={styles.summaryValue}>₹{total.toFixed(2)}</Text>
+        {/* Order Summary Card */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <LinearGradient
+              colors={['#F59E0B', '#D97706']}
+              style={styles.sectionIcon}
+            >
+              <Ionicons name="receipt-outline" size={16} color="#FFFFFF" />
+            </LinearGradient>
+            <Text style={styles.sectionTitle}>Order Summary</Text>
           </View>
           
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Delivery Charges</Text>
-            <Text style={[styles.summaryValue, { color: colors.success }]}>FREE</Text>
-          </View>
-          
-          {discount > 0 && (
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Discount</Text>
-              <Text style={[styles.summaryValue, { color: colors.success }]}>
-                -₹{discount.toFixed(2)}
+          <LinearGradient
+            colors={['#FFFFFF', '#F9FAFB']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.card}
+          >
+            {items.slice(0, 3).map((item, index) => (
+              <View key={index} style={styles.orderItem}>
+                <View style={styles.orderItemImage}>
+                  <Text style={styles.orderItemInitial}>
+                    {item.name?.charAt(0) || 'P'}
+                  </Text>
+                </View>
+                <View style={styles.orderItemDetails}>
+                  <Text style={styles.orderItemName} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Text style={styles.orderItemMeta}>
+                    Qty: {item.quantity} × ₹{item.price}
+                  </Text>
+                </View>
+                <Text style={styles.orderItemPrice}>
+                  ₹{(item.price * item.quantity).toFixed(2)}
+                </Text>
+              </View>
+            ))}
+            
+            {items.length > 3 && (
+              <Text style={styles.moreItems}>
+                +{items.length - 3} more item{items.length - 3 > 1 ? 's' : ''}
               </Text>
+            )}
+            
+            <View style={styles.divider} />
+            
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Subtotal ({items.length} items)</Text>
+              <Text style={styles.summaryValue}>₹{total.toFixed(2)}</Text>
             </View>
-          )}
-          
-          <View style={styles.divider} />
-          
-          <View style={styles.summaryRow}>
-            <Text style={styles.totalLabel}>Total Amount</Text>
-            <Text style={styles.totalValue}>₹{finalTotal.toFixed(2)}</Text>
-          </View>
+            
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Delivery Charges</Text>
+              <LinearGradient
+                colors={['#10B981', '#059669']}
+                style={styles.freeBadge}
+              >
+                <Text style={styles.freeBadgeText}>FREE</Text>
+              </LinearGradient>
+            </View>
+            
+            <View style={styles.dashedDivider} />
+            
+            <View style={styles.summaryRow}>
+              <Text style={styles.totalLabel}>Total Amount</Text>
+              <Text style={styles.totalValue}>₹{finalTotal.toFixed(2)}</Text>
+            </View>
+          </LinearGradient>
         </View>
 
-        {/* Payment Info */}
-        <View style={[styles.card, shadows.sm]}>
-          <View style={styles.paymentInfoRow}>
-            <Ionicons name="shield-checkmark" size={20} color={colors.success} />
-            <Text style={styles.paymentInfoText}>
-              Secure payment powered by Cashfree
-            </Text>
+        {/* Payment Info Card */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <LinearGradient
+              colors={['#10B981', '#059669']}
+              style={styles.sectionIcon}
+            >
+              <Ionicons name="card-outline" size={16} color="#FFFFFF" />
+            </LinearGradient>
+            <Text style={styles.sectionTitle}>Payment</Text>
           </View>
-          <View style={styles.paymentInfoRow}>
-            <Ionicons name="card" size={20} color={colors.primary} />
-            <Text style={styles.paymentInfoText}>
-              Multiple payment options available
-            </Text>
-          </View>
+          
+          <LinearGradient
+            colors={['#FFFFFF', '#F9FAFB']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.card}
+          >
+            <View style={styles.paymentMethod}>
+              <LinearGradient
+                colors={['#8B5CF6', '#7C3AED']}
+                style={styles.paymentMethodIcon}
+              >
+                <Ionicons name="lock-closed" size={18} color="#FFFFFF" />
+              </LinearGradient>
+              <View style={styles.paymentMethodInfo}>
+                <Text style={styles.paymentMethodTitle}>Secure Payment</Text>
+                <Text style={styles.paymentMethodDesc}>Powered by Cashfree</Text>
+              </View>
+              <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+            </View>
+            
+            <View style={styles.paymentOptions}>
+              <View style={styles.paymentOption}>
+                <Ionicons name="card" size={20} color="#6B7280" />
+                <Text style={styles.paymentOptionText}>Credit/Debit Card</Text>
+              </View>
+              <View style={styles.paymentOption}>
+                <Ionicons name="logo-google" size={20} color="#6B7280" />
+                <Text style={styles.paymentOptionText}>Google Pay</Text>
+              </View>
+              <View style={styles.paymentOption}>
+                <Ionicons name="phone-portrait" size={20} color="#6B7280" />
+                <Text style={styles.paymentOptionText}>PhonePe</Text>
+              </View>
+              <View style={styles.paymentOption}>
+                <Ionicons name="logo-bitcoin" size={20} color="#6B7280" />
+                <Text style={styles.paymentOptionText}>Net Banking</Text>
+              </View>
+            </View>
+          </LinearGradient>
         </View>
 
-        <View style={{ height: spacing.xl }} />
-      </ScrollView>
+        <View style={{ height: spacing.xxl }} />
+      </Animated.ScrollView>
 
-      {/* Place Order Button */}
-      <View style={styles.bottomBar}>
+      {/* Premium Bottom Bar */}
+      <LinearGradient
+        colors={['#FFFFFF', '#F9FAFB']}
+        style={styles.bottomBar}
+      >
         <View style={styles.totalContainer}>
-          <Text style={styles.bottomLabel}>Total</Text>
+          <Text style={styles.bottomLabel}>Total Amount</Text>
           <Text style={styles.bottomTotal}>₹{finalTotal.toFixed(2)}</Text>
         </View>
         <TouchableOpacity
-          style={[styles.placeOrderButton, loading && styles.disabledButton]}
+          style={[styles.placeOrderButton, (loading || processingPayment) && styles.disabledButton]}
           onPress={handlePayment}
           disabled={loading || processingPayment}
-          data-testid="place-order-button"
+          activeOpacity={0.9}
         >
-          {loading ? (
-            <ActivityIndicator size="small" color={colors.surface} />
-          ) : (
-            <>
-              <Ionicons name="checkmark-circle" size={20} color={colors.surface} />
-              <Text style={styles.placeOrderText}>Place Order</Text>
-            </>
-          )}
+          <LinearGradient
+            colors={loading || processingPayment ? ['#9CA3AF', '#6B7280'] : ['#8B5CF6', '#7C3AED']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.placeOrderGradient}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+                <Text style={styles.placeOrderText}>Place Order</Text>
+              </>
+            )}
+          </LinearGradient>
         </TouchableOpacity>
-      </View>
+      </LinearGradient>
+
       {/* Cashfree Payment Modal */}
       {showCashfree && cashfreePaymentSessionId && (
         <CashfreePayment
@@ -679,80 +696,212 @@ const handlePaymentSuccess = async (paymentId: string, orderId: string) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F9FAFB',
+  },
+  headerGradient: {
+    paddingBottom: spacing.lg,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingTop: spacing.md,
+    paddingHorizontal: spacing.lg,
   },
   backButton: {
     width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
-    ...typography.h3,
-    color: colors.text,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
-  card: {
-    backgroundColor: colors.surface,
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  menuButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  cartBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  section: {
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     marginBottom: spacing.md,
   },
-  cardTitle: {
-    ...typography.h4,
-    color: colors.text,
+  sectionIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  manageAddressButton: {
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+    flex: 1,
+  },
+  manageButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 4,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-    backgroundColor: colors.primary + '15',
-    borderRadius: borderRadius.sm,
+    backgroundColor: '#8B5CF615',
+    borderRadius: 8,
   },
-  manageAddressText: {
-    ...typography.bodySmall,
-    color: colors.primary,
+  manageButtonText: {
+    fontSize: 12,
     fontWeight: '600',
+    color: '#8B5CF6',
   },
-  inputLabel: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
-    marginBottom: spacing.sm,
-    marginTop: spacing.sm,
+  card: {
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  inputIcon: {
+    marginRight: spacing.sm,
   },
   input: {
-    ...typography.body,
-    color: colors.text,
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    flex: 1,
+    paddingVertical: spacing.md,
+    fontSize: 14,
+    color: '#1F2937',
   },
   textArea: {
     minHeight: 80,
     textAlignVertical: 'top',
+    paddingTop: spacing.md,
   },
   row: {
     flexDirection: 'row',
-    gap: spacing.md,
   },
-  halfInput: {
+  halfInputWrapper: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  orderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+  },
+  orderItemImage: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.md,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  orderItemInitial: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#8B5CF6',
+  },
+  orderItemDetails: {
+    flex: 1,
+  },
+  orderItemName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  orderItemMeta: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  orderItemPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  moreItems: {
+    fontSize: 12,
+    color: '#8B5CF6',
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginVertical: spacing.md,
+  },
+  dashedDivider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: spacing.md,
+    borderStyle: 'dashed',
   },
   summaryRow: {
     flexDirection: 'row',
@@ -760,77 +909,131 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   summaryLabel: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#6B7280',
   },
   summaryValue: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 14,
     fontWeight: '600',
+    color: '#1F2937',
   },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.md,
+  freeBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  freeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   totalLabel: {
-    ...typography.h4,
-    color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
   },
   totalValue: {
-    ...typography.h3,
-    color: colors.primary,
+    fontSize: 20,
     fontWeight: '700',
+    color: '#8B5CF6',
   },
-  paymentInfoRow: {
+  paymentMethod: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
-  paymentInfoText: {
-    ...typography.body,
-    color: colors.textSecondary,
+  paymentMethodIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  paymentMethodInfo: {
     flex: 1,
+  },
+  paymentMethodTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  paymentMethodDesc: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  paymentOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    paddingTop: spacing.md,
+  },
+  paymentOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  paymentOptionText: {
+    fontSize: 12,
+    color: '#6B7280',
   },
   bottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.lg,
-    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: '#F3F4F6',
     gap: spacing.md,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   totalContainer: {
     flex: 1,
   },
   bottomLabel: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginBottom: 2,
   },
   bottomTotal: {
-    ...typography.h3,
-    color: colors.primary,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#8B5CF6',
   },
   placeOrderButton: {
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  placeOrderGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.primary,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
-    borderRadius: borderRadius.lg,
+    gap: spacing.sm,
   },
   disabledButton: {
-    opacity: 0.6,
+    opacity: 0.7,
   },
   placeOrderText: {
-    ...typography.body,
-    color: colors.surface,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

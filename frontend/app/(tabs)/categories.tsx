@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,13 @@ import {
   ScrollView,
   Animated,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useCategoryStore } from '../../src/store/categoryStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
@@ -38,14 +40,14 @@ const getIconName = (icon: string): any => {
 
 const getCategoryGradient = (index: number): string[] => {
   const gradients = [
-    ['#5B7CFF', '#7B95FF'],
-    ['#8B5CF6', '#A78BFA'],
-    ['#F59E0B', '#FCD34D'],
-    ['#10B981', '#34D399'],
-    ['#EF4444', '#F87171'],
-    ['#3B82F6', '#60A5FA'],
-    ['#EC4899', '#F472B6'],
-    ['#14B8A6', '#2DD4BF'],
+    ['#8B5CF6', '#7C3AED', '#6D28D9'],
+    ['#EC4899', '#DB2777', '#BE185D'],
+    ['#F59E0B', '#D97706', '#B45309'],
+    ['#10B981', '#059669', '#047857'],
+    ['#3B82F6', '#2563EB', '#1D4ED8'],
+    ['#EF4444', '#DC2626', '#B91C1C'],
+    ['#14B8A6', '#0D9488', '#0F766E'],
+    ['#8B5CF6', '#7C3AED', '#6D28D9'],
   ];
   return gradients[index % gradients.length];
 };
@@ -56,10 +58,16 @@ export default function CategoriesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'services' | 'products'>('all');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const searchAnimation = new Animated.Value(0);
+  const searchAnimation = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     fetchCategories();
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
   useEffect(() => {
@@ -94,7 +102,7 @@ export default function CategoriesScreen() {
 
   const searchBorderColor = searchAnimation.interpolate({
     inputRange: [0, 1],
-    outputRange: [colors.border, colors.primary],
+    outputRange: ['#E5E7EB', '#8B5CF6'],
   });
 
   const searchScale = searchAnimation.interpolate({
@@ -102,23 +110,50 @@ export default function CategoriesScreen() {
     outputRange: [1, 1.02],
   });
 
+  const getFilterGradient = (filter: string) => {
+    switch (filter) {
+      case 'services':
+        return ['#10B981', '#059669'];
+      case 'products':
+        return ['#F59E0B', '#D97706'];
+      default:
+        return ['#8B5CF6', '#7C3AED'];
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header with Gradient */}
+      {/* Premium Header */}
       <LinearGradient
-        colors={[colors.primary, colors.secondary]}
+        colors={['#1E1B4B', '#312E81', '#4C1D95']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerGradient}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Categories</Text>
-          <Text style={styles.subtitle}>Explore services and products</Text>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.title}>Categories</Text>
+            <View style={styles.headerBadge}>
+              <Text style={styles.subtitle}>Explore & Discover</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.menuButton}>
+            <Ionicons name="options-outline" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
       </LinearGradient>
 
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.content}>
-        {/* Search Bar */}
+      <Animated.ScrollView
+        showsVerticalScrollIndicator={false}
+        style={[styles.content, { opacity: fadeAnim }]}
+      >
+        {/* Premium Search Bar */}
         <Animated.View
           style={[
             styles.searchContainer,
@@ -128,116 +163,110 @@ export default function CategoriesScreen() {
             },
           ]}
         >
-          <Ionicons name="search" size={22} color={colors.primary} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search categories..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor={colors.textSecondary}
-            onFocus={() => setIsSearchFocused(true)}
-            onBlur={() => setIsSearchFocused(false)}
-          />
-          {searchQuery.length > 0 ? (
-            <TouchableOpacity
-              onPress={() => {
-                setSearchQuery('');
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }}
-            >
-              <Ionicons name="close-circle" size={22} color={colors.textSecondary} />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity>
-              <Ionicons name="options-outline" size={22} color={colors.textSecondary} />
-            </TouchableOpacity>
-          )}
+          <LinearGradient
+            colors={['#FFFFFF', '#F9FAFB']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.searchGradient}
+          >
+            <View style={styles.searchIconContainer}>
+              <Ionicons name="search" size={20} color="#8B5CF6" />
+            </View>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search categories..."
+              placeholderTextColor="#9CA3AF"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
+            />
+            {searchQuery.length > 0 ? (
+              <TouchableOpacity
+                onPress={() => {
+                  setSearchQuery('');
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+              >
+                <View style={styles.clearIcon}>
+                  <Ionicons name="close" size={18} color="#9CA3AF" />
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity>
+                <View style={styles.filterIcon}>
+                  <Feather name="sliders" size={18} color="#8B5CF6" />
+                </View>
+              </TouchableOpacity>
+            )}
+          </LinearGradient>
         </Animated.View>
 
-        {/* Filter Chips */}
+        {/* Premium Filter Chips */}
         <View style={styles.filterContainer}>
-          <TouchableOpacity
-            style={[styles.filterChip, selectedFilter === 'all' && styles.filterChipActive]}
-            onPress={() => handleFilterPress('all')}
-          >
-            {selectedFilter === 'all' ? (
-              <LinearGradient
-                colors={[colors.primary, colors.primaryDark]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.filterChipGradient}
-              >
-                <Ionicons name="grid-outline" size={18} color={colors.surface} />
-                <Text style={styles.filterChipTextActive}>All</Text>
-              </LinearGradient>
-            ) : (
-              <>
-                <Ionicons name="grid-outline" size={18} color={colors.textSecondary} />
-                <Text style={styles.filterChipText}>All</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterChip, selectedFilter === 'services' && styles.filterChipActive]}
-            onPress={() => handleFilterPress('services')}
-          >
-            {selectedFilter === 'services' ? (
-              <LinearGradient
-                colors={[colors.secondary, colors.secondaryDark]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.filterChipGradient}
-              >
-                <Ionicons name="construct-outline" size={18} color={colors.surface} />
-                <Text style={styles.filterChipTextActive}>Services</Text>
-              </LinearGradient>
-            ) : (
-              <>
-                <Ionicons name="construct-outline" size={18} color={colors.textSecondary} />
-                <Text style={styles.filterChipText}>Services</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterChip, selectedFilter === 'products' && styles.filterChipActive]}
-            onPress={() => handleFilterPress('products')}
-          >
-            {selectedFilter === 'products' ? (
-              <LinearGradient
-                colors={['#F59E0B', '#D97706']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.filterChipGradient}
-              >
-                <Ionicons name="cube-outline" size={18} color={colors.surface} />
-                <Text style={styles.filterChipTextActive}>Products</Text>
-              </LinearGradient>
-            ) : (
-              <>
-                <Ionicons name="cube-outline" size={18} color={colors.textSecondary} />
-                <Text style={styles.filterChipText}>Products</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {[
+            { key: 'all', label: 'All', icon: 'grid-outline' },
+            { key: 'services', label: 'Services', icon: 'construct-outline' },
+            { key: 'products', label: 'Products', icon: 'cube-outline' },
+          ].map((filter) => (
+            <TouchableOpacity
+              key={filter.key}
+              style={styles.filterChipWrapper}
+              onPress={() => handleFilterPress(filter.key as any)}
+              activeOpacity={0.8}
+            >
+              {selectedFilter === filter.key ? (
+                <LinearGradient
+                  colors={getFilterGradient(filter.key)}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.filterChipActive}
+                >
+                  <Ionicons name={filter.icon as any} size={16} color="#FFFFFF" />
+                  <Text style={styles.filterChipTextActive}>{filter.label}</Text>
+                </LinearGradient>
+              ) : (
+                <BlurView intensity={5} tint="light" style={styles.filterChipInactive}>
+                  <Ionicons name={filter.icon as any} size={16} color="#6B7280" />
+                  <Text style={styles.filterChipText}>{filter.label}</Text>
+                </BlurView>
+              )}
+            </TouchableOpacity>
+          ))}
         </View>
 
-        {/* Results Count */}
+        {/* Results Header */}
         <View style={styles.resultsHeader}>
-          <Text style={styles.resultsText}>
-            {filteredCategories.length} {filteredCategories.length === 1 ? 'category' : 'categories'} found
-          </Text>
+          <LinearGradient
+            colors={['#F3F4F6', '#E5E7EB']}
+            style={styles.resultsBadge}
+          >
+            <Ionicons name="apps-outline" size={14} color="#6B7280" />
+            <Text style={styles.resultsText}>
+              {filteredCategories.length} {filteredCategories.length === 1 ? 'Category' : 'Categories'}
+            </Text>
+          </LinearGradient>
         </View>
 
         {/* Categories Grid */}
         {loading ? (
           <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading categories...</Text>
+            <LinearGradient
+              colors={['#F3F4F6', '#E5E7EB']}
+              style={styles.loadingCard}
+            >
+              <ActivityIndicator size="large" color="#8B5CF6" />
+              <Text style={styles.loadingText}>Loading categories...</Text>
+            </LinearGradient>
           </View>
         ) : filteredCategories.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Ionicons name="folder-open-outline" size={80} color={colors.textLight} />
+            <LinearGradient
+              colors={['#F3F4F6', '#E5E7EB']}
+              style={styles.emptyIconContainer}
+            >
+              <Ionicons name="folder-open-outline" size={48} color="#9CA3AF" />
+            </LinearGradient>
             <Text style={styles.emptyTitle}>No categories found</Text>
             <Text style={styles.emptyText}>
               {searchQuery ? 'Try adjusting your search' : 'Categories will appear here'}
@@ -246,35 +275,49 @@ export default function CategoriesScreen() {
         ) : (
           <View style={styles.categoriesGrid}>
             {filteredCategories.map((category, index) => (
-              <TouchableOpacity
+              <Animated.View
                 key={category.id}
-                style={styles.categoryCard}
-                onPress={() => handleCategoryPress(category.id, category.slug)}
-                activeOpacity={0.8}
+                style={{
+                  opacity: fadeAnim,
+                  transform: [{ scale: fadeAnim }],
+                }}
               >
-                <LinearGradient
-                  colors={getCategoryGradient(index)}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.categoryIconContainer}
+                <TouchableOpacity
+                  style={styles.categoryCard}
+                  onPress={() => handleCategoryPress(category.id, category.slug)}
+                  activeOpacity={0.9}
                 >
-                  <Ionicons name={getIconName(category.icon)} size={32} color={colors.surface} />
-                </LinearGradient>
-                <Text style={styles.categoryName} numberOfLines={2}>
-                  {category.name}
-                </Text>
-                {category.description && (
-                  <Text style={styles.categoryDesc} numberOfLines={1}>
-                    {category.description}
+                  <LinearGradient
+                    colors={getCategoryGradient(index)}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.categoryIconContainer}
+                  >
+                    <Ionicons name={getIconName(category.icon)} size={28} color="#FFFFFF" />
+                    <LinearGradient
+                      colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0)']}
+                      style={styles.iconOverlay}
+                    />
+                  </LinearGradient>
+                  <Text style={styles.categoryName} numberOfLines={2}>
+                    {category.name}
                   </Text>
-                )}
-              </TouchableOpacity>
+                  {category.description && (
+                    <Text style={styles.categoryDesc} numberOfLines={1}>
+                      {category.description}
+                    </Text>
+                  )}
+                  <View style={styles.categoryArrow}>
+                    <Ionicons name="arrow-forward" size={12} color="#8B5CF6" />
+                  </View>
+                </TouchableOpacity>
+              </Animated.View>
             ))}
           </View>
         )}
 
         <View style={{ height: spacing.xxl }} />
-      </ScrollView>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 }
@@ -282,92 +325,200 @@ export default function CategoriesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F9FAFB',
   },
   headerGradient: {
     paddingBottom: spacing.xl,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingTop: spacing.md,
     paddingHorizontal: spacing.lg,
   },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTextContainer: {
+    alignItems: 'center',
+  },
   title: {
-    ...typography.h2,
-    color: colors.surface,
+    fontSize: 22,
     fontWeight: '700',
-    marginBottom: spacing.xs,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  headerBadge: {
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: borderRadius.md,
   },
   subtitle: {
-    ...typography.body,
-    color: colors.surface,
-    opacity: 0.9,
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  menuButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   content: {
     flex: 1,
     marginTop: -spacing.lg,
   },
   searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
     marginHorizontal: spacing.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
     borderRadius: borderRadius.xl,
     borderWidth: 2,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  searchGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     gap: spacing.sm,
-    ...shadows.md,
+  },
+  searchIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchInput: {
     flex: 1,
-    ...typography.body,
-    color: colors.text,
+    fontSize: 15,
+    color: '#1F2937',
     paddingVertical: spacing.xs,
+  },
+  clearIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterContainer: {
     flexDirection: 'row',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md,
     gap: spacing.sm,
   },
-  filterChip: {
+  filterChipWrapper: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  filterChipActive: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.xl,
-    backgroundColor: colors.surface,
     gap: spacing.xs,
-    ...shadows.sm,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
-  filterChipActive: {
-    backgroundColor: 'transparent',
-    overflow: 'hidden',
-  },
-  filterChipGradient: {
+  filterChipInactive: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+    borderRadius: borderRadius.xl,
     gap: spacing.xs,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   filterChipText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6B7280',
   },
   filterChipTextActive: {
-    ...typography.bodySmall,
-    color: colors.surface,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   resultsHeader: {
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
+    marginTop: spacing.xs,
+  },
+  resultsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    gap: spacing.xs,
   },
   resultsText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#6B7280',
+    letterSpacing: 0.3,
   },
   loadingContainer: {
     flex: 1,
@@ -375,10 +526,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: spacing.xxl,
   },
+  loadingCard: {
+    width: 200,
+    padding: spacing.xl,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    gap: spacing.md,
+  },
   loadingText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginTop: spacing.md,
+    fontSize: 14,
+    color: '#6B7280',
   },
   emptyContainer: {
     flex: 1,
@@ -387,15 +544,23 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xxl,
     paddingHorizontal: spacing.xl,
   },
+  emptyIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+  },
   emptyTitle: {
-    ...typography.h3,
-    color: colors.text,
-    marginTop: spacing.lg,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
     marginBottom: spacing.sm,
   },
   emptyText: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#9CA3AF',
     textAlign: 'center',
   },
   categoriesGrid: {
@@ -406,32 +571,74 @@ const styles = StyleSheet.create({
   },
   categoryCard: {
     width: CARD_WIDTH,
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     alignItems: 'center',
-    ...shadows.sm,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+    position: 'relative',
   },
   categoryIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: borderRadius.md,
+    width: 70,
+    height: 70,
+    borderRadius: borderRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
-    ...shadows.sm,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  iconOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   categoryName: {
-    ...typography.bodySmall,
-    color: colors.text,
+    fontSize: 12,
     fontWeight: '600',
+    color: '#1F2937',
     textAlign: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: 2,
   },
   categoryDesc: {
-    ...typography.caption,
     fontSize: 10,
-    color: colors.textSecondary,
+    color: '#9CA3AF',
     textAlign: 'center',
   },
+  categoryArrow: {
+    position: 'absolute',
+    bottom: spacing.sm,
+    right: spacing.sm,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
+
+// Add ActivityIndicator import
+import { ActivityIndicator } from 'react-native';

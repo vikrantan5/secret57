@@ -1,3 +1,4 @@
+// src/components/cards/EnhancedProductCard.tsx
 import React, { useRef } from "react";
 import {
   View,
@@ -6,6 +7,7 @@ import {
   StyleSheet,
   Animated,
   Dimensions,
+  Platform,
 } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,15 +23,15 @@ import {
 import { Product } from "../../store/productStore";
 
 const { width } = Dimensions.get("window");
-/* CHANGES DONE:
-- card height reduced 300 → 250
-- imageWrapper height reduced 160 → 130
-- paddingTop fixed 150 → 120
-- top spacing fixed 4 → 6
-- content spacing adjusted
-*/
+const CARD_WIDTH = (width - 48) / 2; // 2 columns with 16px gap on each side
 
-const CARD_WIDTH = (width - 32 - 16) / 2;
+interface EnhancedProductCardProps {
+  product: Product;
+  onPress: () => void;
+  onAddToCart?: () => void;
+  onToggleWishlist?: () => void;
+  isInWishlist?: boolean;
+}
 
 export const EnhancedProductCard: React.FC<EnhancedProductCardProps> = ({
   product,
@@ -39,6 +41,8 @@ export const EnhancedProductCard: React.FC<EnhancedProductCardProps> = ({
   isInWishlist = false,
 }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const heartScale = useRef(new Animated.Value(1)).current;
+  const cartScale = useRef(new Animated.Value(1)).current;
 
   const hasDiscount =
     product.compare_at_price &&
@@ -46,15 +50,17 @@ export const EnhancedProductCard: React.FC<EnhancedProductCardProps> = ({
 
   const discountPercent = hasDiscount
     ? Math.round(
-        ((product.compare_at_price - product.price) /
-          product.compare_at_price) *
+        ((product.compare_at_price! - product.price) /
+          product.compare_at_price!) *
           100
       )
     : 0;
 
   const animateIn = () => {
     Animated.spring(scaleAnim, {
-      toValue: 0.95,
+      toValue: 0.97,
+      friction: 5,
+      tension: 40,
       useNativeDriver: true,
     }).start();
   };
@@ -62,30 +68,70 @@ export const EnhancedProductCard: React.FC<EnhancedProductCardProps> = ({
   const animateOut = () => {
     Animated.spring(scaleAnim, {
       toValue: 1,
+      friction: 5,
+      tension: 40,
       useNativeDriver: true,
     }).start();
   };
 
   const addToCart = (e: any) => {
     e.stopPropagation();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    Animated.sequence([
+      Animated.spring(cartScale, {
+        toValue: 0.8,
+        friction: 3,
+        useNativeDriver: true,
+      }),
+      Animated.spring(cartScale, {
+        toValue: 1,
+        friction: 3,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    
     onAddToCart?.();
   };
 
   const toggleWishlist = (e: any) => {
     e.stopPropagation();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    Animated.sequence([
+      Animated.spring(heartScale, {
+        toValue: 1.3,
+        friction: 3,
+        useNativeDriver: true,
+      }),
+      Animated.spring(heartScale, {
+        toValue: 1,
+        friction: 3,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    
     onToggleWishlist?.();
   };
 
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+    <Animated.View style={{ transform: [{ scale: scaleAnim }], width: CARD_WIDTH }}>
       <TouchableOpacity
         style={styles.card}
-        activeOpacity={1}
+        activeOpacity={0.9}
         onPress={onPress}
         onPressIn={animateIn}
         onPressOut={animateOut}
       >
-        {/* IMAGE */}
+        {/* Premium Gradient Border */}
+        <LinearGradient
+          colors={['#8B5CF6', '#7C3AED', '#6D28D9']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientBorder}
+        />
+
+        {/* IMAGE SECTION */}
         <View style={styles.imageWrapper}>
           <Image
             source={{
@@ -95,33 +141,61 @@ export const EnhancedProductCard: React.FC<EnhancedProductCardProps> = ({
             }}
             style={styles.image}
             contentFit="cover"
+            transition={300}
           />
 
-          {/* WISHLIST */}
+          {/* Discount Badge */}
+          {hasDiscount && (
+            <LinearGradient
+              colors={['#EF4444', '#DC2626']}
+              style={styles.discountBadge}
+            >
+              <Text style={styles.discountText}>{discountPercent}% OFF</Text>
+            </LinearGradient>
+          )}
+
+          {/* Stock Badge */}
+          {product.stock === 0 && (
+            <LinearGradient
+              colors={['#6B7280', '#4B5563']}
+              style={styles.stockBadge}
+            >
+              <Text style={styles.stockText}>Out of Stock</Text>
+            </LinearGradient>
+          )}
+
+          {/* Wishlist Button */}
           {onToggleWishlist && (
             <TouchableOpacity
               style={styles.wishlistButton}
               onPress={toggleWishlist}
+              activeOpacity={0.8}
             >
-              <Ionicons
-                name={isInWishlist ? "heart" : "heart-outline"}
-                size={20}
-                color={isInWishlist ? colors.error : "#fff"}
-              />
+              <Animated.View style={{ transform: [{ scale: heartScale }] }}>
+                <LinearGradient
+                  colors={isInWishlist ? ['#EF4444', '#DC2626'] : ['rgba(0,0,0,0.4)', 'rgba(0,0,0,0.3)']}
+                  style={styles.wishlistGradient}
+                >
+                  <Ionicons
+                    name={isInWishlist ? "heart" : "heart-outline"}
+                    size={16}
+                    color="#FFFFFF"
+                  />
+                </LinearGradient>
+              </Animated.View>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* TEXT CONTENT */}
+        {/* CONTENT SECTION */}
         <View style={styles.content}>
           <Text style={styles.name} numberOfLines={2}>
             {product.name}
           </Text>
 
-          <View style={styles.priceRow}>
-            <View style={{ flex: 1 }}>
+          <View style={styles.priceSection}>
+            <View style={styles.priceRow}>
               <Text style={styles.price}>₹{product.price.toFixed(2)}</Text>
-
               {hasDiscount && (
                 <Text style={styles.comparePrice}>
                   ₹{product.compare_at_price?.toFixed(2)}
@@ -129,17 +203,23 @@ export const EnhancedProductCard: React.FC<EnhancedProductCardProps> = ({
               )}
             </View>
 
+            {/* Add to Cart Button */}
             {onAddToCart && product.stock > 0 && (
               <TouchableOpacity
                 style={styles.cartButton}
                 onPress={addToCart}
+                activeOpacity={0.8}
               >
-                <LinearGradient
-                  colors={[colors.primary, colors.primaryDark]}
-                  style={styles.cartButtonGradient}
-                >
-                  <Ionicons name="cart-outline" size={18} color="#fff" />
-                </LinearGradient>
+                <Animated.View style={{ transform: [{ scale: cartScale }] }}>
+                  <LinearGradient
+                    colors={['#8B5CF6', '#7C3AED']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.cartButtonGradient}
+                  >
+                    <Ionicons name="cart-outline" size={18} color="#FFFFFF" />
+                  </LinearGradient>
+                </Animated.View>
               </TouchableOpacity>
             )}
           </View>
@@ -151,86 +231,131 @@ export const EnhancedProductCard: React.FC<EnhancedProductCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    width: CARD_WIDTH,
-    height: 200,          // FIX 1: height reduced
-    backgroundColor: "#fff",
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    marginBottom: 16,
-    paddingTop: 120,      // FIX 2: floating image adjusted
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
-
+  gradientBorder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    zIndex: 1,
+  },
   imageWrapper: {
-    width: "90%",
-    height: 130,          // FIX 3: image height reduced
-    backgroundColor: "#f2f2f2",
-    position: "absolute",
-    top: 6,               // FIX 4: alignment perfect
-    alignSelf: "center",
-    borderRadius: 12,
-    overflow: "hidden",
+    position: 'relative',
+    height: 140,
+    backgroundColor: '#F3F4F6',
+    overflow: 'hidden',
   },
-
   image: {
-    width: "100%",
-    height: "100%",
+    width: '100%',
+    height: '100%',
   },
-
+  discountBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    zIndex: 2,
+  },
+  discountText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  stockBadge: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 4,
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  stockText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
   wishlistButton: {
-    position: "absolute",
-    top: 6,
-    right: 6,
-    backgroundColor: "rgba(0,0,0,0.3)",
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 2,
   },
-
+  wishlistGradient: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
   content: {
-    flex: 1,
-    
-    paddingHorizontal: 10,
-    justifyContent: "space-between",
+    padding: 12,
   },
-
   name: {
-    marginTop: 20,
     fontSize: 13,
-    fontWeight: "600",
-    height: 34,
+    fontWeight: '600',
+    color: '#1F2937',
+    lineHeight: 18,
+    minHeight: 36,
+    marginBottom: 8,
   },
-
+  priceSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   priceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 8,
+    flex: 1,
   },
-
   price: {
     fontSize: 16,
-    fontWeight: "700",
-    color: colors.primary,
+    fontWeight: '800',
+    color: '#8B5CF6',
   },
-
   comparePrice: {
-    fontSize: 11,
-    color: "#777",
-    textDecorationLine: "line-through",
+    fontSize: 10,
+    color: '#9CA3AF',
+    textDecorationLine: 'line-through',
+    marginTop: 2,
   },
-
   cartButton: {
     width: 34,
     height: 34,
-    borderRadius: 8,
-    overflow: "hidden",
+    borderRadius: 10,
+    overflow: 'hidden',
   },
-
   cartButtonGradient: {
-    width: "100%",
-    height: "100%",
-    justifyContent: "center",
-    alignItems: "center",
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

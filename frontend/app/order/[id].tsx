@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,19 @@ import {
   TextInput,
   FlatList,
   Image,
+  Animated,
+  Dimensions,
+  Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import { useOrderStore } from '../../src/store/orderStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
+
+const { width, height } = Dimensions.get('window');
 
 export default function OrderDetailScreen() {
   const router = useRouter();
@@ -25,57 +33,90 @@ export default function OrderDetailScreen() {
   const { selectedOrder, loading, fetchOrderById, cancelOrder } = useOrderStore();
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancellationReason, setCancellationReason] = useState('');
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
     if (orderId) {
       fetchOrderById(orderId);
     }
   }, [orderId]);
-   // ✅ FIX: Auto-refresh order when screen comes into focus
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [selectedOrder]);
+
   useEffect(() => {
     const refreshTimer = setInterval(() => {
       if (orderId && selectedOrder?.payment_status === 'pending') {
         console.log('🔄 Auto-refreshing pending order...');
         fetchOrderById(orderId);
       }
-    }, 5000); // Refresh every 5 seconds if payment is pending
+    }, 5000);
 
     return () => clearInterval(refreshTimer);
   }, [orderId, selectedOrder?.payment_status]);
 
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending':
-        return colors.warning;
+        return '#F59E0B';
       case 'processing':
       case 'shipped':
-        return colors.primary;
+        return '#8B5CF6';
       case 'delivered':
-        return colors.success;
+        return '#10B981';
       case 'cancelled':
       case 'refunded':
-        return colors.error;
+        return '#EF4444';
       default:
-        return colors.textSecondary;
+        return '#6B7280';
+    }
+  };
+
+  const getStatusGradient = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return ['#FEF3C7', '#FDE68A'];
+      case 'processing':
+        return ['#E0E7FF', '#C7D2FE'];
+      case 'shipped':
+        return ['#EDE9FE', '#DDD6FE'];
+      case 'delivered':
+        return ['#D1FAE5', '#A7F3D0'];
+      case 'cancelled':
+        return ['#FEE2E2', '#FECACA'];
+      default:
+        return ['#F3F4F6', '#E5E7EB'];
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'pending':
-        return 'time';
+        return 'time-outline';
       case 'processing':
-        return 'refresh-circle';
+        return 'refresh-outline';
       case 'shipped':
-        return 'car';
+        return 'car-outline';
       case 'delivered':
-        return 'checkmark-circle';
+        return 'checkmark-circle-outline';
       case 'cancelled':
       case 'refunded':
-        return 'close-circle';
+        return 'close-circle-outline';
       default:
-        return 'help-circle';
+        return 'help-circle-outline';
     }
   };
 
@@ -99,17 +140,13 @@ export default function OrderDetailScreen() {
     const result = await cancelOrder(orderId, cancellationReason);
     
     if (result.success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowCancelModal(false);
       setCancellationReason('');
       Alert.alert(
         'Order Cancelled',
         'Your order has been cancelled successfully',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.back(),
-          },
-        ]
+        [{ text: 'OK', onPress: () => router.back() }]
       );
     } else {
       Alert.alert('Error', result.error || 'Failed to cancel order');
@@ -119,9 +156,13 @@ export default function OrderDetailScreen() {
   if (loading || !selectedOrder) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <LinearGradient
+          colors={['#F9FAFB', '#FFFFFF']}
+          style={styles.loadingContainer}
+        >
+          <ActivityIndicator size="large" color="#8B5CF6" />
+          <Text style={styles.loadingText}>Loading order details...</Text>
+        </LinearGradient>
       </SafeAreaView>
     );
   }
@@ -129,12 +170,11 @@ export default function OrderDetailScreen() {
   const order = selectedOrder;
   const canCancel = order.status === 'pending' || order.status === 'processing';
 
-  // Order tracking steps
   const trackingSteps = [
-    { status: 'pending', label: 'Order Placed', icon: 'cart' },
-    { status: 'processing', label: 'Processing', icon: 'refresh-circle' },
-    { status: 'shipped', label: 'Shipped', icon: 'car' },
-    { status: 'delivered', label: 'Delivered', icon: 'checkmark-circle' },
+    { status: 'pending', label: 'Order Placed', icon: 'bag-handle-outline', description: 'Your order has been placed' },
+    { status: 'processing', label: 'Processing', icon: 'refresh-outline', description: 'Seller is preparing your order' },
+    { status: 'shipped', label: 'Shipped', icon: 'car-outline', description: 'Order is on the way' },
+    { status: 'delivered', label: 'Delivered', icon: 'checkmark-circle-outline', description: 'Order delivered successfully' },
   ];
 
   const getCurrentStepIndex = () => {
@@ -145,34 +185,62 @@ export default function OrderDetailScreen() {
   const currentStepIndex = getCurrentStepIndex();
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Order Details</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Premium Header */}
+      <LinearGradient
+        colors={['#1E1B4B', '#312E81', '#4C1D95']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Order Details</Text>
+          <View style={{ width: 40 }} />
+        </View>
+      </LinearGradient>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <Animated.ScrollView
+        showsVerticalScrollIndicator={false}
+        style={[styles.scrollView, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+      >
         {/* Order Status Card */}
-        <View style={[styles.card, shadows.sm]}>
+        <LinearGradient
+          colors={getStatusGradient(order.status)}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.statusCard}
+        >
           <View style={styles.statusHeader}>
-            <View style={[styles.statusIconContainer, { backgroundColor: getStatusColor(order.status) }]}>
-              <Ionicons name={getStatusIcon(order.status) as any} size={32} color={colors.surface} />
-            </View>
+            <LinearGradient
+              colors={[getStatusColor(order.status), getStatusColor(order.status) + 'CC']}
+              style={styles.statusIconContainer}
+            >
+              <Ionicons name={getStatusIcon(order.status) as any} size={32} color="#FFFFFF" />
+            </LinearGradient>
             <View style={styles.statusInfo}>
-              <Text style={styles.statusTitle}>{order.status.toUpperCase()}</Text>
-              <Text style={styles.orderNumber}>{order.order_number}</Text>
+              <Text style={styles.statusTitle}>
+                {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+              </Text>
+              <Text style={styles.orderNumber}>Order #{order.order_number?.slice(0, 12)}</Text>
             </View>
           </View>
-        </View>
+        </LinearGradient>
 
-        {/* Tracking Timeline */}
+        {/* Premium Tracking Timeline */}
         {order.status !== 'cancelled' && order.status !== 'refunded' && (
-          <View style={[styles.card, shadows.sm]}>
-            <Text style={styles.cardTitle}>Order Tracking</Text>
+          <View style={styles.timelineCard}>
+            <View style={styles.timelineHeader}>
+              <LinearGradient
+                colors={['#8B5CF6', '#7C3AED']}
+                style={styles.timelineIconBg}
+              >
+                <Ionicons name="map-outline" size={18} color="#FFFFFF" />
+              </LinearGradient>
+              <Text style={styles.timelineTitle}>Order Tracking</Text>
+            </View>
             <View style={styles.timeline}>
               {trackingSteps.map((step, index) => {
                 const isCompleted = index <= currentStepIndex;
@@ -181,18 +249,16 @@ export default function OrderDetailScreen() {
                 return (
                   <View key={step.status} style={styles.timelineItem}>
                     <View style={styles.timelineLeft}>
-                      <View
-                        style={[
-                          styles.timelineIcon,
-                          isCompleted && styles.timelineIconActive,
-                        ]}
+                      <LinearGradient
+                        colors={isCompleted ? ['#8B5CF6', '#7C3AED'] : ['#E5E7EB', '#D1D5DB']}
+                        style={styles.timelineIcon}
                       >
                         <Ionicons
                           name={step.icon as any}
-                          size={20}
-                          color={isCompleted ? colors.surface : colors.textSecondary}
+                          size={18}
+                          color={isCompleted ? '#FFFFFF' : '#9CA3AF'}
                         />
-                      </View>
+                      </LinearGradient>
                       {index < trackingSteps.length - 1 && (
                         <View
                           style={[
@@ -211,6 +277,7 @@ export default function OrderDetailScreen() {
                       >
                         {step.label}
                       </Text>
+                      <Text style={styles.timelineDescription}>{step.description}</Text>
                       {isActive && order.updated_at && (
                         <Text style={styles.timelineDate}>
                           {formatDate(order.updated_at)}
@@ -225,8 +292,16 @@ export default function OrderDetailScreen() {
         )}
 
         {/* Order Items */}
-        <View style={[styles.card, shadows.sm]}>
-          <Text style={styles.cardTitle}>Items ({order.items?.length || 0})</Text>
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <LinearGradient
+              colors={['#8B5CF6', '#7C3AED']}
+              style={styles.cardIcon}
+            >
+              <Ionicons name="cube-outline" size={18} color="#FFFFFF" />
+            </LinearGradient>
+            <Text style={styles.cardTitle}>Items ({order.items?.length || 0})</Text>
+          </View>
           {order.items?.map((item, index) => (
             <View key={index} style={styles.orderItem}>
               <Image
@@ -237,78 +312,111 @@ export default function OrderDetailScreen() {
                 <Text style={styles.itemName} numberOfLines={2}>
                   {item.product?.name || 'Product'}
                 </Text>
-                <Text style={styles.itemQuantity}>Qty: {item.quantity}</Text>
-                <Text style={styles.itemPrice}>₹{item.price.toFixed(2)}</Text>
+                <View style={styles.itemMeta}>
+                  <Text style={styles.itemQuantity}>Qty: {item.quantity}</Text>
+                  <Text style={styles.itemPrice}>₹{item.price.toFixed(2)}</Text>
+                </View>
               </View>
-              <Text style={styles.itemTotal}>₹{item.total.toFixed(2)}</Text>
+              <LinearGradient
+                colors={['#1E1B4B', '#312E81']}
+                style={styles.itemTotalContainer}
+              >
+                <Text style={styles.itemTotal}>₹{item.total.toFixed(2)}</Text>
+              </LinearGradient>
             </View>
           ))}
         </View>
 
         {/* Shipping Address */}
-        <View style={[styles.card, shadows.sm]}>
-          <Text style={styles.cardTitle}>Shipping Address</Text>
-          <View style={styles.addressRow}>
-            <Ionicons name="person" size={20} color={colors.primary} />
-            <Text style={styles.addressText}>{order.shipping_name}</Text>
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <LinearGradient
+              colors={['#10B981', '#059669']}
+              style={styles.cardIcon}
+            >
+              <Ionicons name="location-outline" size={18} color="#FFFFFF" />
+            </LinearGradient>
+            <Text style={styles.cardTitle}>Shipping Address</Text>
           </View>
-          <View style={styles.addressRow}>
-            <Ionicons name="call" size={20} color={colors.primary} />
-            <Text style={styles.addressText}>{order.shipping_phone}</Text>
-          </View>
-          <View style={styles.addressRow}>
-            <Ionicons name="location" size={20} color={colors.primary} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.addressText}>{order.shipping_address}</Text>
-              <Text style={styles.addressText}>
-                {order.shipping_city}, {order.shipping_state} - {order.shipping_pincode}
-              </Text>
+          <View style={styles.addressContainer}>
+            <View style={styles.addressRow}>
+              <Ionicons name="person-outline" size={18} color="#8B5CF6" />
+              <Text style={styles.addressText}>{order.shipping_name}</Text>
+            </View>
+            <View style={styles.addressRow}>
+              <Ionicons name="call-outline" size={18} color="#8B5CF6" />
+              <Text style={styles.addressText}>{order.shipping_phone}</Text>
+            </View>
+            <View style={styles.addressRow}>
+              <Ionicons name="location-outline" size={18} color="#8B5CF6" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.addressText}>{order.shipping_address}</Text>
+                <Text style={styles.addressText}>
+                  {order.shipping_city}, {order.shipping_state} - {order.shipping_pincode}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
 
-
-                {/* Delivery OTP Card - Show to customer when order is delivered */}
+        {/* Delivery OTP Card */}
         {order.delivery_otp && !order.otp_verified && order.seller_status === 'delivered' && (
-          <View style={[styles.card, shadows.sm, styles.otpCard]}>
+          <LinearGradient
+            colors={['#FEF3C7', '#FDE68A']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.otpCard}
+          >
             <View style={styles.otpHeader}>
-              <Ionicons name="key" size={28} color={colors.primary} />
-              <Text style={styles.cardTitle}>Delivery Verification OTP</Text>
+              <Ionicons name="key-outline" size={28} color="#92400E" />
+              <Text style={styles.otpTitle}>Delivery Verification OTP</Text>
             </View>
             <Text style={styles.otpDescription}>
-              Share this OTP with the delivery person to confirm you have received your order
+              Share this OTP with the delivery person to confirm receipt
             </Text>
             <View style={styles.otpContainer}>
               <Text style={styles.otpText}>{order.delivery_otp}</Text>
             </View>
             <View style={styles.otpNote}>
-              <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
+              <Ionicons name="information-circle-outline" size={18} color="#92400E" />
               <Text style={styles.otpNoteText}>
                 Keep this OTP private. Only share with the delivery person upon receiving your order.
               </Text>
             </View>
-          </View>
+          </LinearGradient>
         )}
 
         {/* OTP Verified Badge */}
         {order.otp_verified && (
-          <View style={[styles.card, shadows.sm, { backgroundColor: colors.success + '10' }]}>
+          <LinearGradient
+            colors={['#D1FAE5', '#A7F3D0']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.verifiedCard}
+          >
             <View style={styles.verifiedBadge}>
-              <Ionicons name="checkmark-circle" size={32} color={colors.success} />
+              <Ionicons name="checkmark-circle" size={32} color="#10B981" />
               <View style={{ flex: 1, marginLeft: spacing.md }}>
-                <Text style={[styles.cardTitle, { color: colors.success }]}>Delivery Verified</Text>
+                <Text style={styles.verifiedTitle}>Delivery Verified</Text>
                 <Text style={styles.verifiedText}>
                   Your order has been successfully delivered and verified.
                 </Text>
               </View>
             </View>
-          </View>
+          </LinearGradient>
         )}
 
-
         {/* Payment Summary */}
-        <View style={[styles.card, shadows.sm]}>
-          <Text style={styles.cardTitle}>Payment Summary</Text>
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <LinearGradient
+              colors={['#F59E0B', '#D97706']}
+              style={styles.cardIcon}
+            >
+              <Ionicons name="card-outline" size={18} color="#FFFFFF" />
+            </LinearGradient>
+            <Text style={styles.cardTitle}>Payment Summary</Text>
+          </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Subtotal</Text>
             <Text style={styles.summaryValue}>₹{order.subtotal.toFixed(2)}</Text>
@@ -316,122 +424,155 @@ export default function OrderDetailScreen() {
           {order.discount > 0 && (
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Discount</Text>
-              <Text style={[styles.summaryValue, { color: colors.success }]}>
+              <Text style={[styles.summaryValue, styles.discountValue]}>
                 -₹{order.discount.toFixed(2)}
               </Text>
             </View>
           )}
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Delivery</Text>
-            <Text style={[styles.summaryValue, { color: colors.success }]}>
+            <Text style={styles.summaryLabel}>Delivery Charges</Text>
+            <Text style={[styles.summaryValue, order.delivery_charges === 0 && styles.freeValue]}>
               {order.delivery_charges === 0 ? 'FREE' : `₹${order.delivery_charges.toFixed(2)}`}
             </Text>
           </View>
           <View style={styles.divider} />
-          <View style={styles.summaryRow}>
-            <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>₹{order.total_amount.toFixed(2)}</Text>
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Total Amount</Text>
+            <LinearGradient
+              colors={['#1E1B4B', '#312E81']}
+              style={styles.totalContainer}
+            >
+              <Text style={styles.totalValue}>₹{order.total_amount.toFixed(2)}</Text>
+            </LinearGradient>
           </View>
           <View style={styles.paymentStatusRow}>
             <Text style={styles.summaryLabel}>Payment Status</Text>
-            <View
-              style={[
-                styles.paymentBadge,
-                {
-                  backgroundColor:
-                    order.payment_status === 'paid' ? colors.success + '20' : colors.warning + '20',
-                },
-              ]}
+            <LinearGradient
+              colors={
+                order.payment_status === 'paid'
+                  ? ['#D1FAE5', '#A7F3D0']
+                  : ['#FEF3C7', '#FDE68A']
+              }
+              style={styles.paymentBadge}
             >
               <Text
                 style={[
                   styles.paymentBadgeText,
                   {
-                    color: order.payment_status === 'paid' ? colors.success : colors.warning,
+                    color: order.payment_status === 'paid' ? '#10B981' : '#F59E0B',
                   },
                 ]}
               >
                 {order.payment_status.toUpperCase()}
               </Text>
-            </View>
+            </LinearGradient>
           </View>
         </View>
-
-        {/* Cancel Modal */}
-        {showCancelModal && (
-          <View style={[styles.card, shadows.md, { backgroundColor: colors.surface }]}>
-            <Text style={styles.cardTitle}>Cancel Order</Text>
-            <Text style={styles.modalSubtitle}>Please provide a reason for cancellation:</Text>
-            <TextInput
-              style={styles.textArea}
-              placeholder="Enter reason..."
-              placeholderTextColor={colors.textSecondary}
-              value={cancellationReason}
-              onChangeText={setCancellationReason}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelModalButton]}
-                onPress={() => {
-                  setShowCancelModal(false);
-                  setCancellationReason('');
-                }}
-              >
-                <Text style={styles.cancelModalButtonText}>Back</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.confirmCancelButton]}
-                onPress={handleCancelOrder}
-              >
-                <Text style={styles.confirmCancelButtonText}>Cancel Order</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
 
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
           {canCancel && !showCancelModal && (
             <TouchableOpacity
-              style={[styles.actionButton, styles.cancelButton]}
+              style={styles.cancelButton}
               onPress={() => setShowCancelModal(true)}
-              data-testid="cancel-order-button"
             >
-              <Ionicons name="close-circle" size={20} color={colors.surface} />
-              <Text style={styles.cancelButtonText}>Cancel Order</Text>
+              <LinearGradient
+                colors={['#EF4444', '#DC2626']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.cancelGradient}
+              >
+                <Ionicons name="close-circle-outline" size={20} color="#FFFFFF" />
+                <Text style={styles.cancelButtonText}>Cancel Order</Text>
+              </LinearGradient>
             </TouchableOpacity>
           )}
           
-          {/* Report Seller Button */}
           {order.status === 'delivered' && (
             <TouchableOpacity
-              style={[styles.actionButton, styles.reportButton]}
+              style={styles.reportButton}
               onPress={() => router.push(`/complaints/create?orderId=${orderId}&sellerId=${order.items?.[0]?.seller_id}`)}
-              data-testid="report-seller-button"
             >
-              <Ionicons name="flag-outline" size={20} color={colors.surface} />
-              <Text style={styles.reportButtonText}>Report Issue</Text>
+              <LinearGradient
+                colors={['#F59E0B', '#D97706']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.reportGradient}
+              >
+                <Ionicons name="flag-outline" size={20} color="#FFFFFF" />
+                <Text style={styles.reportButtonText}>Report Issue</Text>
+              </LinearGradient>
             </TouchableOpacity>
           )}
           
-          {/* Request Refund Button */}
           {order.status === 'delivered' && order.payment_status === 'paid' && (
             <TouchableOpacity
-              style={[styles.actionButton, styles.refundButton]}
+              style={styles.refundButton}
               onPress={() => router.push(`/order/${orderId}/refund`)}
-              data-testid="request-refund-button"
             >
-              <Ionicons name="return-down-back-outline" size={20} color={colors.surface} />
-              <Text style={styles.refundButtonText}>Request Refund</Text>
+              <LinearGradient
+                colors={['#3B82F6', '#2563EB']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.refundGradient}
+              >
+                <Ionicons name="return-down-back-outline" size={20} color="#FFFFFF" />
+                <Text style={styles.refundButtonText}>Request Refund</Text>
+              </LinearGradient>
             </TouchableOpacity>
           )}
         </View>
 
+        {/* Cancel Modal */}
+        {showCancelModal && (
+          <BlurView intensity={90} tint="dark" style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <LinearGradient
+                colors={['#EF4444', '#DC2626']}
+                style={styles.modalHeader}
+              >
+                <Ionicons name="alert-circle-outline" size={28} color="#FFFFFF" />
+                <Text style={styles.modalTitle}>Cancel Order</Text>
+              </LinearGradient>
+              <Text style={styles.modalSubtitle}>Please provide a reason for cancellation:</Text>
+              <TextInput
+                style={styles.textArea}
+                placeholder="Enter reason..."
+                placeholderTextColor="#9CA3AF"
+                value={cancellationReason}
+                onChangeText={setCancellationReason}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={() => {
+                    setShowCancelModal(false);
+                    setCancellationReason('');
+                  }}
+                >
+                  <Text style={styles.modalCancelText}>Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalConfirmButton}
+                  onPress={handleCancelOrder}
+                >
+                  <LinearGradient
+                    colors={['#EF4444', '#DC2626']}
+                    style={styles.modalConfirmGradient}
+                  >
+                    <Text style={styles.modalConfirmText}>Cancel Order</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </BlurView>
+        )}
+
         <View style={{ height: spacing.xl }} />
-      </ScrollView>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 }
@@ -439,39 +580,75 @@ export default function OrderDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F9FAFB',
+  },
+  headerGradient: {
+    paddingBottom: spacing.lg,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingTop: spacing.md,
+    paddingHorizontal: spacing.lg,
   },
   backButton: {
     width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
-    ...typography.h3,
-    color: colors.text,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  scrollView: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.md,
   },
-  card: {
-    backgroundColor: colors.surface,
+  loadingText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  statusCard: {
     marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
     marginBottom: spacing.md,
     padding: spacing.lg,
     borderRadius: borderRadius.lg,
-  },
-  cardTitle: {
-    ...typography.h4,
-    color: colors.text,
-    marginBottom: spacing.md,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   statusHeader: {
     flexDirection: 'row',
@@ -481,7 +658,7 @@ const styles = StyleSheet.create({
   statusIconContainer: {
     width: 64,
     height: 64,
-    borderRadius: borderRadius.full,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -489,16 +666,53 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statusTitle: {
-    ...typography.h2,
-    color: colors.text,
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1F2937',
     marginBottom: spacing.xs,
   },
   orderNumber: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  timelineCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  timelineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  timelineIconBg: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timelineTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
   },
   timeline: {
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
   },
   timelineItem: {
     flexDirection: 'row',
@@ -508,43 +722,80 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   timelineIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.border,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  timelineIconActive: {
-    backgroundColor: colors.primary,
   },
   timelineLine: {
     width: 2,
     flex: 1,
-    backgroundColor: colors.border,
+    backgroundColor: '#E5E7EB',
     marginTop: spacing.xs,
     marginBottom: spacing.xs,
   },
   timelineLineActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#8B5CF6',
   },
   timelineContent: {
     flex: 1,
-    paddingVertical: spacing.sm,
+    paddingBottom: spacing.md,
   },
   timelineLabel: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 2,
   },
   timelineLabelActive: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
+    color: '#1F2937',
+  },
+  timelineDescription: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginBottom: 2,
   },
   timelineDate: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: 4,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  cardIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
   },
   orderItem: {
     flexDirection: 'row',
@@ -552,47 +803,59 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: '#F3F4F6',
   },
   itemImage: {
-    width: 80,
-    height: 80,
+    width: 70,
+    height: 70,
     borderRadius: borderRadius.md,
   },
   itemDetails: {
     flex: 1,
   },
   itemName: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 14,
     fontWeight: '600',
+    color: '#1F2937',
     marginBottom: spacing.xs,
+  },
+  itemMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   itemQuantity: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
+    fontSize: 12,
+    color: '#6B7280',
   },
   itemPrice: {
-    ...typography.body,
-    color: colors.primary,
+    fontSize: 13,
     fontWeight: '600',
+    color: '#8B5CF6',
+  },
+  itemTotalContainer: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
   },
   itemTotal: {
-    ...typography.h4,
-    color: colors.text,
+    fontSize: 14,
     fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  addressContainer: {
+    gap: spacing.sm,
   },
   addressRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.md,
-    marginBottom: spacing.md,
   },
   addressText: {
-    ...typography.body,
-    color: colors.text,
     flex: 1,
+    fontSize: 14,
+    color: '#4B5563',
+    lineHeight: 20,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -600,33 +863,51 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   summaryLabel: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#6B7280',
   },
   summaryValue: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 14,
     fontWeight: '600',
+    color: '#1F2937',
+  },
+  discountValue: {
+    color: '#10B981',
+  },
+  freeValue: {
+    color: '#10B981',
   },
   divider: {
     height: 1,
-    backgroundColor: colors.border,
+    backgroundColor: '#F3F4F6',
     marginVertical: spacing.md,
   },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
   totalLabel: {
-    ...typography.h4,
-    color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  totalContainer: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
   },
   totalValue: {
-    ...typography.h3,
-    color: colors.primary,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   paymentStatusRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
   },
   paymentBadge: {
     paddingHorizontal: spacing.md,
@@ -634,95 +915,67 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
   },
   paymentBadgeText: {
-    ...typography.bodySmall,
+    fontSize: 12,
     fontWeight: '700',
-  },
-  modalSubtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginBottom: spacing.md,
-  },
-  textArea: {
-    ...typography.body,
-    color: colors.text,
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    minHeight: 100,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  modalButton: {
-    flex: 1,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-  },
-  cancelModalButton: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cancelModalButtonText: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  confirmCancelButton: {
-    backgroundColor: colors.error,
-  },
-  confirmCancelButtonText: {
-    ...typography.body,
-    color: colors.surface,
-    fontWeight: '600',
   },
   actionButtons: {
     marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
   },
-  actionButton: {
+  cancelButton: {
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  cancelGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
     paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
-  },
-  cancelButton: {
-    backgroundColor: colors.error,
+    gap: spacing.sm,
   },
   cancelButtonText: {
-    ...typography.body,
-    color: colors.surface,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
-    reportButton: {
-    backgroundColor: colors.warning,
-    marginTop: spacing.sm,
+  reportButton: {
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  reportGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
   },
   reportButtonText: {
-    ...typography.body,
-    color: colors.surface,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   refundButton: {
-    backgroundColor: colors.info,
-    marginTop: spacing.sm,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  refundGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
   },
   refundButtonText: {
-    ...typography.body,
-    color: colors.surface,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   otpCard: {
-    backgroundColor: colors.primary + '08',
-    borderWidth: 2,
-    borderColor: colors.primary + '30',
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
   },
   otpHeader: {
     flexDirection: 'row',
@@ -730,50 +983,153 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.sm,
   },
+  otpTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#92400E',
+  },
   otpDescription: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    marginBottom: spacing.lg,
+    fontSize: 13,
+    color: '#78350F',
+    marginBottom: spacing.md,
     lineHeight: 20,
   },
   otpContainer: {
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
     padding: spacing.xl,
     borderRadius: borderRadius.md,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: colors.primary + '20',
+    borderColor: '#FDE68A',
     borderStyle: 'dashed',
     marginBottom: spacing.md,
   },
   otpText: {
     fontSize: 36,
-    fontWeight: '700',
-    color: colors.primary,
+    fontWeight: '800',
+    color: '#92400E',
     letterSpacing: 8,
   },
   otpNote: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.primary + '10',
+    backgroundColor: 'rgba(255,255,255,0.6)',
     padding: spacing.md,
     borderRadius: borderRadius.md,
   },
   otpNoteText: {
-    ...typography.bodySmall,
-    color: colors.primary,
     flex: 1,
+    fontSize: 12,
+    color: '#92400E',
     lineHeight: 18,
+  },
+  verifiedCard: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
   },
   verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+  verifiedTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#10B981',
+  },
   verifiedText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
+    fontSize: 13,
+    color: '#065F46',
+    marginTop: 2,
     lineHeight: 20,
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  modalCard: {
+    width: width - spacing.xl * 2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.lg,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  textArea: {
+    fontSize: 14,
+    color: '#1F2937',
+    backgroundColor: '#F9FAFB',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    minHeight: 100,
+    marginHorizontal: spacing.lg,
+    marginVertical: spacing.md,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.lg,
+  },
+  modalCancelButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  modalCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  modalConfirmButton: {
+    flex: 1,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+  },
+  modalConfirmGradient: {
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

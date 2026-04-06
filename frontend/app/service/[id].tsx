@@ -156,7 +156,7 @@ const handleBookService = async () => {
       pincode: bookingData.locationType === 'visit_customer' ? bookingData.pincode : null,
       notes: bookingData.notes || null,
       total_amount: selectedService?.price || 0,
-       customer_name: user.name || 'Customer',
+      customer_name: user.name || 'Customer',
       customer_email: user.email || '',
       customer_phone: user.phone || '',
     });
