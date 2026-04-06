@@ -64,13 +64,25 @@ serve(async (req) => {
       );
     }
 
-    // Verify OTP
-    if (booking.otp !== otp) {
+    // Verify OTP - Convert both to strings and trim whitespace for comparison
+    const storedOTP = String(booking.otp || '').trim();
+    const inputOTP = String(otp || '').trim();
+    
+    console.log('🔍 OTP Comparison Debug:');
+    console.log('  Stored OTP:', storedOTP, '(type:', typeof booking.otp, ')');
+    console.log('  Input OTP:', inputOTP, '(type:', typeof otp, ')');
+    console.log('  Match:', storedOTP === inputOTP);
+    
+    if (storedOTP !== inputOTP) {
       // Increment OTP attempts
       await supabase
         .from('bookings')
         .update({ otp_attempts: (booking.otp_attempts || 0) + 1 })
         .eq('id', booking_id);
+
+      console.error('❌ OTP Mismatch!');
+      console.error('  Expected:', storedOTP);
+      console.error('  Received:', inputOTP);
 
       return new Response(
         JSON.stringify({ 
