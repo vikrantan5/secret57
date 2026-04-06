@@ -271,10 +271,15 @@ const handleBookService = async () => {
         );
         console.log('Payment status updated to success');
 
-        // Step 3: Auto-confirm booking after successful payment
-        const { updateBookingStatus } = require('../../src/store/bookingStore').useBookingStore.getState();
-        await updateBookingStatus(currentBookingId, 'confirmed');
-        console.log('Booking status updated to confirmed');
+        // Step 3: ✅ CRITICAL FIX: Use updatePaymentStatus to trigger OTP generation
+        // This will:
+        // 1. Set payment_status = 'paid' in bookings table
+        // 2. Set booking status = 'pending' (awaiting seller confirmation)
+        // 3. Call generate-otp edge function
+        // 4. Send OTP to customer
+        const { updatePaymentStatus: updateBookingPaymentStatus } = require('../../src/store/bookingStore').useBookingStore.getState();
+        await updateBookingPaymentStatus(currentBookingId, 'paid', paymentId);
+        console.log('✅ Booking payment status updated to paid, OTP generated and sent to customer');
 
 
         

@@ -372,11 +372,13 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         console.log('🔐 Generating OTP for booking after successful payment...');
         
         try {
+            // Use service role key for edge function authentication
+          const serviceRoleKey = process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
           const response = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/generate-otp`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+               'Authorization': `Bearer ${serviceRoleKey}`
             },
             body: JSON.stringify({
               type: 'booking',
@@ -384,16 +386,29 @@ export const useBookingStore = create<BookingState>((set, get) => ({
             })
           });
 
+                    // Log response status for debugging
+          console.log('OTP API Response Status:', response.status);
+          
+          // Check if response is OK
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ OTP API Error Response:', errorText);
+            throw new Error(`OTP generation failed with status ${response.status}: ${errorText}`);
+          }
+
           const otpResult = await response.json();
+            console.log('OTP API Result:', JSON.stringify(otpResult, null, 2));
 
           if (otpResult.success) {
             console.log('✅ OTP generated and sent to customer:', otpResult.otp);
           } else {
-            console.error('❌ Failed to generate OTP:', otpResult.error);
+              console.error('❌ Failed to generate OTP:', otpResult.error || 'Unknown error');
+            console.error('Full OTP result:', otpResult);
             // Don't fail the payment update, just log the error
           }
         } catch (otpError: any) {
           console.error('❌ Exception generating OTP:', otpError.message);
+             console.error('OTP Error details:', otpError);
           // Don't fail the payment update, just log the error
         }
       }
@@ -416,13 +431,15 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       if (!user) {
         throw new Error('User not authenticated');
       }
+       // Use service role key for edge function authentication
+      const serviceRoleKey = process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
 
       // Call the verify-service-otp edge function
       const response = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/verify-service-otp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+           'Authorization': `Bearer ${serviceRoleKey}`
         },
         body: JSON.stringify({
           booking_id: bookingId,
