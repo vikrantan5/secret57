@@ -175,6 +175,34 @@ export const useBankAccountStore = create<BankAccountState>((set, get) => ({
         users: userData
       };
 
+      
+      // ✅ CRITICAL FIX: Check if beneficiary already exists for this account
+      // This prevents creating duplicate beneficiaries for the same seller
+      console.log('🔍 Checking for existing beneficiary with same account details...');
+      
+      const { data: existingAccount, error: existingError } = await supabase
+        .from('seller_bank_accounts')
+        .select('id, cashfree_bene_id, cashfree_beneficiary_id, verification_status')
+        .eq('seller_id', data.seller_id)
+        .eq('account_number', data.account_number)
+        .eq('ifsc_code', data.ifsc_code.toUpperCase())
+        .limit(1);
+
+      if (!existingError && existingAccount && existingAccount.length > 0) {
+        const existing = existingAccount[0];
+        console.log('⚠️ Account with same details already exists!');
+        console.log('Existing account ID:', existing.id);
+        console.log('Existing beneficiary ID:', existing.cashfree_bene_id);
+        
+        set({ loading: false });
+        return { 
+          success: false, 
+          error: 'Bank account with same account number and IFSC already exists. Please use a different account or delete the existing one first.' 
+        };
+      }
+
+      console.log('✅ No duplicate found. Proceeding with beneficiary creation...');
+
       // Generate unique beneficiary ID
       const beneId = `SELLER_${data.seller_id.substring(0, 8)}_${Date.now()}`;
 

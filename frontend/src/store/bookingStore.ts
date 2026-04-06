@@ -443,20 +443,27 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         }
       }
 
-      const { error } = await supabase
+      console.log('📝 Updating booking payment status...');
+      console.log('Update data:', JSON.stringify(updateData, null, 2));
+      
+      const { data: updatedBooking, error } = await supabase
         .from('bookings')
         .update(updateData)
-        .eq('id', id);
+        .eq('id', id)
+        .select()
+        .single();
 
       if (error) {
-        console.error('Error updating payment status:', error);
+        console.error('❌ Error updating payment status:', error);
+        console.error('Error details:', error.message, error.details, error.hint);
         set({ loading: false });
         return { success: false, error: error.message };
       }
 
       console.log(`✅ Booking ${id} payment status updated: ${paymentStatus} -> ${newStatus}`);
+      console.log('Updated booking data:', JSON.stringify(updatedBooking, null, 2));
 
-      await supabase
+        const { error: timelineError } = await supabase
         .from('booking_timeline')
         .insert([{
           booking_id: id,
@@ -464,6 +471,48 @@ export const useBookingStore = create<BookingState>((set, get) => ({
           notes: paymentStatus === 'success' || paymentStatus === 'paid' ? 'Payment received successfully, awaiting seller confirmation' : 'Payment failed',
           created_at: new Date().toISOString(),
         }]);
+      
+      if (timelineError) {
+        console.warn('⚠️ Timeline insert failed (non-critical):', timelineError.message);
+      } else {
+        console.log('✅ Booking timeline updated');
+           }
+
+      // ✅ Send notifications to seller
+      if (paymentStatus === 'success' || paymentStatus === 'paid') {
+        console.log('📧 Sending notifications...');
+        
+        // Get booking data for notification
+        const { data: bookingForNotif } = await supabase
+          .from('bookings')
+          .select('seller_id, customer_name')
+          .eq('id', id)
+          .single();
+
+        if (bookingForNotif) {
+          // Get seller user_id
+          const { data: sellerData } = await supabase
+            .from('sellers')
+            .select('user_id')
+            .eq('id', bookingForNotif.seller_id)
+            .single();
+
+          if (sellerData) {
+            await supabase
+              .from('notifications')
+              .insert({
+                user_id: sellerData.user_id,
+                type: 'booking',
+                title: '💰 New Paid Booking',
+                message: `${bookingForNotif.customer_name || 'A customer'} has booked your service and paid successfully!`,
+                data: { booking_id: id },
+                created_at: new Date().toISOString()
+              });
+            console.log('✅ Seller notified');
+          }
+        }
+      }
+
 
 
 
