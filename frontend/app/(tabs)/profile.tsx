@@ -408,14 +408,14 @@ export default function ProfileScreen() {
                   ) : undefined
                 }
               />
-              <MenuItem
+              {/* <MenuItem
                 icon="star-outline"
                 title="Reviews & Ratings"
                 subtitle="Your reviews and ratings"
                 onPress={() => router.push("/profile/reviews" as any)}
                 color="#F59E0B"
                 gradient={getMenuGradient("#F59E0B")}
-              />
+              /> */}
             </View>
           </Animated.View>
         )}

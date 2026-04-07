@@ -84,11 +84,21 @@ export const useIssueReportStore = create<IssueReportState>((set, get) => ({
           .single();
 
         if (seller) {
+              // Get order number for better notification message
+          let orderLabel = data.order_id?.slice(0, 8) || '';
+          if (data.order_id) {
+            const { data: orderData } = await supabase
+              .from('orders')
+              .select('order_number')
+              .eq('id', data.order_id)
+              .single();
+            if (orderData?.order_number) orderLabel = orderData.order_number;
+          }
           await notificationService.sendNotification(
             seller.user_id,
             'issue',
             'Customer Reported an Issue',
-            `Order #${data.order_id?.slice(0, 8)} - ${data.subject}. Tap to view details.`,
+            `Order #${orderLabel} - ${data.subject}. Tap to view details.`,
             { 
               issue_id: newIssue.id,
               order_id: data.order_id,

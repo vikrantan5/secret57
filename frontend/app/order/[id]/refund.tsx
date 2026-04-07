@@ -114,7 +114,7 @@ export default function OrderRefundRequestScreen() {
 
       const refundData: any = {
         order_id: orderId,
-        seller_id: selectedOrder?.items?.[0]?.seller_id,
+          seller_id: selectedOrder?.order_items?.[0]?.seller_id || selectedOrder?.items?.[0]?.seller_id,
         amount: selectedOrder?.total_amount || 0,
         reason,
         description,

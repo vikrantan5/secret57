@@ -219,7 +219,7 @@ export default function ManageAddressesScreen() {
         >
           <View style={styles.header}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+              <Ionicons name="arrow-back" size={24} color="#161515" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Manage Addresses</Text>
             <TouchableOpacity onPress={openAddModal} style={styles.addButton}>

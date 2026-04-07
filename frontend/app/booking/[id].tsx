@@ -152,7 +152,7 @@ export default function BookingDetailScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <LinearGradient
-          colors={['#F9FAFB', '#FFFFFF']}
+          colors={['#F3F4F6', '#E5E7EB']} // Changed from white to gray
           style={styles.loadingContainer}
         >
           <ActivityIndicator size="large" color="#8B5CF6" />
@@ -187,6 +187,7 @@ export default function BookingDetailScreen() {
 
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
         style={{
           opacity: fadeAnim,
           transform: [{ translateY: slideAnim }],
@@ -205,11 +206,8 @@ export default function BookingDetailScreen() {
           </Text>
         </LinearGradient>
 
-        {/* Service Info Card */}
-        <LinearGradient
-          colors={['#FFFFFF', '#F9FAFB']}
-          style={styles.card}
-        >
+        {/* Service Info Card - Now with solid white background and shadow */}
+        <View style={styles.card}>
           <View style={styles.cardHeader}>
             <LinearGradient
               colors={['#8B5CF6', '#7C3AED']}
@@ -239,14 +237,11 @@ export default function BookingDetailScreen() {
               </View>
             </View>
           )}
-        </LinearGradient>
+        </View>
 
         {/* Contact Seller Card */}
         {booking.payment_method && (booking.status === 'pending' || booking.status === 'confirmed' || booking.status === 'in_progress') && (
-          <LinearGradient
-            colors={['#FFFFFF', '#F9FAFB']}
-            style={styles.contactCard}
-          >
+          <View style={[styles.card, styles.contactCard]}>
             <View style={styles.cardHeader}>
               <LinearGradient
                 colors={['#10B981', '#059669']}
@@ -322,14 +317,11 @@ export default function BookingDetailScreen() {
                 </LinearGradient>
               </TouchableOpacity>
             )}
-          </LinearGradient>
+          </View>
         )}
 
         {/* Booking Details Card */}
-        <LinearGradient
-          colors={['#FFFFFF', '#F9FAFB']}
-          style={styles.card}
-        >
+        <View style={styles.card}>
           <View style={styles.cardHeader}>
             <LinearGradient
               colors={['#F59E0B', '#D97706']}
@@ -382,10 +374,10 @@ export default function BookingDetailScreen() {
               </Text>
             </View>
           </View>
-        </LinearGradient>
+        </View>
 
         {/* OTP Card */}
-        {booking.payment_method && booking.otp && booking.status !== 'completed' && (
+        {booking.payment_method && booking.otp && booking.status !== 'completed' && booking.status !== 'cancelled' && (
           <LinearGradient
             colors={['#8B5CF6', '#7C3AED']}
             start={{ x: 0, y: 0 }}
@@ -426,10 +418,7 @@ export default function BookingDetailScreen() {
 
         {/* Address Card */}
         {booking.location_type === 'visit_customer' && booking.address && (
-          <LinearGradient
-            colors={['#FFFFFF', '#F9FAFB']}
-            style={styles.card}
-          >
+          <View style={styles.card}>
             <View style={styles.cardHeader}>
               <LinearGradient
                 colors={['#10B981', '#059669']}
@@ -444,14 +433,11 @@ export default function BookingDetailScreen() {
             <Text style={styles.address}>
               {booking.city}, {booking.state} - {booking.pincode}
             </Text>
-          </LinearGradient>
+          </View>
         )}
 
         {/* Payment Card */}
-        <LinearGradient
-          colors={['#FFFFFF', '#F9FAFB']}
-          style={styles.card}
-        >
+        <View style={styles.card}>
           <View style={styles.cardHeader}>
             <LinearGradient
               colors={['#10B981', '#059669']}
@@ -466,7 +452,7 @@ export default function BookingDetailScreen() {
             <Text style={styles.paymentLabel}>Total Amount</Text>
             <Text style={styles.paymentValue}>₹{booking.total_amount.toFixed(2)}</Text>
           </View>
-        </LinearGradient>
+        </View>
 
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
@@ -498,10 +484,7 @@ export default function BookingDetailScreen() {
       {/* Cancel Modal */}
       {showCancelModal && (
         <Animated.View style={[styles.modalOverlay, { opacity: fadeAnim }]}>
-          <LinearGradient
-            colors={['#FFFFFF', '#F9FAFB']}
-            style={styles.modalCard}
-          >
+          <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <LinearGradient
                 colors={['#EF4444', '#DC2626']}
@@ -552,7 +535,7 @@ export default function BookingDetailScreen() {
                 </LinearGradient>
               </TouchableOpacity>
             </View>
-          </LinearGradient>
+          </View>
         </Animated.View>
       )}
     </SafeAreaView>
@@ -562,7 +545,10 @@ export default function BookingDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#F3F4F6', // Changed from white to light gray background
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
   loadingContainer: {
     flex: 1,
@@ -632,6 +618,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   card: {
+    backgroundColor: '#FFFFFF', // Solid white background
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
     padding: spacing.lg,
@@ -640,11 +627,11 @@ const styles = StyleSheet.create({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
+        shadowOpacity: 0.1,
         shadowRadius: 8,
       },
       android: {
-        elevation: 2,
+        elevation: 4, // Increased elevation for better visibility
       },
     }),
   },
@@ -702,10 +689,6 @@ const styles = StyleSheet.create({
     color: '#10B981',
   },
   contactCard: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: '#8B5CF620',
   },
@@ -874,6 +857,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
+    backgroundColor: '#FFFFFF', // Solid white background
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
   },

@@ -21,6 +21,78 @@ import { useAuthStore } from '../../src/store/authStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { supabase } from '../../src/services/supabase';
 
+
+// Extracted as a proper component to avoid hook violations in FlatList renderItem
+const NotificationItem = React.memo(({ item, index, onPress, getIconGradient, getIconName, formatTime }: any) => {
+  const iconGradient = getIconGradient(item.type);
+  const itemFadeAnim = useRef(new Animated.Value(0)).current;
+  const itemSlideAnim = useRef(new Animated.Value(30)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(itemFadeAnim, {
+        toValue: 1,
+        duration: 400,
+        delay: index * 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(itemSlideAnim, {
+        toValue: 0,
+        duration: 400,
+        delay: index * 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View
+      style={{
+        opacity: itemFadeAnim,
+        transform: [{ translateY: itemSlideAnim }],
+      }}
+    >
+      <TouchableOpacity
+        style={[
+          styles.notificationCard,
+          !item.is_read && styles.unreadCard,
+        ]}
+        onPress={() => onPress(item)}
+        activeOpacity={0.8}
+      >
+        {!item.is_read && (
+          <LinearGradient
+            colors={iconGradient}
+            style={styles.unreadBorder}
+          />
+        )}
+        <LinearGradient
+          colors={iconGradient}
+          style={styles.iconContainer}
+        >
+          <Ionicons name={getIconName(item.type) as any} size={22} color="#FFFFFF" />
+        </LinearGradient>
+        <View style={styles.content}>
+          <View style={styles.titleRow}>
+            <Text style={styles.title} numberOfLines={1}>
+              {item.title}
+            </Text>
+            {!item.is_read && <View style={styles.unreadDot} />}
+          </View>
+          <Text style={styles.message} numberOfLines={2}>
+            {item.message}
+          </Text>
+          <View style={styles.timeContainer}>
+            <Ionicons name="time-outline" size={12} color="#9CA3AF" />
+            <Text style={styles.time}>{formatTime(item.created_at)}</Text>
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
+      </TouchableOpacity>
+    </Animated.View>
+  );
+});
+
 export default function NotificationsScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
@@ -209,77 +281,15 @@ export default function NotificationsScreen() {
   };
 
   const renderNotification = ({ item, index }: { item: any; index: number }) => {
-    const iconGradient = getIconGradient(item.type);
-    const itemFadeAnim = useRef(new Animated.Value(0)).current;
-    const itemSlideAnim = useRef(new Animated.Value(30)).current;
-
-    useEffect(() => {
-      Animated.parallel([
-        Animated.timing(itemFadeAnim, {
-          toValue: 1,
-          duration: 400,
-          delay: index * 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(itemSlideAnim, {
-          toValue: 0,
-          duration: 400,
-          delay: index * 100,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }, []);
-
     return (
-      <Animated.View
-        style={{
-          opacity: itemFadeAnim,
-          transform: [{ translateY: itemSlideAnim }],
-        }}
-      >
-        <TouchableOpacity
-          style={[
-            styles.notificationCard,
-            !item.is_read && styles.unreadCard,
-          ]}
-          onPress={() => handleNotificationPress(item)}
-          activeOpacity={0.8}
-        >
-          {/* Gradient Border for Unread */}
-          {!item.is_read && (
-            <LinearGradient
-              colors={iconGradient}
-              style={styles.unreadBorder}
-            />
-          )}
-
-          {/* Icon Container */}
-          <LinearGradient
-            colors={iconGradient}
-            style={styles.iconContainer}
-          >
-            <Ionicons name={getIconName(item.type) as any} size={22} color="#FFFFFF" />
-          </LinearGradient>
-
-          <View style={styles.content}>
-            <View style={styles.titleRow}>
-              <Text style={styles.title} numberOfLines={1}>
-                {item.title}
-              </Text>
-              {!item.is_read && <View style={styles.unreadDot} />}
-            </View>
-            <Text style={styles.message} numberOfLines={2}>
-              {item.message}
-            </Text>
-            <View style={styles.timeContainer}>
-              <Ionicons name="time-outline" size={12} color="#9CA3AF" />
-              <Text style={styles.time}>{formatTime(item.created_at)}</Text>
-            </View>
-          </View>
-
-          <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
-        </TouchableOpacity>
-      </Animated.View>
+      <NotificationItem
+        item={item}
+        index={index}
+        onPress={handleNotificationPress}
+        getIconGradient={getIconGradient}
+        getIconName={getIconName}
+        formatTime={formatTime}
+      />
     );
   };
 
