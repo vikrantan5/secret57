@@ -45,6 +45,12 @@ export default function OrderRefundRequestScreen() {
   const [selectedReason, setSelectedReason] = useState('');
   const [customReason, setCustomReason] = useState('');
   const [description, setDescription] = useState('');
+    const [upiId, setUpiId] = useState('');
+  const [bankAccountNumber, setBankAccountNumber] = useState('');
+  const [bankIfsc, setBankIfsc] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [accountHolderName, setAccountHolderName] = useState('');
+  const [paymentMode, setPaymentMode] = useState<'upi' | 'bank'>('upi');
   const [submitting, setSubmitting] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;

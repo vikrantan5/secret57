@@ -73,8 +73,13 @@ export default function OrderDetailScreen() {
       case 'pending':
         return '#F59E0B';
       case 'processing':
-      case 'shipped':
+      case 'state_processing':
+      case 'processed':
         return '#8B5CF6';
+      case 'shipped':
+        return '#6366F1';
+      case 'out_for_delivery':
+        return '#3B82F6';
       case 'delivered':
         return '#10B981';
       case 'cancelled':
@@ -90,9 +95,14 @@ export default function OrderDetailScreen() {
       case 'pending':
         return ['#FEF3C7', '#FDE68A'];
       case 'processing':
+      case 'state_processing':
         return ['#E0E7FF', '#C7D2FE'];
-      case 'shipped':
+      case 'processed':
         return ['#EDE9FE', '#DDD6FE'];
+      case 'shipped':
+        return ['#E0E7FF', '#C7D2FE'];
+      case 'out_for_delivery':
+        return ['#DBEAFE', '#BFDBFE'];
       case 'delivered':
         return ['#D1FAE5', '#A7F3D0'];
       case 'cancelled':
@@ -107,8 +117,13 @@ export default function OrderDetailScreen() {
       case 'pending':
         return 'time-outline';
       case 'processing':
+      case 'state_processing':
         return 'refresh-outline';
+      case 'processed':
+        return 'checkmark-outline';
       case 'shipped':
+        return 'rocket-outline';
+      case 'out_for_delivery':
         return 'car-outline';
       case 'delivered':
         return 'checkmark-circle-outline';
@@ -168,17 +183,23 @@ export default function OrderDetailScreen() {
   }
 
   const order = selectedOrder;
+    const activeStatus = order.seller_status || order.status;
   const canCancel = order.status === 'pending' || order.status === 'processing';
 
   const trackingSteps = [
     { status: 'pending', label: 'Order Placed', icon: 'bag-handle-outline', description: 'Your order has been placed' },
     { status: 'processing', label: 'Processing', icon: 'refresh-outline', description: 'Seller is preparing your order' },
-    { status: 'shipped', label: 'Shipped', icon: 'car-outline', description: 'Order is on the way' },
+    { status: 'processed', label: 'Processed', icon: 'checkmark-outline', description: 'Order has been processed' },
+    { status: 'shipped', label: 'Shipped', icon: 'rocket-outline', description: 'Order has been shipped' },
+    { status: 'out_for_delivery', label: 'Out for Delivery', icon: 'car-outline', description: 'Order is out for delivery' },
     { status: 'delivered', label: 'Delivered', icon: 'checkmark-circle-outline', description: 'Order delivered successfully' },
   ];
 
+  // Use seller_status for tracking (more granular than order status)
+  const activeStatus = order.seller_status || order.status;
+
   const getCurrentStepIndex = () => {
-    const index = trackingSteps.findIndex(step => step.status === order.status);
+    const index = trackingSteps.findIndex(step => step.status === activeStatus);
     return index >= 0 ? index : 0;
   };
 
@@ -206,31 +227,36 @@ export default function OrderDetailScreen() {
         showsVerticalScrollIndicator={false}
         style={[styles.scrollView, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
       >
-        {/* Order Status Card */}
+        {/* Order Status Card - uses seller_status for detailed tracking */}
         <LinearGradient
-          colors={getStatusGradient(order.status)}
+          colors={getStatusGradient(activeStatus)}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.statusCard}
         >
           <View style={styles.statusHeader}>
             <LinearGradient
-              colors={[getStatusColor(order.status), getStatusColor(order.status) + 'CC']}
+              colors={[getStatusColor(activeStatus), getStatusColor(activeStatus) + 'CC']}
               style={styles.statusIconContainer}
             >
-              <Ionicons name={getStatusIcon(order.status) as any} size={32} color="#FFFFFF" />
+              <Ionicons name={getStatusIcon(activeStatus) as any} size={32} color=\"#FFFFFF\" />
             </LinearGradient>
             <View style={styles.statusInfo}>
               <Text style={styles.statusTitle}>
-                {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                {activeStatus.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
               </Text>
               <Text style={styles.orderNumber}>Order #{order.order_number?.slice(0, 12)}</Text>
+              {order.seller_status_updated_at && (
+                <Text style={styles.orderNumber}>
+                  Updated: {formatDate(order.seller_status_updated_at)}
+                </Text>
+              )}
             </View>
           </View>
         </LinearGradient>
 
         {/* Premium Tracking Timeline */}
-        {order.status !== 'cancelled' && order.status !== 'refunded' && (
+               {activeStatus !== 'cancelled' && activeStatus !== 'refunded' && (
           <View style={styles.timelineCard}>
             <View style={styles.timelineHeader}>
               <LinearGradient
@@ -300,9 +326,9 @@ export default function OrderDetailScreen() {
             >
               <Ionicons name="cube-outline" size={18} color="#FFFFFF" />
             </LinearGradient>
-            <Text style={styles.cardTitle}>Items ({order.items?.length || 0})</Text>
+                    <Text style={styles.cardTitle}>Items ({order.order_items?.length || order.items?.length || 0})</Text>
           </View>
-          {order.items?.map((item, index) => (
+          {(order.order_items || order.items)?.map((item: any, index: number) => (
             <View key={index} style={styles.orderItem}>
               <Image
                 source={{ uri: item.product?.images?.[0] || 'https://via.placeholder.com/80' }}
@@ -310,7 +336,7 @@ export default function OrderDetailScreen() {
               />
               <View style={styles.itemDetails}>
                 <Text style={styles.itemName} numberOfLines={2}>
-                  {item.product?.name || 'Product'}
+                    {item.product_name || item.product?.name || 'Product'}
                 </Text>
                 <View style={styles.itemMeta}>
                   <Text style={styles.itemQuantity}>Qty: {item.quantity}</Text>
@@ -491,8 +517,9 @@ export default function OrderDetailScreen() {
           {order.status === 'delivered' && (
             <TouchableOpacity
               style={styles.reportButton}
-              onPress={() => router.push(`/complaints/create?orderId=${orderId}&sellerId=${order.items?.[0]?.seller_id}`)}
+               onPress={() => router.push(`/complaints/create?orderId=${orderId}&sellerId=${(order.order_items || order.items)?.[0]?.seller_id}`)}
             >
+            
               <LinearGradient
                 colors={['#F59E0B', '#D97706']}
                 start={{ x: 0, y: 0 }}
