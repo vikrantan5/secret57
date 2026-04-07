@@ -1,5 +1,6 @@
 // Verify Service Completion OTP for Bookings
 // This function verifies the OTP and triggers instant payout
+// FIXED v2: Using Supabase client's functions.invoke() for proper authentication
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
@@ -102,7 +103,7 @@ serve(async (req) => {
         otp_verified_at: new Date().toISOString(),
         otp_verified_by: user_id,
         status: 'completed',
-            payment_status: 'paid', // Ensure payment_status is set
+        payment_status: 'paid',
         payout_status: 'processing'
       })
       .eq('id', booking_id);
@@ -117,47 +118,48 @@ serve(async (req) => {
 
     console.log('✅ Service OTP verified successfully');
 
-    // TRIGGER INSTANT PAYOUT
-    console.log('🚀 Triggering instant payout...');
+    // TRIGGER INSTANT PAYOUT - METHOD 2: Using Supabase Functions.invoke()
+    console.log('🚀 Triggering instant payout via Supabase client...');
     
     let payoutTriggered = false;
     let payoutData: any = null;
     let payoutError = null;
 
     try {
-      const payoutResponse = await fetch(`${SUPABASE_URL}/functions/v1/auto-payout-trigger`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
-        },
-        body: JSON.stringify({
-          booking_id: booking_id,
-          trigger_type: 'immediate' // This skips the 7-day hold period
-        })
-      });
+      // ✅ FIX v2: Use Supabase client's functions.invoke() instead of fetch
+      // This properly handles authentication and environment variable access
+      const { data: payoutResult, error: payoutFunctionError } = await supabase.functions.invoke(
+        'auto-payout-trigger',
+        {
+          body: {
+            booking_id: booking_id,
+            trigger_type: 'immediate'
+          }
+        }
+      );
 
-      console.log('Payout response status:', payoutResponse.status);
-      
-      if (!payoutResponse.ok) {
-        const errorText = await payoutResponse.text();
-        console.error('❌ Payout API error response:', errorText);
-        payoutError = `Payout API returned ${payoutResponse.status}: ${errorText}`;
-      } else {
-        const result = await payoutResponse.json();
-        console.log('✅ Payout response:', JSON.stringify(result, null, 2));
+      console.log('Payout function invoke result:', JSON.stringify({ data: payoutResult, error: payoutFunctionError }, null, 2));
+
+      if (payoutFunctionError) {
+        console.error('❌ Payout function error:', payoutFunctionError);
+        payoutError = `Payout function error: ${payoutFunctionError.message || JSON.stringify(payoutFunctionError)}`;
+      } else if (payoutResult) {
+        console.log('✅ Payout response:', JSON.stringify(payoutResult, null, 2));
         
-        payoutData = result.data;
-        payoutTriggered = result.success === true;
+        payoutData = payoutResult.data;
+        payoutTriggered = payoutResult.success === true;
         
         if (!payoutTriggered) {
-          payoutError = result.error || 'Payout failed for unknown reason';
+          payoutError = payoutResult.error || 'Payout failed for unknown reason';
           console.error('❌ Payout trigger failed:', payoutError);
-          console.error('Full payout result:', result);
+          console.error('Full payout result:', payoutResult);
         } else {
           console.log('💰 Payout successfully triggered!');
           console.log('Payouts processed:', payoutData?.successful_payouts || 0);
         }
+      } else {
+        payoutError = 'No response from payout function';
+        console.error('❌ No response from payout function');
       }
     } catch (payoutErr: any) {
       console.error('❌ Exception calling payout trigger:', payoutErr.message);
