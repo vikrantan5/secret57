@@ -38,6 +38,7 @@ export default function RootLayout() {
         <Stack.Screen name="seller/revenue" />
         <Stack.Screen name="seller/add-product" />
         <Stack.Screen name="seller/add-service" />
+                <Stack.Screen name="notifications/index" />
          <Stack.Screen name="admin/dashboard" />
         <Stack.Screen name="admin/pending-sellers" />
       </Stack>

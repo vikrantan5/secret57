@@ -345,7 +345,7 @@ export default function SellerDashboard() {
             </View>
             <View style={styles.headerActions}>
               <TouchableOpacity 
-                onPress={() => router.push('/notifications/index' as any)}
+               onPress={() => router.push('/notifications' as any)}
                 style={styles.iconButton}
               >
                 <LinearGradient

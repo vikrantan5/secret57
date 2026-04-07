@@ -19,6 +19,7 @@ import * as Haptics from 'expo-haptics';
 import { useNotificationStore } from '../../src/store/notificationStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
+import { supabase } from '../../src/services/supabase';
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -77,20 +78,39 @@ export default function NotificationsScreen() {
       await markAsRead(notification.id);
     }
 
-    // Navigate based on notification type
+    // Navigate based on notification type AND user role
+    const userRole = user?.role;
+
     switch (notification.type) {
       case 'order':
         if (notification.data?.order_id) {
-          router.push(`/order/${notification.data.order_id}`);
+          if (userRole === 'seller') {
+            router.push(`/seller/order-detail/${notification.data.order_id}` as any);
+          } else {
+            router.push(`/order/${notification.data.order_id}` as any);
+          }
         }
         break;
       case 'booking':
         if (notification.data?.booking_id) {
-          router.push(`/booking/${notification.data.booking_id}`);
+          if (userRole === 'seller') {
+            router.push(`/seller/booking-detail/${notification.data.booking_id}` as any);
+          } else {
+            router.push(`/booking/${notification.data.booking_id}` as any);
+          }
+        }
+        break;
+      case 'payment':
+        if (notification.data?.order_id) {
+          if (userRole === 'seller') {
+            router.push(`/seller/order-detail/${notification.data.order_id}` as any);
+          } else {
+            router.push(`/order/${notification.data.order_id}` as any);
+          }
         }
         break;
       case 'seller_approval':
-        router.push('/seller/dashboard');
+        router.push('/seller/dashboard' as any);
         break;
       default:
         break;

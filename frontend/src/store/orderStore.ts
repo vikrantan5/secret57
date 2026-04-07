@@ -585,8 +585,6 @@ export const useOrderStore = create<OrderState>((set, get) => ({
     try {
       set({ loading: true, error: null });
 
-      // ✅ CRITICAL FIX: Call verify-delivery-otp edge function instead of local verification
-      // This edge function handles BOTH OTP verification AND payout triggering
       console.log('🔐 Verifying delivery OTP via edge function...');
 
       // Get current user ID
@@ -595,29 +593,52 @@ export const useOrderStore = create<OrderState>((set, get) => ({
         throw new Error('User not authenticated');
       }
 
+      // ✅ CRITICAL FIX: Use service role key for Authorization (same as generate-otp)
+      // The user's session access_token can be expired/null, causing Supabase to return 401
+      // BEFORE the Edge Function even runs — resulting in \"Invalid OTP\" with no Edge Function logs.
+      const serviceRoleKey = process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
+
+      console.log('Using service role key for auth:', serviceRoleKey ? 'SET' : 'MISSING');
+      console.log('Order ID:', orderId);
+      console.log('OTP:', otp);
+      console.log('User ID:', user.id);
+
       const response = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/verify-delivery-otp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+          'Authorization': `Bearer ${serviceRoleKey}`
         },
         body: JSON.stringify({
           order_id: orderId,
-          otp: otp,
+          otp: String(otp).trim(),
           user_id: user.id
         })
       });
 
-      const result = await response.json();
+      console.log('Verify OTP Response Status:', response.status);
+
+      const responseText = await response.text();
+      console.log('Verify OTP Raw Response:', responseText);
+
+      let result: any;
+      try {
+        result = JSON.parse(responseText);
+      } catch (parseErr) {
+        console.error('Failed to parse verify response:', responseText);
+        set({ loading: false, error: 'Server returned invalid response' });
+        return { success: false, error: 'Server returned invalid response' };
+      }
 
       if (!result.success) {
-        set({ loading: false, error: result.error });
-        return { success: false, error: result.error };
+        const errorMsg = result.error || result.msg || 'OTP verification failed';
+        console.error('❌ OTP verification failed:', errorMsg);
+        set({ loading: false, error: errorMsg });
+        return { success: false, error: errorMsg };
       }
 
       console.log('✅ Delivery OTP verified successfully');
       console.log('💸 Payout triggered:', result.payout_triggered);
-      console.log('Payout data:', result.payout_data);
 
       // Refresh order data
       await get().fetchOrderById(orderId);
@@ -625,7 +646,8 @@ export const useOrderStore = create<OrderState>((set, get) => ({
       set({ loading: false });
       return { success: true };
     } catch (error: any) {
-      console.error('Failed to verify OTP:', error);
+      console.error('❌ Failed to verify OTP:', error);
+      console.error('Error stack:', error.stack);
       set({ loading: false, error: error.message });
       return { success: false, error: error.message };
     }
