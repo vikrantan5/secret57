@@ -627,6 +627,8 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     textAlign: 'center',
   },
+
+  
   categoryArrow: {
     position: 'absolute',
     bottom: spacing.sm,
