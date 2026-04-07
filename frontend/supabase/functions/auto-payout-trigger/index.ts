@@ -270,7 +270,8 @@ serve(async (req) => {
             }
             const group = sellerGroups.get(sellerId);
             group.items.push(item);
-            group.totalAmount += item.seller_payout_amount || item.total_price || item.total || 0;
+             // ✅ FIX: Prioritize seller_payout_amount, then total (correct column name)
+            group.totalAmount += item.seller_payout_amount || item.total || 0;
           }
         }
       }

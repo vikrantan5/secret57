@@ -220,7 +220,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
           product_image: item.image,
           quantity: item.quantity,
           price: item.price,
-          total_price: totalPrice,
+          total: totalPrice,
           created_at: new Date().toISOString(),
         };
 
