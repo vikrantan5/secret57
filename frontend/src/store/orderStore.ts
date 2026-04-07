@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '../services/supabase';
+import { notificationService } from '../services/notificationService';
 export interface Order {
   id: string;
   customer_id: string;
@@ -326,6 +327,39 @@ export const useOrderStore = create<OrderState>((set, get) => ({
 
       console.log('✅ Payment status updated successfully for order:', orderId);
 
+
+
+         // Send payment notification to seller(s)
+      try {
+        const { data: orderWithItems } = await supabase
+          .from('orders')
+          .select('order_number, total_amount, order_items(seller_id)')
+          .eq('id', orderId)
+          .single();
+
+        if (orderWithItems?.order_items) {
+          const sellerIds = [...new Set(orderWithItems.order_items.map((item: any) => item.seller_id).filter(Boolean))];
+          for (const sellerId of sellerIds) {
+            const { data: seller } = await supabase
+              .from('sellers')
+              .select('user_id')
+              .eq('id', sellerId)
+              .single();
+
+            if (seller?.user_id) {
+              await notificationService.sendPaymentNotification(
+                seller.user_id,
+                orderWithItems.total_amount || 0,
+                orderId,
+                orderWithItems.order_number || orderId.slice(0, 8)
+              );
+            }
+          }
+        }
+      } catch (notifError) {
+        console.error('Failed to send payment notification:', notifError);
+      }
+
       // Update local state
       set(state => ({
         orders: state.orders.map(o => 
@@ -560,6 +594,29 @@ export const useOrderStore = create<OrderState>((set, get) => ({
       console.log('✅ Seller status updated to:', sellerStatus);
       if (generatedOTP) {
         console.log('✅ OTP sent to customer:', generatedOTP);
+      }
+
+
+        // Send notification to customer about status update
+      try {
+        const { data: orderData } = await supabase
+          .from('orders')
+          .select('customer_id, order_number')
+          .eq('id', orderId)
+          .single();
+
+        if (orderData?.customer_id) {
+          await notificationService.sendOrderStatusNotification(
+            orderData.customer_id,
+            orderId,
+            orderData.order_number || orderId.slice(0, 8),
+            sellerStatus,
+            notes
+          );
+          console.log('✅ Notification sent to customer for status:', sellerStatus);
+        }
+      } catch (notifError) {
+        console.error('Failed to send notification:', notifError);
       }
 
       // Update local state (OTP is already in DB from edge function)

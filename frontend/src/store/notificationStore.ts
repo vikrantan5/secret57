@@ -4,7 +4,7 @@ import { supabase } from '../services/supabase';
 export interface Notification {
   id: string;
   user_id: string;
-  type: 'order' | 'booking' | 'payment' | 'review' | 'seller_approval' | 'general';
+  type: 'order' | 'booking' | 'payment' | 'review' | 'seller_approval' | 'general' | 'order_status' | 'issue' | 'refund';
   title: string;
   message: string;
   data: any;

@@ -347,14 +347,14 @@ export default function ProfileScreen() {
               color="#10B981"
               gradient={getMenuGradient("#10B981")}
             />
-            <MenuItem
+            {/* <MenuItem
               icon="card-outline"
               title="Payment Methods"
               subtitle="Saved cards and payment options"
               onPress={() => router.push("/profile/payments" as any)}
               color="#F59E0B"
               gradient={getMenuGradient("#F59E0B")}
-            />
+            /> */}
           </View>
         </Animated.View>
 

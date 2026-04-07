@@ -1,16 +1,16 @@
-import { supabase } from './supabase';
+import { supabase, supabaseAdmin } from './supabase';
 
 export const notificationService = {
   // Send notification to database
   async sendNotification(
     userId: string,
-    type: 'order' | 'booking' | 'payment' | 'review' | 'seller_approval' | 'general',
+    type: 'order' | 'booking' | 'payment' | 'review' | 'seller_approval' | 'general' | 'order_status' | 'issue' | 'refund',
     title: string,
     message: string,
     data?: any
   ) {
     try {
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from('notifications')
         .insert([{
           user_id: userId,
@@ -27,6 +27,138 @@ export const notificationService = {
       console.error('Error sending notification:', error);
       return { success: false, error: error.message };
     }
+  },
+
+  // Send order status notification to customer
+  async sendOrderStatusNotification(
+    customerId: string,
+    orderId: string,
+    orderNumber: string,
+    newStatus: string,
+    notes?: string
+  ) {
+    const statusLabels: Record<string, string> = {
+      pending: 'Order Placed',
+      processing: 'Processing',
+      processed: 'Processed',
+      shipped: 'Shipped',
+      out_for_delivery: 'Out for Delivery',
+      delivered: 'Delivered',
+    };
+
+    const statusLabel = statusLabels[newStatus] || newStatus;
+    const message = notes 
+      ? `Order #${orderNumber} is now ${statusLabel}. ${notes}`
+      : `Order #${orderNumber} status updated to: ${statusLabel}`;
+
+    return this.sendNotification(
+      customerId,
+      'order_status',
+      `Order ${statusLabel}`,
+      message,
+      {
+        order_id: orderId,
+        order_number: orderNumber,
+        new_status: newStatus,
+        timestamp: new Date().toISOString(),
+        type: 'order_status_update'
+      }
+    );
+  },
+
+  // Send payment received notification to seller
+  async sendPaymentNotification(
+    sellerUserId: string,
+    amount: number,
+    orderId: string,
+    orderNumber: string
+  ) {
+    return this.sendNotification(
+      sellerUserId,
+      'payment',
+      'Payment Received',
+      `₹${amount.toFixed(2)} received for Order #${orderNumber}`,
+      {
+        order_id: orderId,
+        order_number: orderNumber,
+        amount,
+        type: 'payment_received'
+      }
+    );
+  },
+
+  // Send refund request notification to seller
+  async sendRefundRequestNotification(
+    sellerUserId: string,
+    orderId: string,
+    orderNumber: string,
+    amount: number,
+    refundId: string
+  ) {
+    return this.sendNotification(
+      sellerUserId,
+      'order',
+      'Refund Requested',
+      `Refund of ₹${amount.toFixed(2)} requested for Order #${orderNumber}`,
+      {
+        order_id: orderId,
+        refund_id: refundId,
+        amount,
+        type: 'refund_request'
+      }
+    );
+  },
+
+  // Send refund status update to customer
+  async sendRefundStatusNotification(
+    customerId: string,
+    refundId: string,
+    orderId: string,
+    status: string,
+    amount: number
+  ) {
+    const statusLabels: Record<string, string> = {
+      approved: 'Approved',
+      rejected: 'Rejected',
+      processed: 'Being Processed',
+      refunded: 'Completed',
+    };
+    const statusLabel = statusLabels[status] || status;
+
+    return this.sendNotification(
+      customerId,
+      'payment',
+      `Refund ${statusLabel}`,
+      `Your refund request of ₹${amount.toFixed(2)} has been ${statusLabel.toLowerCase()}.`,
+      {
+        refund_id: refundId,
+        order_id: orderId,
+        status,
+        amount,
+        type: 'refund_status_update'
+      }
+    );
+  },
+
+  // Send issue report notification to seller
+  async sendIssueReportNotification(
+    sellerUserId: string,
+    issueId: string,
+    orderId: string,
+    orderNumber: string,
+    subject: string
+  ) {
+    return this.sendNotification(
+      sellerUserId,
+      'order',
+      'Customer Reported an Issue',
+      `Order #${orderNumber} - ${subject}. Tap to view details.`,
+      {
+        issue_id: issueId,
+        order_id: orderId,
+        type: 'issue_report'
+      }
+    );
   },
 
   // Mark as read
