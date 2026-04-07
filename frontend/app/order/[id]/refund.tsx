@@ -45,7 +45,7 @@ export default function OrderRefundRequestScreen() {
   const [selectedReason, setSelectedReason] = useState('');
   const [customReason, setCustomReason] = useState('');
   const [description, setDescription] = useState('');
-    const [upiId, setUpiId] = useState('');
+  const [upiId, setUpiId] = useState('');
   const [bankAccountNumber, setBankAccountNumber] = useState('');
   const [bankIfsc, setBankIfsc] = useState('');
   const [bankName, setBankName] = useState('');
@@ -93,19 +93,44 @@ export default function OrderRefundRequestScreen() {
       return;
     }
 
+    // Validate payment details
+    if (paymentMode === 'upi') {
+      if (!upiId.trim()) {
+        Alert.alert('Error', 'Please provide your UPI ID');
+        return;
+      }
+    } else {
+      if (!bankAccountNumber.trim() || !bankIfsc.trim() || !bankName.trim() || !accountHolderName.trim()) {
+        Alert.alert('Error', 'Please fill in all bank account details');
+        return;
+      }
+    }
+
     try {
       setSubmitting(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 
       const reason = selectedReason === 'other' ? customReason : (selectedReasonData?.label || '');
 
-      const result = await createRefundRequest({
+      const refundData: any = {
         order_id: orderId,
         seller_id: selectedOrder?.items?.[0]?.seller_id,
         amount: selectedOrder?.total_amount || 0,
         reason,
         description,
-      });
+      };
+
+      // Add payment details based on mode
+      if (paymentMode === 'upi') {
+        refundData.upi_id = upiId;
+      } else {
+        refundData.bank_account_number = bankAccountNumber;
+        refundData.bank_ifsc = bankIfsc;
+        refundData.bank_name = bankName;
+        refundData.account_holder_name = accountHolderName;
+      }
+
+      const result = await createRefundRequest(refundData);
 
       if (result.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -312,6 +337,151 @@ export default function OrderRefundRequestScreen() {
             />
           </LinearGradient>
         </View>
+
+
+            {/* Payment Mode Selection */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <LinearGradient
+              colors={['#3B82F6', '#2563EB']}
+              style={styles.cardIcon}
+            >
+              <Ionicons name="wallet-outline" size={18} color="#FFFFFF" />
+            </LinearGradient>
+            <Text style={styles.cardTitle}>Refund Payment Method *</Text>
+          </View>
+          
+          <View style={styles.paymentModeContainer}>
+            <TouchableOpacity
+              style={[styles.paymentModeOption, paymentMode === 'upi' && styles.paymentModeOptionActive]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setPaymentMode('upi');
+              }}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={paymentMode === 'upi' ? ['#3B82F6', '#2563EB'] : ['#F9FAFB', '#FFFFFF']}
+                style={styles.paymentModeIconContainer}
+              >
+                <Ionicons name="phone-portrait-outline" size={24} color={paymentMode === 'upi' ? '#FFFFFF' : '#3B82F6'} />
+              </LinearGradient>
+              <Text style={[styles.paymentModeText, paymentMode === 'upi' && styles.paymentModeTextActive]}>
+                UPI ID
+              </Text>
+              {paymentMode === 'upi' && (
+                <Ionicons name="checkmark-circle" size={20} color="#3B82F6" style={styles.paymentModeCheck} />
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.paymentModeOption, paymentMode === 'bank' && styles.paymentModeOptionActive]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setPaymentMode('bank');
+              }}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={paymentMode === 'bank' ? ['#3B82F6', '#2563EB'] : ['#F9FAFB', '#FFFFFF']}
+                style={styles.paymentModeIconContainer}
+              >
+                <Ionicons name="business-outline" size={24} color={paymentMode === 'bank' ? '#FFFFFF' : '#3B82F6'} />
+              </LinearGradient>
+              <Text style={[styles.paymentModeText, paymentMode === 'bank' && styles.paymentModeTextActive]}>
+                Bank Account
+              </Text>
+              {paymentMode === 'bank' && (
+                <Ionicons name="checkmark-circle" size={20} color="#3B82F6" style={styles.paymentModeCheck} />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* UPI Input */}
+          {paymentMode === 'upi' && (
+            <Animated.View style={styles.paymentInputContainer}>
+              <LinearGradient
+                colors={['#FFFFFF', '#F9FAFB']}
+                style={styles.inputGradient}
+              >
+                <Ionicons name="at-outline" size={20} color="#3B82F6" />
+                <TextInput
+                  style={styles.paymentInput}
+                  placeholder="Enter your UPI ID (e.g., yourname@upi)"
+                  placeholderTextColor="#9CA3AF"
+                  value={upiId}
+                  onChangeText={setUpiId}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </LinearGradient>
+            </Animated.View>
+          )}
+
+          {/* Bank Account Inputs */}
+          {paymentMode === 'bank' && (
+            <Animated.View style={styles.paymentInputContainer}>
+              <LinearGradient
+                colors={['#FFFFFF', '#F9FAFB']}
+                style={styles.inputGradient}
+              >
+                <Ionicons name="person-outline" size={20} color="#3B82F6" />
+                <TextInput
+                  style={styles.paymentInput}
+                  placeholder="Account Holder Name"
+                  placeholderTextColor="#9CA3AF"
+                  value={accountHolderName}
+                  onChangeText={setAccountHolderName}
+                />
+              </LinearGradient>
+
+              <LinearGradient
+                colors={['#FFFFFF', '#F9FAFB']}
+                style={styles.inputGradient}
+              >
+                <Ionicons name="card-outline" size={20} color="#3B82F6" />
+                <TextInput
+                  style={styles.paymentInput}
+                  placeholder="Account Number"
+                  placeholderTextColor="#9CA3AF"
+                  value={bankAccountNumber}
+                  onChangeText={setBankAccountNumber}
+                  keyboardType="number-pad"
+                />
+              </LinearGradient>
+
+              <LinearGradient
+                colors={['#FFFFFF', '#F9FAFB']}
+                style={styles.inputGradient}
+              >
+                <Ionicons name="business-outline" size={20} color="#3B82F6" />
+                <TextInput
+                  style={styles.paymentInput}
+                  placeholder="Bank Name"
+                  placeholderTextColor="#9CA3AF"
+                  value={bankName}
+                  onChangeText={setBankName}
+                />
+              </LinearGradient>
+
+              <LinearGradient
+                colors={['#FFFFFF', '#F9FAFB']}
+                style={styles.inputGradient}
+              >
+                <Ionicons name="code-outline" size={20} color="#3B82F6" />
+                <TextInput
+                  style={styles.paymentInput}
+                  placeholder="IFSC Code"
+                  placeholderTextColor="#9CA3AF"
+                  value={bankIfsc}
+                  onChangeText={setBankIfsc}
+                  autoCapitalize="characters"
+                />
+              </LinearGradient>
+            </Animated.View>
+          )}
+        </View>
+
 
         {/* Important Notice */}
         <LinearGradient
@@ -648,5 +818,64 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: 0.5,
+  },
+
+
+   paymentModeContainer: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  paymentModeOption: {
+    flex: 1,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  paymentModeOptionActive: {
+    borderColor: '#3B82F6',
+    backgroundColor: '#EFF6FF',
+  },
+  paymentModeIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  paymentModeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  paymentModeTextActive: {
+    color: '#3B82F6',
+  },
+  paymentModeCheck: {
+    position: 'absolute',
+    top: spacing.xs,
+    right: spacing.xs,
+  },
+  paymentInputContainer: {
+    gap: spacing.md,
+  },
+  inputGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    gap: spacing.sm,
+  },
+  paymentInput: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    fontSize: 14,
+    color: '#1F2937',
   },
 });

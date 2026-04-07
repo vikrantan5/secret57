@@ -83,11 +83,37 @@ export default function NotificationsScreen() {
 
     switch (notification.type) {
       case 'order':
+     case 'order_status':
         if (notification.data?.order_id) {
           if (userRole === 'seller') {
             router.push(`/seller/order-detail/${notification.data.order_id}` as any);
           } else {
             router.push(`/order/${notification.data.order_id}` as any);
+          }
+        }
+        break;
+
+            case 'issue':
+        if (notification.data?.issue_id) {
+          if (userRole === 'seller') {
+            router.push(`/seller/issue-detail/${notification.data.issue_id}` as any);
+          } else {
+            // Customer views issue from order detail or a dedicated issues list page
+            if (notification.data?.order_id) {
+              router.push(`/order/${notification.data.order_id}` as any);
+            }
+          }
+        }
+        break;
+      case 'refund':
+        if (notification.data?.refund_id) {
+          if (userRole === 'seller') {
+            router.push(`/seller/refund-detail/${notification.data.refund_id}` as any);
+          } else {
+            // Customer views refund status from order detail
+            if (notification.data?.order_id) {
+              router.push(`/order/${notification.data.order_id}` as any);
+            }
           }
         }
         break;
@@ -126,7 +152,12 @@ export default function NotificationsScreen() {
   const getIconName = (type: string) => {
     switch (type) {
       case 'order':
+      case 'order_status':
         return 'cart-outline';
+      case 'issue':
+        return 'alert-circle-outline';
+      case 'refund':
+        return 'return-down-back-outline';
       case 'booking':
         return 'calendar-outline';
       case 'payment':
@@ -143,7 +174,12 @@ export default function NotificationsScreen() {
   const getIconGradient = (type: string) => {
     switch (type) {
       case 'order':
+      case 'order_status':
         return ['#8B5CF6', '#7C3AED'];
+      case 'issue':
+        return ['#F59E0B', '#D97706'];
+      case 'refund':
+        return ['#3B82F6', '#2563EB'];
       case 'booking':
         return ['#10B981', '#059669'];
       case 'payment':
