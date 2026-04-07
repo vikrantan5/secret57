@@ -547,6 +547,20 @@ export default function SellerDashboard() {
             )}
 
             {/* Common Actions */}
+             <QuickActionCard
+              icon="alert-circle-outline"
+              title="Customer Issues"
+              subtitle="View and respond to customer issues"
+              onPress={() => router.push('/seller/issues' as any)}
+              gradient={[colors.accentWarning, colors.accentWarning]}
+            />
+            <QuickActionCard
+              icon="return-down-back-outline"
+              title="Refund Requests"
+              subtitle="Manage customer refund requests"
+              onPress={() => router.push('/seller/refunds' as any)}
+              gradient={[colors.accentPrimary, colors.accentPrimaryLight]}
+            />
             <QuickActionCard
               icon="analytics-outline"
               title="Revenue Analytics"

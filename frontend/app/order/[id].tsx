@@ -196,7 +196,7 @@ export default function OrderDetailScreen() {
   ];
 
   // Use seller_status for tracking (more granular than order status)
-  const activeStatus = order.seller_status || order.status;
+
 
   const getCurrentStepIndex = () => {
     const index = trackingSteps.findIndex(step => step.status === activeStatus);
@@ -239,7 +239,7 @@ export default function OrderDetailScreen() {
               colors={[getStatusColor(activeStatus), getStatusColor(activeStatus) + 'CC']}
               style={styles.statusIconContainer}
             >
-              <Ionicons name={getStatusIcon(activeStatus) as any} size={32} color=\"#FFFFFF\" />
+              <Ionicons name={getStatusIcon(activeStatus) as any} size={32} color="#FFFFFF" />
             </LinearGradient>
             <View style={styles.statusInfo}>
               <Text style={styles.statusTitle}>

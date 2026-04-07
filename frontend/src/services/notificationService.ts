@@ -75,7 +75,7 @@ export const notificationService = {
   ) {
     return this.sendNotification(
       sellerUserId,
-      'payment',
+       'refund',
       'Payment Received',
       `₹${amount.toFixed(2)} received for Order #${orderNumber}`,
       {
@@ -150,7 +150,7 @@ export const notificationService = {
   ) {
     return this.sendNotification(
       sellerUserId,
-      'order',
+     'refund',
       'Customer Reported an Issue',
       `Order #${orderNumber} - ${subject}. Tap to view details.`,
       {

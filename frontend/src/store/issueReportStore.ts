@@ -86,7 +86,7 @@ export const useIssueReportStore = create<IssueReportState>((set, get) => ({
         if (seller) {
           await notificationService.sendNotification(
             seller.user_id,
-            'order',
+            'issue',
             'Customer Reported an Issue',
             `Order #${data.order_id?.slice(0, 8)} - ${data.subject}. Tap to view details.`,
             { 
@@ -219,7 +219,7 @@ export const useIssueReportStore = create<IssueReportState>((set, get) => ({
       if (issue?.user_id) {
         await notificationService.sendNotification(
           issue.user_id,
-          'order',
+         'issue',
           `Issue ${status === 'resolved' ? 'Resolved' : 'Updated'}`,
           `Your issue report has been ${status}. ${response ? 'Seller responded: ' + response.slice(0, 50) : ''}`,
           {
