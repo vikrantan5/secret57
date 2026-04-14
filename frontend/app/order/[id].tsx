@@ -28,8 +28,8 @@ const { width, height } = Dimensions.get('window');
 
 export default function OrderDetailScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string }>();
-  const orderId = params.id as string;
+  const params = useLocalSearchParams();
+  const orderId = params.id;
   
   const { selectedOrder, loading, fetchOrderById, cancelOrder } = useOrderStore();
   const { createRefundRequest } = useRefundStore();
@@ -38,6 +38,7 @@ export default function OrderDetailScreen() {
   const [upiId, setUpiId] = useState('');
   const [paymentId, setPaymentId] = useState('');
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
     if (orderId) {
@@ -45,7 +46,7 @@ export default function OrderDetailScreen() {
     }
   }, [orderId]);
 
-   // Auto-fill payment ID when opening cancel modal
+  // Auto-fill payment ID when opening cancel modal
   useEffect(() => {
     if (showCancelModal && selectedOrder) {
       const existingPaymentId = selectedOrder.razorpay_payment_id || selectedOrder.cashfree_payment_id || '';
@@ -79,10 +80,12 @@ export default function OrderDetailScreen() {
     return () => clearInterval(refreshTimer);
   }, [orderId, selectedOrder?.payment_status]);
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status) => {
     switch (status) {
       case 'pending':
         return '#F59E0B';
+      case 'confirmed':
+        return '#3B82F6';
       case 'processing':
       case 'state_processing':
       case 'processed':
@@ -94,6 +97,9 @@ export default function OrderDetailScreen() {
       case 'delivered':
         return '#10B981';
       case 'cancelled':
+        return '#EF4444';
+      case 'refund_requested':
+        return '#A855F7';
       case 'refunded':
         return '#EF4444';
       default:
@@ -101,10 +107,12 @@ export default function OrderDetailScreen() {
     }
   };
 
-  const getStatusGradient = (status: string) => {
+  const getStatusGradient = (status) => {
     switch (status) {
       case 'pending':
         return ['#FEF3C7', '#FDE68A'];
+      case 'confirmed':
+        return ['#DBEAFE', '#BFDBFE'];
       case 'processing':
       case 'state_processing':
         return ['#E0E7FF', '#C7D2FE'];
@@ -118,15 +126,21 @@ export default function OrderDetailScreen() {
         return ['#D1FAE5', '#A7F3D0'];
       case 'cancelled':
         return ['#FEE2E2', '#FECACA'];
+      case 'refund_requested':
+        return ['#F3E8FF', '#E9D5FF'];
+      case 'refunded':
+        return ['#FEE2E2', '#FECACA'];
       default:
         return ['#F3F4F6', '#E5E7EB'];
     }
   };
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status) => {
     switch (status) {
       case 'pending':
         return 'time-outline';
+      case 'confirmed':
+        return 'checkmark-outline';
       case 'processing':
       case 'state_processing':
         return 'refresh-outline';
@@ -139,14 +153,17 @@ export default function OrderDetailScreen() {
       case 'delivered':
         return 'checkmark-circle-outline';
       case 'cancelled':
-      case 'refunded':
         return 'close-circle-outline';
+      case 'refund_requested':
+        return 'return-down-back-outline';
+      case 'refunded':
+        return 'cash-outline';
       default:
         return 'help-circle-outline';
     }
   };
-
-  const formatDate = (dateString: string) => {
+  
+  const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleString('en-IN', {
       day: 'numeric',
@@ -231,13 +248,17 @@ export default function OrderDetailScreen() {
   }
 
   const order = selectedOrder;
-    const activeStatus = order.seller_status || order.status;
- // ✅ FIX: Show cancel button only for pending, confirmed, shipped statuses
-  // NOT for out_for_delivery or delivered
-  const canCancel = ['pending', 'confirmed', 'processing', 'shipped'].includes(order.status);
+  const activeStatus = order.seller_status || order.status;
+  // ✅ FIX: Show cancel button only for pending, confirmed, shipped statuses
+  // NOT for out_for_delivery, delivered, cancelled, refund_requested, or refunded
+  const canCancel = ['pending', 'confirmed', 'processing', 'shipped'].includes(order.status) 
+    && order.status !== 'cancelled' 
+    && order.status !== 'refund_requested' 
+    && order.status !== 'refunded';
 
   const trackingSteps = [
     { status: 'pending', label: 'Order Placed', icon: 'bag-handle-outline', description: 'Your order has been placed' },
+    { status: 'confirmed', label: 'Confirmed', icon: 'checkmark-outline', description: 'Seller confirmed your order' },
     { status: 'processing', label: 'Processing', icon: 'refresh-outline', description: 'Seller is preparing your order' },
     { status: 'processed', label: 'Processed', icon: 'checkmark-outline', description: 'Order has been processed' },
     { status: 'shipped', label: 'Shipped', icon: 'rocket-outline', description: 'Order has been shipped' },
@@ -246,8 +267,6 @@ export default function OrderDetailScreen() {
   ];
 
   // Use seller_status for tracking (more granular than order status)
-
-
   const getCurrentStepIndex = () => {
     const index = trackingSteps.findIndex(step => step.status === activeStatus);
     return index >= 0 ? index : 0;
@@ -289,11 +308,11 @@ export default function OrderDetailScreen() {
               colors={[getStatusColor(activeStatus), getStatusColor(activeStatus) + 'CC']}
               style={styles.statusIconContainer}
             >
-              <Ionicons name={getStatusIcon(activeStatus) as any} size={32} color="#FFFFFF" />
+              <Ionicons name={getStatusIcon(activeStatus)} size={32} color="#FFFFFF" />
             </LinearGradient>
             <View style={styles.statusInfo}>
               <Text style={styles.statusTitle}>
-                {activeStatus.replace(/_/g, ' ').replace(/bw/g, (c: string) => c.toUpperCase())}
+                {activeStatus.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
               </Text>
               <Text style={styles.orderNumber}>Order #{order.order_number?.slice(0, 12)}</Text>
               {order.seller_status_updated_at && (
@@ -306,7 +325,7 @@ export default function OrderDetailScreen() {
         </LinearGradient>
 
         {/* Premium Tracking Timeline */}
-               {activeStatus !== 'cancelled' && activeStatus !== 'refunded' && (
+        {activeStatus !== 'cancelled' && activeStatus !== 'refunded' && activeStatus !== 'refund_requested' && (
           <View style={styles.timelineCard}>
             <View style={styles.timelineHeader}>
               <LinearGradient
@@ -330,7 +349,7 @@ export default function OrderDetailScreen() {
                         style={styles.timelineIcon}
                       >
                         <Ionicons
-                          name={step.icon as any}
+                          name={step.icon}
                           size={18}
                           color={isCompleted ? '#FFFFFF' : '#9CA3AF'}
                         />
@@ -545,6 +564,46 @@ export default function OrderDetailScreen() {
           </View>
         </View>
 
+                {/* Refund Requested Status Banner */}
+        {(order.status === 'refund_requested') && (
+          <LinearGradient
+            colors={['#F3E8FF', '#E9D5FF']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.verifiedCard}
+          >
+            <View style={styles.verifiedBadge}>
+              <Ionicons name="return-down-back-outline" size={32} color="#A855F7" />
+              <View style={{ flex: 1, marginLeft: spacing.md }}>
+                <Text style={[styles.verifiedTitle, { color: '#A855F7' }]}>Refund Requested</Text>
+                <Text style={[styles.verifiedText, { color: '#6B21A8' }]}>
+                  Your refund request is being reviewed by the seller.
+                </Text>
+              </View>
+            </View>
+          </LinearGradient>
+        )}
+
+        {/* Refunded Status Banner */}
+        {(order.status === 'refunded') && (
+          <LinearGradient
+            colors={['#D1FAE5', '#A7F3D0']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.verifiedCard}
+          >
+            <View style={styles.verifiedBadge}>
+              <Ionicons name="cash-outline" size={32} color="#10B981" />
+              <View style={{ flex: 1, marginLeft: spacing.md }}>
+                <Text style={styles.verifiedTitle}>Refund Processed</Text>
+                <Text style={styles.verifiedText}>
+                  Your refund has been processed successfully.
+                </Text>
+              </View>
+            </View>
+          </LinearGradient>
+        )}
+
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
           {canCancel && !showCancelModal && (
@@ -567,7 +626,14 @@ export default function OrderDetailScreen() {
           {order.status === 'delivered' && (
             <TouchableOpacity
               style={styles.reportButton}
-               onPress={() => router.push(`/complaints/create?orderId=${orderId}&sellerId=${(order.order_items || order.items)?.[0]?.seller_id}`)}
+                onPress={() => {
+                const sellerId = (order.order_items || order.items)?.[0]?.seller_id;
+                if (!sellerId) {
+                  Alert.alert('Error', 'Unable to identify seller. Please try again later.');
+                  return;
+                }
+                router.push(`/complaints/create?orderId=${orderId}&sellerId=${sellerId}`);
+              }}
             >
             
               <LinearGradient
