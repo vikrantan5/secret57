@@ -18,6 +18,7 @@ import { useCartStore } from '../../src/store/cartStore';
 import { useWishlistStore } from '../../src/store/wishlistStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
+import BrandedSplash from '../../src/components/ui/BrandedSplash';
 
 const { width } = Dimensions.get('window');
 
@@ -32,15 +33,37 @@ export default function ProductDetailScreen() {
   const { isInWishlist, toggleWishlist, fetchWishlist } = useWishlistStore();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
+  const [showSplash, setShowSplash] = useState(true);
+  const [dataReady, setDataReady] = useState(false);
 
   useEffect(() => {
     if (productId) {
-      fetchProductById(productId);
+      fetchProductById(productId).then(() => setDataReady(true));
     }
     if (user?.id) {
       fetchWishlist(user.id);
     }
   }, [productId, user?.id]);
+
+  // Show branded splash once data is ready
+  if (showSplash && dataReady && selectedProduct?.seller) {
+    return (
+      <View style={{ flex: 1 }}>
+        <BrandedSplash
+          companyName={selectedProduct.seller.company_name || 'Store'}
+          companyLogo={selectedProduct.seller.company_logo}
+          type="product"
+          onFinish={() => setShowSplash(false)}
+          duration={3500}
+        />
+      </View>
+    );
+  }
+
+  // Show splash without seller data (skip splash if no seller info)
+  if (showSplash && dataReady && !selectedProduct?.seller) {
+    setShowSplash(false);
+  }
 
   if (loading || !selectedProduct) {
     return (
