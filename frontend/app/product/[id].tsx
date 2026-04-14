@@ -255,6 +255,16 @@ export default function ProductDetailScreen() {
               )}
             </View>
           )}
+          
+          {/* More from this seller */}
+          {sellerProducts.length > 0 && product.seller && (
+            <SellerRecommendations
+              title={`More from ${product.seller.company_name}`}
+              items={sellerProducts}
+              type="product"
+              currentItemId={productId}
+            />
+          )}
         </View>
       </ScrollView>
 

@@ -25,6 +25,7 @@ import { useAddressStore } from '../../src/store/addressStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { YouTubePlayerComponent } from '../../src/components/ui/YouTubePlayer';
 import BrandedSplash from '../../src/components/ui/BrandedSplash';
+import SellerRecommendations from '../../src/components/ui/SellerRecommendations';
 import CashfreePayment from '../../src/components/CashfreePayment';
 import CashfreeService from '../../src/services/cashfreeService';
 import { supabase } from '../../src/services/supabase';
@@ -37,7 +38,7 @@ export default function ServiceDetailScreen() {
   const serviceId = params.id as string;
   
   const { user } = useAuthStore();
-  const { selectedService, loading, fetchServiceById } = useServiceStore();
+ const { selectedService, loading, fetchServiceById, fetchSellerServices, services } = useServiceStore();
  const { createBooking, updatePaymentStatus: updateBookingPaymentStatus } = useBookingStore();
   const { createPayment, updatePaymentStatus } = usePaymentStore();
   const { addresses, getDefaultAddress, fetchUserAddresses } = useAddressStore();
@@ -52,7 +53,7 @@ export default function ServiceDetailScreen() {
 
 const [cashfreePaymentSessionId, setCashfreePaymentSessionId] = useState<string>('');
 
-  
+   const [sellerServices, setSellerServices] = useState<any[]>([]);
   const [bookingData, setBookingData] = useState({
     date: '',
     time: '',
@@ -86,6 +87,20 @@ const [cashfreePaymentSessionId, setCashfreePaymentSessionId] = useState<string>
       fetchWishlist(user.id);
     }
   }, [serviceId, user?.id]);
+
+
+
+   // Fetch seller's other services when selectedService is available
+  useEffect(() => {
+    if (selectedService?.seller_id) {
+      fetchSellerServices(selectedService.seller_id).then(() => {
+        // Get services from store after fetch
+        const allServices = useServiceStore.getState().services;
+        setSellerServices(allServices);
+      });
+    }
+  }, [selectedService?.seller_id]);
+
 
   // Load user addresses and auto-fill with default address
   useEffect(() => {
@@ -889,6 +904,15 @@ const handleBookService = async () => {
                 </TouchableOpacity>
               </View>
             </View>
+          )}
+                 {/* More from this seller */}
+          {sellerServices.length > 0 && service.seller && (
+            <SellerRecommendations
+              title={`More from ${service.seller.company_name}`}
+              items={sellerServices}
+              type="service"
+              currentItemId={serviceId}
+            />
           )}
         </View>
       </ScrollView>

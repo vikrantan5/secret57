@@ -21,6 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useOrderStore } from '../../src/store/orderStore';
+import { useRefundStore } from '../../src/store/refundStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 
 const { width, height } = Dimensions.get('window');
@@ -31,16 +32,26 @@ export default function OrderDetailScreen() {
   const orderId = params.id as string;
   
   const { selectedOrder, loading, fetchOrderById, cancelOrder } = useOrderStore();
+  const { createRefundRequest } = useRefundStore();
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancellationReason, setCancellationReason] = useState('');
+  const [upiId, setUpiId] = useState('');
+  const [paymentId, setPaymentId] = useState('');
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
     if (orderId) {
       fetchOrderById(orderId);
     }
   }, [orderId]);
+
+   // Auto-fill payment ID when opening cancel modal
+  useEffect(() => {
+    if (showCancelModal && selectedOrder) {
+      const existingPaymentId = selectedOrder.razorpay_payment_id || selectedOrder.cashfree_payment_id || '';
+      setPaymentId(existingPaymentId);
+    }
+  }, [showCancelModal, selectedOrder]);
 
   useEffect(() => {
     Animated.parallel([
@@ -152,17 +163,54 @@ export default function OrderDetailScreen() {
       return;
     }
 
+    // If payment is already made, require UPI ID for refund
+    if (selectedOrder?.payment_status === 'paid') {
+      if (!upiId.trim()) {
+        Alert.alert('Error', 'Please provide UPI ID for refund');
+        return;
+      }
+      // Validate UPI ID format (basic check)
+      if (!upiId.includes('@')) {
+        Alert.alert('Error', 'Please provide a valid UPI ID (e.g., name@upi)');
+        return;
+      }
+    }
+
+    // Cancel the order first
     const result = await cancelOrder(orderId, cancellationReason);
     
     if (result.success) {
+      // If payment was made, create refund request
+      if (selectedOrder?.payment_status === 'paid') {
+        const sellerId = (selectedOrder.order_items || selectedOrder.items)?.[0]?.seller_id;
+        
+        await createRefundRequest({
+          order_id: orderId,
+          seller_id: sellerId,
+          payment_id: paymentId || selectedOrder.razorpay_payment_id || selectedOrder.cashfree_payment_id || '',
+          amount: selectedOrder.total_amount,
+          reason: cancellationReason,
+          upi_id: upiId,
+        });
+        
+        Alert.alert(
+          'Order Cancelled',
+          'Your order has been cancelled and refund request has been submitted. The seller will process your refund to the provided UPI ID.',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      } else {
+        Alert.alert(
+          'Order Cancelled',
+          'Your order has been cancelled successfully',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      }
+      
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowCancelModal(false);
       setCancellationReason('');
-      Alert.alert(
-        'Order Cancelled',
-        'Your order has been cancelled successfully',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
+      setUpiId('');
+      setPaymentId('');
     } else {
       Alert.alert('Error', result.error || 'Failed to cancel order');
     }
@@ -184,7 +232,9 @@ export default function OrderDetailScreen() {
 
   const order = selectedOrder;
     const activeStatus = order.seller_status || order.status;
-  const canCancel = order.status === 'pending' || order.status === 'processing';
+ // ✅ FIX: Show cancel button only for pending, confirmed, shipped statuses
+  // NOT for out_for_delivery or delivered
+  const canCancel = ['pending', 'confirmed', 'processing', 'shipped'].includes(order.status);
 
   const trackingSteps = [
     { status: 'pending', label: 'Order Placed', icon: 'bag-handle-outline', description: 'Your order has been placed' },
@@ -243,7 +293,7 @@ export default function OrderDetailScreen() {
             </LinearGradient>
             <View style={styles.statusInfo}>
               <Text style={styles.statusTitle}>
-                {activeStatus.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                {activeStatus.replace(/_/g, ' ').replace(/bw/g, (c: string) => c.toUpperCase())}
               </Text>
               <Text style={styles.orderNumber}>Order #{order.order_number?.slice(0, 12)}</Text>
               {order.seller_status_updated_at && (
@@ -561,23 +611,66 @@ export default function OrderDetailScreen() {
                 <Ionicons name="alert-circle-outline" size={28} color="#FFFFFF" />
                 <Text style={styles.modalTitle}>Cancel Order</Text>
               </LinearGradient>
-              <Text style={styles.modalSubtitle}>Please provide a reason for cancellation:</Text>
-              <TextInput
-                style={styles.textArea}
-                placeholder="Enter reason..."
-                placeholderTextColor="#9CA3AF"
-                value={cancellationReason}
-                onChangeText={setCancellationReason}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
+              
+              <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+                <Text style={styles.modalSubtitle}>Please provide cancellation details:</Text>
+                
+                <Text style={styles.inputLabel}>Reason for Cancellation *</Text>
+                <TextInput
+                  style={styles.textArea}
+                  placeholder="Enter reason..."
+                  placeholderTextColor="#9CA3AF"
+                  value={cancellationReason}
+                  onChangeText={setCancellationReason}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+
+                {order.payment_status === 'paid' && (
+                  <>
+                    <View style={styles.refundNotice}>
+                      <Ionicons name="information-circle" size={20} color="#3B82F6" />
+                      <Text style={styles.refundNoticeText}>
+                        Refund will be processed to your UPI ID by the seller
+                      </Text>
+                    </View>
+
+                    <Text style={styles.inputLabel}>Payment ID</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder={order.razorpay_payment_id || order.cashfree_payment_id || "Payment ID (optional)"}
+                      placeholderTextColor="#9CA3AF"
+                      value={paymentId}
+                      onChangeText={setPaymentId}
+                      editable={!order.razorpay_payment_id && !order.cashfree_payment_id}
+                    />
+
+                    <Text style={styles.inputLabel}>UPI ID for Refund *</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="yourname@upi"
+                      placeholderTextColor="#9CA3AF"
+                      value={upiId}
+                      onChangeText={setUpiId}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+                    <Text style={styles.helperText}>
+                      Example: 9876543210@paytm, name@okaxis, etc.
+                    </Text>
+                  </>
+                )}
+              </ScrollView>
+
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={styles.modalCancelButton}
                   onPress={() => {
                     setShowCancelModal(false);
                     setCancellationReason('');
+                    setUpiId('');
+                    setPaymentId('');
                   }}
                 >
                   <Text style={styles.modalCancelText}>Back</Text>
@@ -590,7 +683,9 @@ export default function OrderDetailScreen() {
                     colors={['#EF4444', '#DC2626']}
                     style={styles.modalConfirmGradient}
                   >
-                    <Text style={styles.modalConfirmText}>Cancel Order</Text>
+                    <Text style={styles.modalConfirmText}>
+                      {order.payment_status === 'paid' ? 'Cancel & Request Refund' : 'Cancel Order'}
+                    </Text>
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
@@ -1132,6 +1227,51 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.md,
     padding: spacing.lg,
+  },
+   modalContent: {
+    maxHeight: height * 0.6,
+    paddingBottom: spacing.md,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.xs,
+  },
+  textInput: {
+    fontSize: 14,
+    color: '#1F2937',
+    backgroundColor: '#F9FAFB',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginHorizontal: spacing.lg,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  helperText: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.xs,
+  },
+  refundNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: '#EFF6FF',
+    padding: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  refundNoticeText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#1E40AF',
   },
   modalCancelButton: {
     flex: 1,
