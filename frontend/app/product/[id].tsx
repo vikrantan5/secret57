@@ -19,6 +19,7 @@ import { useWishlistStore } from '../../src/store/wishlistStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import BrandedSplash from '../../src/components/ui/BrandedSplash';
+import SellerRecommendations from '../../src/components/ui/SellerRecommendations';
 
 const { width } = Dimensions.get('window');
 
@@ -28,13 +29,14 @@ export default function ProductDetailScreen() {
   const productId = params.id as string;
   
   const { user } = useAuthStore();
-  const { selectedProduct, loading, fetchProductById } = useProductStore();
+  const { selectedProduct, loading, fetchProductById, products, fetchSellerProducts } = useProductStore();
   const { addItem } = useCartStore();
   const { isInWishlist, toggleWishlist, fetchWishlist } = useWishlistStore();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [showSplash, setShowSplash] = useState(true);
   const [dataReady, setDataReady] = useState(false);
+  const [sellerProducts, setSellerProducts] = useState<any[]>([]);
 
   useEffect(() => {
     if (productId) {
@@ -44,6 +46,18 @@ export default function ProductDetailScreen() {
       fetchWishlist(user.id);
     }
   }, [productId, user?.id]);
+
+
+   // Fetch seller's other products when selectedProduct is available
+  useEffect(() => {
+    if (selectedProduct?.seller_id) {
+      fetchSellerProducts(selectedProduct.seller_id).then(() => {
+        // Get products from store after fetch
+        const allProducts = useProductStore.getState().products;
+        setSellerProducts(allProducts);
+      });
+    }
+  }, [selectedProduct?.seller_id]);
 
   // Show branded splash once data is ready
   if (showSplash && dataReady && selectedProduct?.seller) {

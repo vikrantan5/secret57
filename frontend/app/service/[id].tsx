@@ -24,6 +24,7 @@ import { useWishlistStore } from '../../src/store/wishlistStore';
 import { useAddressStore } from '../../src/store/addressStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { YouTubePlayerComponent } from '../../src/components/ui/YouTubePlayer';
+import BrandedSplash from '../../src/components/ui/BrandedSplash';
 import CashfreePayment from '../../src/components/CashfreePayment';
 import CashfreeService from '../../src/services/cashfreeService';
 import { supabase } from '../../src/services/supabase';
@@ -64,6 +65,12 @@ const [cashfreePaymentSessionId, setCashfreePaymentSessionId] = useState<string>
   });
   const [activeImageIndex, setActiveImageIndex] = useState(0);
  const [activeTab, setActiveTab] = useState<'details' | 'video'>('details');
+
+
+   // Branded Splash states
+  const [showSplash, setShowSplash] = useState(true);
+  const [dataReady, setDataReady] = useState(false);
+   
    
   // Date/Time picker states
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -73,7 +80,7 @@ const [cashfreePaymentSessionId, setCashfreePaymentSessionId] = useState<string>
 
   useEffect(() => {
     if (serviceId) {
-      fetchServiceById(serviceId);
+       fetchServiceById(serviceId).then(() => setDataReady(true));
     }
   if (user?.id) {
       fetchWishlist(user.id);
@@ -453,6 +460,28 @@ const handleBookService = async () => {
     }
     await toggleWishlist(serviceId, user.id, 'service');
   };
+
+
+  // Show branded splash once data is ready
+  if (showSplash && dataReady && selectedService?.seller) {
+    return (
+      <View style={{ flex: 1 }}>
+        <BrandedSplash
+          companyName={selectedService.seller.company_name || 'Service Provider'}
+          companyLogo={selectedService.seller.company_logo}
+          type="service"
+          onFinish={() => setShowSplash(false)}
+          duration={3500}
+        />
+      </View>
+    );
+  }
+
+  // Skip splash if no seller data
+  if (showSplash && dataReady && !selectedService?.seller) {
+    setShowSplash(false);
+  }
+
 
 
   if (loading || !selectedService) {
