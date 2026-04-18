@@ -1,16 +1,17 @@
 import { create } from 'zustand';
 import { User, supabase } from '../services/supabase';
 import { uploadImageToSupabase } from '../utils/imageUpload';
+import { useAuthStore } from './authStore';
 
 interface UserState {
   userData: User | null;
   loading: boolean;
   setUserData: (data: User | null) => void;
   updateUserData: (data: Partial<User>) => void;
+  fetchUserProfile: (userId: string) => Promise<{ success: boolean; error?: string }>;
   uploadAvatar: (userId: string, imageUri: string) => Promise<{ success: boolean; url?: string; error?: string }>;
   updateUserProfile: (userId: string, updates: Partial<User>) => Promise<{ success: boolean; error?: string }>;
 }
-
 export const useUserStore = create<UserState>((set, get) => ({
   userData: null,
   loading: false,
@@ -20,6 +21,35 @@ export const useUserStore = create<UserState>((set, get) => ({
   updateUserData: (data) => set((state) => ({
     userData: state.userData ? { ...state.userData, ...data } : null,
   })),
+
+
+   /**
+   * Fetch user profile from database
+   */
+  fetchUserProfile: async (userId: string) => {
+    try {
+      set({ loading: true });
+
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching user profile:', error);
+        set({ loading: false });
+        return { success: false, error: error.message };
+      }
+
+      set({ userData: data, loading: false });
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error in fetchUserProfile:', error);
+      set({ loading: false });
+      return { success: false, error: error.message };
+    }
+  },
 
   /**
    * Upload user avatar to Supabase Storage
@@ -93,6 +123,12 @@ export const useUserStore = create<UserState>((set, get) => ({
       const currentUser = get().userData;
       if (currentUser) {
         set({ userData: { ...currentUser, ...updates } as User });
+      }
+
+        // ✅ FIX: Also update authStore.user to sync profile display
+      const authUser = useAuthStore.getState().user;
+      if (authUser) {
+        useAuthStore.getState().setUser({ ...authUser, ...updates } as User);
       }
 
       set({ loading: false });

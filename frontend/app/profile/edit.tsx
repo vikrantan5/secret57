@@ -29,7 +29,7 @@ const { width, height } = Dimensions.get('window');
 export default function EditProfileScreen() {
   const router = useRouter();
   const { user, setUser } = useAuthStore();
-  const { userData, updateUserProfile, uploadAvatar, loading } = useUserStore();
+  const { userData, fetchUserProfile, updateUserProfile, uploadAvatar, loading } = useUserStore();
 
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
@@ -42,13 +42,28 @@ export default function EditProfileScreen() {
   const slideAnim = useRef(new Animated.Value(30)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
 
+  // ✅ FIX: Fetch user profile on mount and populate fields
   useEffect(() => {
-    if (userData) {
-      setGender((userData as any).gender || '');
-      setDateOfBirth((userData as any).date_of_birth || '');
-      setAvatarUri((userData as any).avatar_url || null);
+    if (user?.id) {
+      fetchUserProfile(user.id);
     }
-  }, [userData]);
+  }, [user?.id]);
+
+  useEffect(() => {
+    // Populate from authStore.user first (already loaded)
+    if (user) {
+      setGender(user.gender || '');
+      setDateOfBirth(user.date_of_birth || '');
+      setAvatarUri(user.avatar_url || null);
+    }
+    
+    // Then update with fresh data from userStore if available
+    if (userData) {
+      setGender(userData.gender || '');
+      setDateOfBirth(userData.date_of_birth || '');
+      setAvatarUri(userData.avatar_url || null);
+    }
+  }, [user, userData]);
 
   useEffect(() => {
     Animated.parallel([

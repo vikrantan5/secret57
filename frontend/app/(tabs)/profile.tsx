@@ -9,6 +9,7 @@ import {
   Animated,
   Dimensions,
   Platform,
+    Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -244,6 +245,13 @@ export default function ProfileScreen() {
                   colors={["rgba(255,255,255,0.3)", "rgba(255,255,255,0.1)"]}
                   style={styles.avatarRing}
                 >
+
+                   {user?.avatar_url ? (
+                    <Image
+                      source={{ uri: user.avatar_url }}
+                      style={styles.avatar}
+                    />
+                  ) : (
                   <LinearGradient
                     colors={["#FFFFFF", "#F3F4F6"]}
                     style={styles.avatar}
@@ -252,6 +260,7 @@ export default function ProfileScreen() {
                       {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
                     </Text>
                   </LinearGradient>
+                    )}
                 </LinearGradient>
                 <View style={styles.onlineBadge}>
                   <View style={styles.onlineDot} />
@@ -266,6 +275,33 @@ export default function ProfileScreen() {
             <Animated.Text style={[styles.userEmail, { opacity: fadeAnim }]}>
               {user?.email || "guest@example.com"}
             </Animated.Text>
+
+
+                 {/* ✅ FIX: Display Gender and DOB if available */}
+            {(user?.gender || user?.date_of_birth) && (
+              <Animated.View style={[styles.userDetailsContainer, { opacity: fadeAnim }]}>
+                {user?.gender && (
+                  <View style={styles.userDetailChip}>
+                    <Ionicons name="person-outline" size={12} color="#FFFFFF" />
+                    <Text style={styles.userDetailText}>
+                      {user.gender.charAt(0).toUpperCase() + user.gender.slice(1)}
+                    </Text>
+                  </View>
+                )}
+                {user?.date_of_birth && (
+                  <View style={styles.userDetailChip}>
+                    <Ionicons name="calendar-outline" size={12} color="#FFFFFF" />
+                    <Text style={styles.userDetailText}>
+                      {new Date(user.date_of_birth).toLocaleDateString('en-IN', { 
+                        day: 'numeric', 
+                        month: 'short', 
+                        year: 'numeric' 
+                      })}
+                    </Text>
+                  </View>
+                )}
+              </Animated.View>
+            )}
 
             {/* Premium Role Badge */}
             <Animated.View style={[styles.roleBadge, { opacity: fadeAnim }]}>
@@ -635,7 +671,26 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: 14,
     color: "rgba(255,255,255,0.8)",
-    marginBottom: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  userDetailsContainer: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  userDetailChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.md,
+  },
+  userDetailText: {
+    fontSize: 11,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   roleBadge: {
     borderRadius: borderRadius.xl,
