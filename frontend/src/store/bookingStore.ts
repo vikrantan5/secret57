@@ -580,6 +580,30 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       if (!user) {
         throw new Error('User not authenticated');
       }
+
+
+      
+      // ✅ CRITICAL: Check if booking is cancelled - block OTP verification
+      const { data: bookingCheck, error: checkError } = await supabase
+        .from('bookings')
+        .select('status')
+        .eq('id', bookingId)
+        .single();
+
+      if (checkError) {
+        console.error('Error checking booking status:', checkError);
+        set({ loading: false, error: 'Failed to check booking status' });
+        return { success: false, error: 'Failed to check booking status' };
+      }
+
+      if (bookingCheck?.status === 'cancelled') {
+        console.log('❌ Booking is cancelled - OTP verification blocked');
+        set({ loading: false, error: 'Cannot verify OTP for a cancelled booking' });
+        return { 
+          success: false, 
+          error: 'Cannot verify OTP for a cancelled booking' 
+        };
+      }
        // Use service role key for edge function authentication
       const serviceRoleKey = process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
 

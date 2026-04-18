@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import { supabase } from '../services/supabase';
+import { NotificationType } from '../services/notificationService';
 
 export interface Notification {
   id: string;
   user_id: string;
-  type: 'order' | 'booking' | 'payment' | 'review' | 'seller_approval' | 'general' | 'order_status' | 'issue' | 'refund';
+  type: NotificationType;
   title: string;
   message: string;
   data: any;

@@ -495,6 +495,30 @@ export const useOrderStore = create<OrderState>((set, get) => ({
    updateSellerStatus: async (orderId, sellerStatus, notes) => {
     try {
       set({ loading: true });
+
+
+
+         // ✅ CRITICAL: Check if order is cancelled - block all updates
+      const { data: orderCheck, error: checkError } = await supabase
+        .from('orders')
+        .select('status, seller_status')
+        .eq('id', orderId)
+        .single();
+
+      if (checkError) {
+        console.error('Error checking order status:', checkError);
+        set({ loading: false });
+        return { success: false, error: 'Failed to check order status' };
+      }
+
+      if (orderCheck?.status === 'cancelled') {
+        console.log('❌ Order is cancelled - status updates blocked');
+        set({ loading: false });
+        return { 
+          success: false, 
+          error: 'Cannot update status of a cancelled order' 
+        };
+      }
       
       // ✅ STEP 1: Generate OTP FIRST if marking as delivered
       let generatedOTP: string | null = null;
@@ -649,6 +673,31 @@ export const useOrderStore = create<OrderState>((set, get) => ({
       if (!user) {
         throw new Error('User not authenticated');
       }
+
+
+
+          // ✅ CRITICAL: Check if order is cancelled - block OTP verification
+      const { data: orderCheck, error: checkError } = await supabase
+        .from('orders')
+        .select('status')
+        .eq('id', orderId)
+        .single();
+
+      if (checkError) {
+        console.error('Error checking order status:', checkError);
+        set({ loading: false, error: 'Failed to check order status' });
+        return { success: false, error: 'Failed to check order status' };
+      }
+
+      if (orderCheck?.status === 'cancelled') {
+        console.log('❌ Order is cancelled - OTP verification blocked');
+        set({ loading: false, error: 'Cannot verify OTP for a cancelled order' });
+        return { 
+          success: false, 
+          error: 'Cannot verify OTP for a cancelled order' 
+        };
+      }
+
 
       // ✅ CRITICAL FIX: Use service role key for Authorization (same as generate-otp)
       // The user's session access_token can be expired/null, causing Supabase to return 401

@@ -1,15 +1,52 @@
 import { supabase, supabaseAdmin } from './supabase';
 
+// Valid notification types (must match database CHECK constraint)
+export type NotificationType = 
+  | 'order'           // General order notifications
+  | 'order_status'    // Order status updates (shipped, delivered, etc.)
+  | 'booking'         // Booking-related notifications
+  | 'payment'         // Payment received notifications
+  | 'review'          // Review notifications
+  | 'seller_approval' // Seller approval status
+  | 'general'         // General notifications
+  | 'issue'           // Customer issue/complaint reports
+  | 'refund';         // Refund request and status notifications
+
+const VALID_NOTIFICATION_TYPES: NotificationType[] = [
+  'order', 'order_status', 'booking', 'payment', 'review', 
+  'seller_approval', 'general', 'issue', 'refund'
+];
+
 export const notificationService = {
+  // Validate notification type before insert
+  validateType(type: string): boolean {
+    return VALID_NOTIFICATION_TYPES.includes(type as NotificationType);
+  },
+
   // Send notification to database
   async sendNotification(
     userId: string,
-    type: 'order' | 'booking' | 'payment' | 'review' | 'seller_approval' | 'general' | 'order_status' | 'issue' | 'refund',
+    type: NotificationType,
     title: string,
     message: string,
     data?: any
   ) {
     try {
+      // Validate type before insert
+      if (!this.validateType(type)) {
+        const error = `Invalid notification type: \"${type}\". Allowed types: ${VALID_NOTIFICATION_TYPES.join(', ')}`;
+        console.error('❌ Notification validation failed:', error);
+        return { success: false, error };
+      }
+
+      // Log notification payload for debugging
+      console.log('📬 Sending notification:', {
+        user_id: userId,
+        type,
+        title,
+        message: message.substring(0, 50) + '...',
+      });
+
       const { error } = await supabaseAdmin
         .from('notifications')
         .insert([{
@@ -21,14 +58,23 @@ export const notificationService = {
           is_read: false,
         }]);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Database error inserting notification:', error);
+        throw error;
+      }
+
+      console.log('✅ Notification sent successfully');
       return { success: true };
     } catch (error: any) {
-      console.error('Error sending notification:', error);
+      console.error('❌ Error sending notification:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        hint: error.hint,
+      });
       return { success: false, error: error.message };
     }
   },
-
   // Send order status notification to customer
   async sendOrderStatusNotification(
     customerId: string,
@@ -75,7 +121,7 @@ export const notificationService = {
   ) {
     return this.sendNotification(
       sellerUserId,
-      'refund',
+     'payment',  // ✅ FIXED: Was 'refund', now correct 'payment' type
       'Payment Received',
       `₹${amount.toFixed(2)} received for Order #${orderNumber}`,
       {

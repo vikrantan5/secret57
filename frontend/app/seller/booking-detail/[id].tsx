@@ -129,7 +129,8 @@ export default function SellerBookingDetailScreen() {
   }
 
   const booking = selectedBooking;
-  const canComplete = booking.status === 'confirmed' && !booking.otp_verified;
+ const isCancelled = booking.status === 'cancelled';
+  const canComplete = booking.status === 'confirmed' && !booking.otp_verified && !isCancelled;
   const statusColor = getStatusColor(booking.status);
 
   return (
@@ -195,6 +196,127 @@ export default function SellerBookingDetailScreen() {
               <Text style={styles.value}>{booking.customer_email || 'N/A'}</Text>
             </View>
           </LinearGradient>
+
+
+                    {/* Cancellation Details Card - Show when booking is cancelled */}
+          {isCancelled && (
+            <LinearGradient
+              colors={['rgba(239, 68, 68, 0.1)', 'rgba(220, 38, 38, 0.05)']}
+              style={[styles.card, { borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.3)' }]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.cardHeader}>
+                <View style={[styles.cardIconContainer, { backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
+                  <Ionicons name="close-circle" size={20} color="#ef4444" />
+                </View>
+                <Text style={[styles.cardTitle, { color: '#ef4444' }]}>Booking Cancelled</Text>
+              </View>
+              
+              {booking.cancellation_reason && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.label}>Cancellation Reason</Text>
+                  <Text style={[styles.value, { color: '#f87171' }]}>{booking.cancellation_reason}</Text>
+                </View>
+              )}
+              
+              {booking.cancelled_at && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.label}>Cancelled On</Text>
+                  <Text style={styles.value}>{formatDate(booking.cancelled_at)}</Text>
+                </View>
+              )}
+
+              {booking.refund_method && (
+                <>
+                  <View style={styles.divider} />
+                  <Text style={[styles.label, { marginBottom: spacing.sm, color: '#f87171' }]}>
+                    Refund Details
+                  </Text>
+                  
+                  <View style={styles.infoRow}>
+                    <Text style={styles.label}>Refund Method</Text>
+                    <Text style={styles.value}>{booking.refund_method.toUpperCase()}</Text>
+                  </View>
+
+                  {booking.refund_upi_id && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.label}>UPI ID</Text>
+                      <Text style={styles.value}>{booking.refund_upi_id}</Text>
+                    </View>
+                  )}
+
+                  {booking.refund_account_number && (
+                    <>
+                      <View style={styles.infoRow}>
+                        <Text style={styles.label}>Account Number</Text>
+                        <Text style={styles.value}>****{booking.refund_account_number.slice(-4)}</Text>
+                      </View>
+                      {booking.refund_bank_ifsc && (
+                        <View style={styles.infoRow}>
+                          <Text style={styles.label}>IFSC Code</Text>
+                          <Text style={styles.value}>{booking.refund_bank_ifsc}</Text>
+                        </View>
+                      )}
+                      {booking.refund_bank_name && (
+                        <View style={styles.infoRow}>
+                          <Text style={styles.label}>Bank Name</Text>
+                          <Text style={styles.value}>{booking.refund_bank_name}</Text>
+                        </View>
+                      )}
+                      {booking.refund_account_holder_name && (
+                        <View style={styles.infoRow}>
+                          <Text style={styles.label}>Account Holder</Text>
+                          <Text style={styles.value}>{booking.refund_account_holder_name}</Text>
+                        </View>
+                      )}
+                    </>
+                  )}
+
+                  {booking.refund_status && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.label}>Refund Status</Text>
+                      <View style={[
+                        styles.paymentBadge,
+                        { 
+                          backgroundColor: booking.refund_status === 'completed' 
+                            ? 'rgba(16, 185, 129, 0.15)' 
+                            : 'rgba(245, 158, 11, 0.15)' 
+                        }
+                      ]}>
+                        <View style={[
+                          styles.statusDot,
+                          { 
+                            backgroundColor: booking.refund_status === 'completed' 
+                              ? '#10b981' 
+                              : '#f59e0b' 
+                          }
+                        ]} />
+                        <Text style={[
+                          styles.paymentBadgeText,
+                          { 
+                            color: booking.refund_status === 'completed' 
+                              ? '#10b981' 
+                              : '#f59e0b' 
+                          }
+                        ]}>
+                          {booking.refund_status.toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </>
+              )}
+
+              <View style={[styles.divider, { marginTop: spacing.md }]} />
+              <View style={[styles.infoRow, { backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: spacing.sm, borderRadius: borderRadius.md }]}>
+                <Ionicons name="information-circle" size={16} color="#ef4444" />
+                <Text style={[styles.label, { flex: 1, marginLeft: spacing.sm, color: '#f87171' }]}>
+                  This booking has been cancelled. No further actions can be taken.
+                </Text>
+              </View>
+            </LinearGradient>
+          )}
 
           {/* Service Info */}
           <LinearGradient
