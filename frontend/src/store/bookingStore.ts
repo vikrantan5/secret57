@@ -301,7 +301,55 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   },
 
   cancelBooking: async (id, reason) => {
-    return get().updateBookingStatus(id, 'cancelled', reason);
+     try {
+      set({ loading: true });
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const updates: any = {
+        status: 'cancelled',
+        cancellation_reason: reason,
+        cancelled_at: new Date().toISOString(),
+        cancelled_by: user?.id,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from('bookings')
+        .update(updates)
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error cancelling booking:', error);
+        set({ loading: false });
+        return { success: false, error: error.message };
+      }
+
+      await supabase
+        .from('booking_timeline')
+        .insert([{
+          booking_id: id,
+          status: 'cancelled',
+          notes: reason || 'Booking cancelled by customer',
+          created_at: new Date().toISOString(),
+        }]);
+
+      set(state => ({
+        bookings: state.bookings.map(b => 
+          b.id === id ? { ...b, ...updates } : b
+        ),
+        selectedBooking: state.selectedBooking?.id === id 
+          ? { ...state.selectedBooking, ...updates }
+          : state.selectedBooking,
+        loading: false
+      }));
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error in cancelBooking:', error);
+      set({ loading: false });
+      return { success: false, error: error.message };
+    }
   },
 
   rescheduleBooking: async (id, newDate, newTime) => {

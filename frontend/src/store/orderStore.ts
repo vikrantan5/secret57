@@ -386,13 +386,19 @@ export const useOrderStore = create<OrderState>((set, get) => ({
 
     cancelOrder: async (orderId, reason) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const updateData = {
+        status: 'cancelled',
+        cancellation_reason: reason,
+        cancelled_at: new Date().toISOString(),
+        cancelled_by: user?.id,
+        updated_at: new Date().toISOString(),
+      };
+
       const { error } = await supabase
         .from('orders')
-        .update({
-          status: 'cancelled',
-          cancellation_reason: reason,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', orderId);
 
       if (error) {
@@ -403,8 +409,11 @@ export const useOrderStore = create<OrderState>((set, get) => ({
       // Update local state
       set(state => ({
         orders: state.orders.map(o => 
-          o.id === orderId ? { ...o, status: 'cancelled', cancellation_reason: reason } : o
-        )
+          o.id === orderId ? { ...o, ...updateData } : o
+        ),
+        selectedOrder: state.selectedOrder?.id === orderId 
+          ? { ...state.selectedOrder, ...updateData }
+          : state.selectedOrder
       }));
 
       return { success: true };
