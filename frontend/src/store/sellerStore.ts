@@ -92,6 +92,7 @@ export const useSellerStore = create<SellerState>((set, get) => ({
       const sellerData = {
         ...data,
         status: 'pending',
+         approval_stage: 'company_details', // Set approval stage for company details
         company_logo: null,
         verification_documents: [],
         created_at: new Date().toISOString(),

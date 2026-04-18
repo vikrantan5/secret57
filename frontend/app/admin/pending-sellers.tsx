@@ -16,32 +16,25 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { supabase } from '../../src/services/supabase';
 
+type ApprovalTab = 'profile' | 'company';
+
 export default function PendingSellersScreen() {
   const router = useRouter();
-  const [sellers, setSellers] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<ApprovalTab>('profile');
+  const [profileApprovals, setProfileApprovals] = useState<any[]>([]);
+  const [companyApprovals, setCompanyApprovals] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    loadPendingSellers();
+    loadPendingApprovals();
   }, []);
 
-  const loadPendingSellers = async () => {
+  const loadPendingApprovals = async () => {
     try {
       setLoading(true);
       
-      const { data: sellersData, error: sellersError } = await supabase
-        .from('sellers')
-        .select(`
-          *,
-         user:users!sellers_user_id_fkey(*),
-          category:categories(id, name, slug, type, icon)
-        `)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
-
-      if (sellersError) throw sellersError;
-      
+      // Load pending seller profile approvals (users who just registered)
       const { data: usersData, error: usersError } = await supabase
         .from('users')
         .select('*')
@@ -49,33 +42,27 @@ export default function PendingSellersScreen() {
         .eq('seller_status', 'pending')
         .order('created_at', { ascending: false });
 
-      if (usersError) console.error('Error loading pending users:', usersError);
-
-      const sellerUserIds = new Set((sellersData || []).map(s => s.user_id));
-      const usersWithoutSellerProfile = (usersData || []).filter(
-        user => !sellerUserIds.has(user.id)
-      );
-
-      const combinedPending = [
-        ...(sellersData || []),
-        ...usersWithoutSellerProfile.map(user => ({
-          id: user.id,
-          user_id: user.id,
-          company_name: user.name + ' (Setup Incomplete)',
-          status: 'pending',
-          city: 'N/A',
-          state: 'N/A',
-          created_at: user.created_at,
-          user: user,
-          category: null,
-          isIncomplete: true
-        }))
-      ];
+      if (usersError) throw usersError;
       
-      setSellers(combinedPending);
+      // Load pending company approvals (sellers who submitted company details)
+      const { data: sellersData, error: sellersError } = await supabase
+        .from('sellers')
+        .select(`
+          *,
+          user:users!sellers_user_id_fkey(*),
+          category:categories(id, name, slug, type, icon)
+        `)
+        .eq('status', 'pending')
+        .eq('approval_stage', 'company_details')
+        .order('created_at', { ascending: false });
+
+      if (sellersError) throw sellersError;
+      
+      setProfileApprovals(usersData || []);
+      setCompanyApprovals(sellersData || []);
     } catch (error: any) {
-      console.error('Error loading pending sellers:', error);
-      Alert.alert('Error', error.message || 'Failed to load pending sellers');
+      console.error('Error loading pending approvals:', error);
+      Alert.alert('Error', error.message || 'Failed to load pending approvals');
     } finally {
       setLoading(false);
     }
@@ -83,45 +70,141 @@ export default function PendingSellersScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadPendingSellers();
+    await loadPendingApprovals();
     setRefreshing(false);
   };
 
-  const handleApprove = async (sellerId: string, companyName: string, seller: any) => {
+  // Handle approval for seller profile (basic registration)
+  const handleApproveProfile = async (userId: string, userName: string) => {
     Alert.alert(
-      'Approve Seller',
-      `Approve ${companyName}?`,
+      'Approve Seller Profile',
+      `Approve seller registration for ${userName}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Approve',
           onPress: async () => {
             try {
-              if (seller.isIncomplete) {
-                const { error: userError } = await supabase
-                  .from('users')
-                  .update({ seller_status: 'approved' })
-                  .eq('id', sellerId);
-                if (userError) throw userError;
-              } else {
-                const { error } = await supabase
-                  .from('sellers')
-                  .update({ status: 'approved' })
-                  .eq('id', sellerId);
-                if (error) throw error;
-
-                const { error: userError } = await supabase
-                  .from('users')
-                  .update({ seller_status: 'approved' })
-                  .eq('id', seller.user_id);
-                if (userError) console.error('Error updating user status:', userError);
-              }
+              const { error } = await supabase
+                .from('users')
+                .update({ seller_status: 'approved' })
+                .eq('id', userId);
               
-              Alert.alert('Success', 'Seller approved successfully');
-              loadPendingSellers();
+              if (error) throw error;
+              
+              Alert.alert('Success', 'Seller profile approved! They can now submit company details.');
+              loadPendingApprovals();
             } catch (error) {
               console.error('Approval error:', error);
-              Alert.alert('Error', 'Failed to approve seller');
+              Alert.alert('Error', 'Failed to approve seller profile');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRejectProfile = async (userId: string, userName: string) => {
+    Alert.prompt(
+      'Reject Seller Profile',
+      `Provide reason for rejecting ${userName}:`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reject',
+          style: 'destructive',
+          onPress: async (reason) => {
+            try {
+              const { error } = await supabase
+                .from('users')
+                .update({ seller_status: 'rejected' })
+                .eq('id', userId);
+              
+              if (error) throw error;
+              
+              Alert.alert('Success', 'Seller profile rejected');
+              loadPendingApprovals();
+            } catch (error) {
+              console.error('Rejection error:', error);
+              Alert.alert('Error', 'Failed to reject seller profile');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Handle approval for company details
+  const handleApproveCompany = async (sellerId: string, companyName: string, userId: string) => {
+    Alert.alert(
+      'Approve Company',
+      `Approve company "${companyName}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Approve',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('sellers')
+                .update({ status: 'approved' })
+                .eq('id', sellerId);
+              
+              if (error) throw error;
+
+              // Also update user status to approved
+              const { error: userError } = await supabase
+                .from('users')
+                .update({ seller_status: 'approved' })
+                .eq('id', userId);
+              
+              if (userError) console.error('Error updating user status:', userError);
+              
+              Alert.alert('Success', 'Company approved successfully! Seller can now start listing.');
+              loadPendingApprovals();
+            } catch (error) {
+              console.error('Approval error:', error);
+              Alert.alert('Error', 'Failed to approve company');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRejectCompany = async (sellerId: string, companyName: string, userId: string) => {
+    Alert.prompt(
+      'Reject Company',
+      `Provide reason for rejecting "${companyName}":`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reject',
+          style: 'destructive',
+          onPress: async (reason) => {
+            try {
+              const { error } = await supabase
+                .from('sellers')
+                .update({ 
+                  status: 'rejected',
+                  rejection_reason: reason || 'Not specified'
+                })
+                .eq('id', sellerId);
+              
+              if (error) throw error;
+
+              const { error: userError } = await supabase
+                .from('users')
+                .update({ seller_status: 'rejected' })
+                .eq('id', userId);
+              
+              if (userError) console.error('Error updating user status:', userError);
+              
+              Alert.alert('Success', 'Company rejected');
+              loadPendingApprovals();
+            } catch (error) {
+              console.error('Rejection error:', error);
+              Alert.alert('Error', 'Failed to reject company');
             }
           },
         },
@@ -175,6 +258,9 @@ export default function PendingSellersScreen() {
     );
   };
 
+  const currentList = activeTab === 'profile' ? profileApprovals : companyApprovals;
+  const currentCount = currentList.length;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Gradient Header */}
@@ -190,112 +276,198 @@ export default function PendingSellersScreen() {
           </TouchableOpacity>
           <View style={styles.headerTextContainer}>
             <Text style={styles.headerTitle}>Pending Approvals</Text>
-            <Text style={styles.headerSubtitle}>{sellers.length} sellers awaiting review</Text>
+            <Text style={styles.headerSubtitle}>
+              {profileApprovals.length} profiles • {companyApprovals.length} companies
+            </Text>
           </View>
-          <TouchableOpacity onPress={loadPendingSellers} style={styles.refreshButton}>
+          <TouchableOpacity onPress={loadPendingApprovals} style={styles.refreshButton}>
             <Ionicons name="refresh" size={24} color={colors.white} />
           </TouchableOpacity>
         </View>
       </LinearGradient>
+
+      {/* Tab Selector */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'profile' && styles.activeTab]}
+          onPress={() => setActiveTab('profile')}
+        >
+          <Ionicons 
+            name="person-outline" 
+            size={20} 
+            color={activeTab === 'profile' ? colors.white : colors.text} 
+          />
+          <Text style={[styles.tabText, activeTab === 'profile' && styles.activeTabText]}>
+            Seller Profile
+          </Text>
+          {profileApprovals.length > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{profileApprovals.length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'company' && styles.activeTab]}
+          onPress={() => setActiveTab('company')}
+        >
+          <Ionicons 
+            name="business-outline" 
+            size={20} 
+            color={activeTab === 'company' ? colors.white : colors.text} 
+          />
+          <Text style={[styles.tabText, activeTab === 'company' && styles.activeTabText]}>
+            Company Details
+          </Text>
+          {companyApprovals.length > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{companyApprovals.length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
 
       <ScrollView
         style={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {sellers.length === 0 ? (
+        {currentCount === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIconBox}>
               <Ionicons name="checkmark-circle" size={60} color={colors.success} />
             </View>
             <Text style={styles.emptyTitle}>All caught up!</Text>
-            <Text style={styles.emptySubtitle}>No pending seller approvals</Text>
+            <Text style={styles.emptySubtitle}>
+              No pending {activeTab === 'profile' ? 'seller profile' : 'company'} approvals
+            </Text>
           </View>
         ) : (
           <View style={styles.sellerList}>
-            {sellers.map((seller) => (
-              <View key={seller.id} style={[styles.sellerCard, shadows.md]}>
-                {seller.isIncomplete && (
-                  <View style={styles.incompleteBadge}>
-                    <Ionicons name="alert-circle" size={16} color={colors.warning} />
-                    <Text style={styles.incompleteText}>Company Setup Incomplete</Text>
-                  </View>
-                )}
-                
-                {seller.company_logo && (
-                  <Image source={{ uri: seller.company_logo }} style={styles.logo} />
-                )}
-                
-                <Text style={styles.companyName}>{seller.company_name}</Text>
-                
-                {seller.category && (
-                  <View style={[styles.categoryBadge, { 
-                    backgroundColor: seller.category.type === 'booking' ? '#F59E0B20' : 
-                                     seller.category.type === 'ecommerce' ? '#10B98120' : '#8B5CF620' 
-                  }]}>
-                    <Ionicons 
-                      name={seller.category.icon as any} 
-                      size={14} 
-                      color={seller.category.type === 'booking' ? '#F59E0B' : 
-                             seller.category.type === 'ecommerce' ? '#10B981' : '#8B5CF6'} 
-                    />
-                    <Text style={[styles.categoryText, { 
-                      color: seller.category.type === 'booking' ? '#F59E0B' : 
-                             seller.category.type === 'ecommerce' ? '#10B981' : '#8B5CF6' 
-                    }]}>
-                      {seller.category.name} • {seller.category.type}
-                    </Text>
-                  </View>
-                )}
-                
-                <View style={styles.infoSection}>
-                  <View style={styles.infoRow}>
-                    <Ionicons name="person" size={16} color={colors.primary} />
-                    <Text style={styles.infoText}>{seller.user?.name || 'N/A'}</Text>
+            {activeTab === 'profile' ? (
+              // Render Profile Approvals
+              profileApprovals.map((user) => (
+                <View key={user.id} style={[styles.sellerCard, shadows.md]}>
+                  <View style={styles.profileBadge}>
+                    <Ionicons name="person-add" size={16} color={colors.primary} />
+                    <Text style={styles.profileBadgeText}>Seller Registration</Text>
                   </View>
                   
-                  {!seller.isIncomplete && (
-                    <>
-                      <View style={styles.infoRow}>
-                        <Ionicons name="location" size={16} color={colors.primary} />
-                        <Text style={styles.infoText}>{seller.city}, {seller.state}</Text>
-                      </View>
-                      {seller.description && (
-                        <View style={styles.descriptionBox}>
-                          <Text style={styles.description} numberOfLines={2}>
-                            {seller.description}
-                          </Text>
-                        </View>
-                      )}
-                    </>
+                  <Text style={styles.companyName}>{user.name}</Text>
+                  
+                  <View style={styles.infoSection}>
+                    <View style={styles.infoRow}>
+                      <Ionicons name="mail" size={16} color={colors.primary} />
+                      <Text style={styles.infoText}>{user.email}</Text>
+                    </View>
+                    
+                    <View style={styles.infoRow}>
+                      <Ionicons name="call" size={16} color={colors.primary} />
+                      <Text style={styles.infoText}>{user.phone}</Text>
+                    </View>
+                    
+                    <View style={styles.dateRow}>
+                      <Ionicons name="calendar" size={14} color={colors.textLight} />
+                      <Text style={styles.dateText}>
+                        Registered: {new Date(user.created_at).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.actions}>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.rejectButton, shadows.sm]}
+                      onPress={() => handleRejectProfile(user.id, user.name)}
+                    >
+                      <Ionicons name="close-circle" size={20} color={colors.white} />
+                      <Text style={styles.actionButtonText}>Reject</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.approveButton, shadows.sm]}
+                      onPress={() => handleApproveProfile(user.id, user.name)}
+                    >
+                      <Ionicons name="checkmark-circle" size={20} color={colors.white} />
+                      <Text style={styles.actionButtonText}>Approve</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            ) : (
+              // Render Company Approvals
+              companyApprovals.map((seller) => (
+                <View key={seller.id} style={[styles.sellerCard, shadows.md]}>
+                  {seller.company_logo && (
+                    <Image source={{ uri: seller.company_logo }} style={styles.logo} />
                   )}
                   
-                  <View style={styles.dateRow}>
-                    <Ionicons name="calendar" size={14} color={colors.textLight} />
-                    <Text style={styles.dateText}>
-                      Applied: {new Date(seller.created_at).toLocaleDateString()}
-                    </Text>
+                  <Text style={styles.companyName}>{seller.company_name}</Text>
+                  
+                  {seller.category && (
+                    <View style={[styles.categoryBadge, { 
+                      backgroundColor: seller.category.type === 'booking' ? '#F59E0B20' : 
+                                       seller.category.type === 'ecommerce' ? '#10B98120' : '#8B5CF620' 
+                    }]}>
+                      <Ionicons 
+                        name={seller.category.icon as any} 
+                        size={14} 
+                        color={seller.category.type === 'booking' ? '#F59E0B' : 
+                               seller.category.type === 'ecommerce' ? '#10B981' : '#8B5CF6'} 
+                      />
+                      <Text style={[styles.categoryText, { 
+                        color: seller.category.type === 'booking' ? '#F59E0B' : 
+                               seller.category.type === 'ecommerce' ? '#10B981' : '#8B5CF6' 
+                      }]}>
+                        {seller.category.name} • {seller.category.type}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  <View style={styles.infoSection}>
+                    <View style={styles.infoRow}>
+                      <Ionicons name="person" size={16} color={colors.primary} />
+                      <Text style={styles.infoText}>{seller.user?.name || 'N/A'}</Text>
+                    </View>
+                    
+                    <View style={styles.infoRow}>
+                      <Ionicons name="location" size={16} color={colors.primary} />
+                      <Text style={styles.infoText}>{seller.city}, {seller.state}</Text>
+                    </View>
+                    
+                    {seller.description && (
+                      <View style={styles.descriptionBox}>
+                        <Text style={styles.description} numberOfLines={2}>
+                          {seller.description}
+                        </Text>
+                      </View>
+                    )}
+                    
+                    <View style={styles.dateRow}>
+                      <Ionicons name="calendar" size={14} color={colors.textLight} />
+                      <Text style={styles.dateText}>
+                        Submitted: {new Date(seller.created_at).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.actions}>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.rejectButton, shadows.sm]}
+                      onPress={() => handleRejectCompany(seller.id, seller.company_name, seller.user_id)}
+                    >
+                      <Ionicons name="close-circle" size={20} color={colors.white} />
+                      <Text style={styles.actionButtonText}>Reject</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.approveButton, shadows.sm]}
+                      onPress={() => handleApproveCompany(seller.id, seller.company_name, seller.user_id)}
+                    >
+                      <Ionicons name="checkmark-circle" size={20} color={colors.white} />
+                      <Text style={styles.actionButtonText}>Approve</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
-                
-                <View style={styles.actions}>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.rejectButton, shadows.sm]}
-                    onPress={() => handleReject(seller.id, seller.company_name, seller)}
-                  >
-                    <Ionicons name="close-circle" size={20} color={colors.white} />
-                    <Text style={styles.actionButtonText}>Reject</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.approveButton, shadows.sm]}
-                    onPress={() => handleApprove(seller.id, seller.company_name, seller)}
-                  >
-                    <Ionicons name="checkmark-circle" size={20} color={colors.white} />
-                    <Text style={styles.actionButtonText}>Approve</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
+              ))
+            )}
           </View>
         )}
         <View style={{ height: spacing.xxl }} />
@@ -340,9 +512,53 @@ const styles = StyleSheet.create({
   refreshButton: {
     padding: spacing.sm,
   },
+  tabContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    gap: spacing.md,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface,
+    gap: spacing.xs,
+  },
+  activeTab: {
+    backgroundColor: colors.primary,
+  },
+  tabText: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  activeTabText: {
+    color: colors.white,
+  },
+  badge: {
+    backgroundColor: colors.error,
+    borderRadius: borderRadius.full,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs / 2,
+  },
+  badgeText: {
+    ...typography.caption,
+    color: colors.white,
+    fontSize: 11,
+    fontWeight: '700',
+  },
   content: {
     flex: 1,
-    marginTop: -spacing.lg,
+    marginTop: spacing.md,
   },
   emptyState: {
     alignItems: 'center',
@@ -378,6 +594,22 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.borderLight,
+  },
+  profileBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary + '20',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+    gap: spacing.xs / 2,
+  },
+  profileBadgeText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '700',
   },
   incompleteBadge: {
     flexDirection: 'row',
