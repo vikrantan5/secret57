@@ -7,6 +7,7 @@ export interface Category {
   slug: string;
   description: string | null;
   icon: string;
+  image_url?: string; // New field for category logo images
   type: 'ecommerce' | 'booking' | 'hybrid';
   is_active: boolean;
   sort_order: number;

@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useBookingStore } from '../../src/store/bookingStore';
+import { useRefundStore } from '@/src/store/refundStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 
 const { width, height } = Dimensions.get('window');

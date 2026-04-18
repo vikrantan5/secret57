@@ -1,8 +1,10 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/theme';
+import { getCategoryImage, hasCategoryImage } from '../../constants/categoryImages';
+
 
 interface CategoryBoxProps {
   id: string;
@@ -46,10 +48,15 @@ const getCategoryGradient = (index: number): string[] => {
 export const CategoryBox: React.FC<CategoryBoxProps & { index: number }> = ({
   name,
   icon,
+  slug,
   itemCount,
   onPress,
   index,
 }) => {
+  // Check if category has a custom image
+  const categoryImage = getCategoryImage(slug) || getCategoryImage(name);
+  const hasImage = hasCategoryImage(slug) || hasCategoryImage(name);
+
   return (
     <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.8}>
       <LinearGradient
@@ -58,7 +65,15 @@ export const CategoryBox: React.FC<CategoryBoxProps & { index: number }> = ({
         end={{ x: 1, y: 1 }}
         style={styles.iconContainer}
       >
-        <Ionicons name={getIconName(icon)} size={28} color={colors.surface} />
+        {hasImage && categoryImage ? (
+          <Image 
+            source={{ uri: categoryImage }} 
+            style={styles.categoryImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <Ionicons name={getIconName(icon)} size={28} color={colors.surface} />
+        )}
       </LinearGradient>
       <Text style={styles.name} numberOfLines={2}>
         {name}
@@ -83,7 +98,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
+    overflow: 'hidden',
     ...shadows.sm,
+  },
+  categoryImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: borderRadius.lg,
   },
   name: {
     ...typography.caption,

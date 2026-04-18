@@ -106,13 +106,13 @@ const [cashfreePaymentSessionId, setCashfreePaymentSessionId] = useState<string>
 
    // ✅ FIX: Fetch recommended products from same category
   useEffect(() => {
-    if (selectedService?.category) {
-      fetchProductsByCategory(selectedService.category).then(() => {
+    if (selectedService?.category_id) {
+      fetchProductsByCategory(selectedService.category_id).then(() => {
         const fetchedProducts = useProductStore.getState().products;
         setRecommendedProducts(fetchedProducts);
       });
     }
-  }, [selectedService?.category]);
+  }, [selectedService?.category_id]);
 
   // Load user addresses and auto-fill with default address
   useEffect(() => {

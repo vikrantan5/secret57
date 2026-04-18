@@ -284,9 +284,9 @@ export default function ProductDetailScreen() {
               {/* Recommended Services from same category */}
           {recommendedServices.length > 0 && (
             <SellerRecommendations
-              title=\"Related Services You May Like\"
+              title="Related Services You May Like"
               items={recommendedServices}
-              type=\"service\"
+              type="service"
               currentItemId={productId}
             />
           )}

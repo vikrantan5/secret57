@@ -9,6 +9,7 @@ import {
   Animated,
   Dimensions,
   Platform,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -18,6 +19,7 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useCategoryStore } from '../../src/store/categoryStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
+import { getCategoryImage, hasCategoryImage } from '../../src/constants/categoryImages';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - spacing.lg * 2 - spacing.md * 2) / 3;
@@ -274,45 +276,58 @@ export default function CategoriesScreen() {
           </View>
         ) : (
           <View style={styles.categoriesGrid}>
-            {filteredCategories.map((category, index) => (
-              <Animated.View
-                key={category.id}
-                style={{
-                  opacity: fadeAnim,
-                  transform: [{ scale: fadeAnim }],
-                }}
-              >
-                <TouchableOpacity
-                  style={styles.categoryCard}
-                  onPress={() => handleCategoryPress(category.id, category.slug)}
-                  activeOpacity={0.9}
+            {filteredCategories.map((category, index) => {
+              const categoryImage = getCategoryImage(category.slug) || getCategoryImage(category.name);
+              const hasImage = hasCategoryImage(category.slug) || hasCategoryImage(category.name);
+
+              return (
+                <Animated.View
+                  key={category.id}
+                  style={{
+                    opacity: fadeAnim,
+                    transform: [{ scale: fadeAnim }],
+                  }}
                 >
-                  <LinearGradient
-                    colors={getCategoryGradient(index)}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.categoryIconContainer}
+                  <TouchableOpacity
+                    style={styles.categoryCard}
+                    onPress={() => handleCategoryPress(category.id, category.slug)}
+                    activeOpacity={0.9}
                   >
-                    <Ionicons name={getIconName(category.icon)} size={28} color="#FFFFFF" />
                     <LinearGradient
-                      colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0)']}
-                      style={styles.iconOverlay}
-                    />
-                  </LinearGradient>
-                  <Text style={styles.categoryName} numberOfLines={2}>
-                    {category.name}
-                  </Text>
-                  {category.description && (
-                    <Text style={styles.categoryDesc} numberOfLines={1}>
-                      {category.description}
+                      colors={getCategoryGradient(index)}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.categoryIconContainer}
+                    >
+                      {hasImage && categoryImage ? (
+                        <Image 
+                          source={{ uri: categoryImage }} 
+                          style={styles.categoryImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Ionicons name={getIconName(category.icon)} size={28} color="#FFFFFF" />
+                      )}
+                      <LinearGradient
+                        colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0)']}
+                        style={styles.iconOverlay}
+                      />
+                    </LinearGradient>
+                    <Text style={styles.categoryName} numberOfLines={2}>
+                      {category.name}
                     </Text>
-                  )}
-                  <View style={styles.categoryArrow}>
-                    <Ionicons name="arrow-forward" size={12} color="#8B5CF6" />
-                  </View>
-                </TouchableOpacity>
-              </Animated.View>
-            ))}
+                    {category.description && (
+                      <Text style={styles.categoryDesc} numberOfLines={1}>
+                        {category.description}
+                      </Text>
+                    )}
+                    <View style={styles.categoryArrow}>
+                      <Ionicons name="arrow-forward" size={12} color="#8B5CF6" />
+                    </View>
+                  </TouchableOpacity>
+                </Animated.View>
+              );
+            })}
           </View>
         )}
 
@@ -477,6 +492,15 @@ const styles = StyleSheet.create({
         elevation: 3,
       },
     }),
+  },
+    categoryImage: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   filterChipInactive: {
     flexDirection: 'row',

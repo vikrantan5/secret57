@@ -36,6 +36,7 @@ interface ProductState {
   fetchProducts: (categoryId?: string) => Promise<void>;
   fetchProductById: (id: string) => Promise<void>;
   fetchSellerProducts: (sellerId: string) => Promise<void>;
+    fetchProductsByCategory: (categoryId: string) => Promise<void>;
   createProduct: (product: Partial<Product>) => Promise<{ success: boolean; error?: string; product?: Product }>;
   updateProduct: (id: string, updates: Partial<Product>) => Promise<{ success: boolean; error?: string }>;
   deleteProduct: (id: string) => Promise<{ success: boolean; error?: string }>;
@@ -132,7 +133,34 @@ export const useProductStore = create<ProductState>((set, get) => ({
   },
 
 
+ fetchProductsByCategory: async (categoryId: string) => {
+    try {
+      set({ loading: true, error: null });
+      
+      const { data, error } = await supabase
+        .from('products')
+        .select(`
+          *,
+          seller:sellers(*),
+          category:categories(*)
+        `)
+        .eq('category_id', categoryId)
+        .eq('is_active', true)
+        .limit(10)
+        .order('created_at', { ascending: false });
 
+      if (error) {
+        console.error('Error fetching products by category:', error);
+        set({ error: error.message, loading: false });
+        return;
+      }
+
+      set({ products: data || [], loading: false });
+    } catch (error: any) {
+      console.error('Error in fetchProductsByCategory:', error);
+      set({ error: error.message, loading: false });
+    }
+  },
 
 
 
