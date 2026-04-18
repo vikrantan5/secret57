@@ -14,6 +14,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useProductStore } from '../../src/store/productStore';
+import { useServiceStore } from '../../src/store/serviceStore';
 import { useCartStore } from '../../src/store/cartStore';
 import { useWishlistStore } from '../../src/store/wishlistStore';
 import { useAuthStore } from '../../src/store/authStore';
@@ -30,6 +31,7 @@ export default function ProductDetailScreen() {
   
   const { user } = useAuthStore();
   const { selectedProduct, loading, fetchProductById, products, fetchSellerProducts } = useProductStore();
+  const { fetchServicesByCategory, services: allServices } = useServiceStore();
   const { addItem } = useCartStore();
   const { isInWishlist, toggleWishlist, fetchWishlist } = useWishlistStore();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -37,6 +39,7 @@ export default function ProductDetailScreen() {
   const [showSplash, setShowSplash] = useState(true);
   const [dataReady, setDataReady] = useState(false);
   const [sellerProducts, setSellerProducts] = useState<any[]>([]);
+  const [recommendedServices, setRecommendedServices] = useState<any[]>([]);
 
   useEffect(() => {
     if (productId) {
@@ -58,6 +61,18 @@ export default function ProductDetailScreen() {
       });
     }
   }, [selectedProduct?.seller_id]);
+
+
+
+   // ✅ FIX: Fetch recommended services from same category
+  useEffect(() => {
+    if (selectedProduct?.category) {
+      fetchServicesByCategory(selectedProduct.category).then(() => {
+        const fetchedServices = useServiceStore.getState().services;
+        setRecommendedServices(fetchedServices);
+      });
+    }
+  }, [selectedProduct?.category]);
 
   // Show branded splash once data is ready
   if (showSplash && dataReady && selectedProduct?.seller) {
@@ -262,6 +277,16 @@ export default function ProductDetailScreen() {
               title={`More from ${product.seller.company_name}`}
               items={sellerProducts}
               type="product"
+              currentItemId={productId}
+            />
+          )}
+
+              {/* Recommended Services from same category */}
+          {recommendedServices.length > 0 && (
+            <SellerRecommendations
+              title=\"Related Services You May Like\"
+              items={recommendedServices}
+              type=\"service\"
               currentItemId={productId}
             />
           )}

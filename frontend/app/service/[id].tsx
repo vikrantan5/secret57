@@ -17,6 +17,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useServiceStore } from '../../src/store/serviceStore';
+import { useProductStore } from '../../src/store/productStore';
 import { useBookingStore } from '../../src/store/bookingStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { usePaymentStore } from '../../src/store/paymentStore';
@@ -39,6 +40,7 @@ export default function ServiceDetailScreen() {
   
   const { user } = useAuthStore();
  const { selectedService, loading, fetchServiceById, fetchSellerServices, services } = useServiceStore();
+ const { fetchProductsByCategory, products: allProducts } = useProductStore();
  const { createBooking, updatePaymentStatus: updateBookingPaymentStatus } = useBookingStore();
   const { createPayment, updatePaymentStatus } = usePaymentStore();
   const { addresses, getDefaultAddress, fetchUserAddresses } = useAddressStore();
@@ -54,6 +56,7 @@ export default function ServiceDetailScreen() {
 const [cashfreePaymentSessionId, setCashfreePaymentSessionId] = useState<string>('');
 
    const [sellerServices, setSellerServices] = useState<any[]>([]);
+    const [recommendedProducts, setRecommendedProducts] = useState<any[]>([]);
   const [bookingData, setBookingData] = useState({
     date: '',
     time: '',
@@ -101,6 +104,15 @@ const [cashfreePaymentSessionId, setCashfreePaymentSessionId] = useState<string>
     }
   }, [selectedService?.seller_id]);
 
+   // ✅ FIX: Fetch recommended products from same category
+  useEffect(() => {
+    if (selectedService?.category) {
+      fetchProductsByCategory(selectedService.category).then(() => {
+        const fetchedProducts = useProductStore.getState().products;
+        setRecommendedProducts(fetchedProducts);
+      });
+    }
+  }, [selectedService?.category]);
 
   // Load user addresses and auto-fill with default address
   useEffect(() => {
@@ -911,6 +923,15 @@ const handleBookService = async () => {
               title={`More from ${service.seller.company_name}`}
               items={sellerServices}
               type="service"
+              currentItemId={serviceId}
+            />
+          )}
+              {/* Recommended Products from same category */}
+          {recommendedProducts.length > 0 && (
+            <SellerRecommendations
+              title="Related Products You May Like"
+              items={recommendedProducts}
+              type="product"
               currentItemId={serviceId}
             />
           )}

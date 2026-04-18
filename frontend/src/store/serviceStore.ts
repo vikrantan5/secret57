@@ -31,6 +31,7 @@ interface ServiceState {
   fetchServices: (categoryId?: string) => Promise<void>;
   fetchServiceById: (id: string) => Promise<void>;
   fetchSellerServices: (sellerId: string) => Promise<void>;
+  
   createService: (service: Partial<Service>) => Promise<{ success: boolean; error?: string; service?: Service }>;
   updateService: (id: string, updates: Partial<Service>) => Promise<{ success: boolean; error?: string }>;
   deleteService: (id: string) => Promise<{ success: boolean; error?: string }>;

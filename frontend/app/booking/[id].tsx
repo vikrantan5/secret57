@@ -30,8 +30,10 @@ export default function BookingDetailScreen() {
   const bookingId = params.id;
   
   const { selectedBooking, loading, fetchBookingById, cancelBooking } = useBookingStore();
+  const { createRefundRequest } = useRefundStore();
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancellationReason, setCancellationReason] = useState('');
+  const [upiId, setUpiId] = useState('');
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -131,7 +133,7 @@ export default function BookingDetailScreen() {
     return `${formattedHour}:${minutes} ${ampm}`;
   };
 
-  const handleCancelBooking = async () => {
+   const handleCancelBooking = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     
     if (!cancellationReason.trim()) {
@@ -139,22 +141,51 @@ export default function BookingDetailScreen() {
       return;
     }
 
+    // If payment is already made, require UPI ID for refund
+    if (booking.payment_status === 'paid') {
+      if (!upiId.trim()) {
+        Alert.alert('Error', 'Please provide UPI ID for refund');
+        return;
+      }
+      // Validate UPI ID format (basic check)
+      if (!upiId.includes('@')) {
+        Alert.alert('Error', 'Please provide a valid UPI ID (e.g., name@upi)');
+        return;
+      }
+    }
+
+    // Cancel the booking first
     const result = await cancelBooking(bookingId, cancellationReason);
     
     if (result.success) {
+      // If payment was made, create refund request
+      if (booking.payment_status === 'paid') {
+        await createRefundRequest({
+          booking_id: bookingId,
+          seller_id: booking.seller_id,
+          payment_id: booking.cashfree_order_id || booking.payment_id || '',
+          amount: booking.total_amount,
+          reason: cancellationReason,
+          upi_id: upiId,
+        });
+        
+        Alert.alert(
+          'Booking Cancelled',
+          'Your booking has been cancelled and refund request has been submitted. The seller will process your refund to the provided UPI ID.',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      } else {
+        Alert.alert(
+          'Booking Cancelled',
+          'Your booking has been cancelled successfully',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      }
+      
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowCancelModal(false);
       setCancellationReason('');
-      Alert.alert(
-        'Booking Cancelled',
-        'Your booking has been cancelled successfully',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.back(),
-          },
-        ]
-      );
+      setUpiId('');
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Error', result.error || 'Failed to cancel booking');
@@ -512,9 +543,10 @@ export default function BookingDetailScreen() {
             </View>
             
             <Text style={styles.modalSubtitle}>
-              Please provide a reason for cancellation:
+              Please provide cancellation details:
             </Text>
             
+            <Text style={styles.inputLabel}>Reason for Cancellation *</Text>
             <TextInput
               style={styles.textArea}
               placeholder="Enter reason..."
@@ -525,6 +557,31 @@ export default function BookingDetailScreen() {
               numberOfLines={4}
               textAlignVertical="top"
             />
+
+            {booking.payment_status === 'paid' && (
+              <>
+                <View style={styles.refundNotice}>
+                  <Ionicons name="information-circle" size={20} color="#3B82F6" />
+                  <Text style={styles.refundNoticeText}>
+                    Refund will be processed to your UPI ID by the seller
+                  </Text>
+                </View>
+
+                <Text style={styles.inputLabel}>UPI ID for Refund *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="yourname@upi"
+                  placeholderTextColor="#9CA3AF"
+                  value={upiId}
+                  onChangeText={setUpiId}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+                <Text style={styles.helperText}>
+                  Example: 9876543210@paytm, name@okaxis, etc.
+                </Text>
+              </>
+            )}
             
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -532,6 +589,7 @@ export default function BookingDetailScreen() {
                 onPress={() => {
                   setShowCancelModal(false);
                   setCancellationReason('');
+                  setUpiId('');
                 }}
                 activeOpacity={0.8}
               >
@@ -547,7 +605,9 @@ export default function BookingDetailScreen() {
                   colors={['#EF4444', '#DC2626']}
                   style={styles.modalConfirmGradient}
                 >
-                  <Text style={styles.modalConfirmText}>Confirm Cancellation</Text>
+                  <Text style={styles.modalConfirmText}>
+                    {booking.payment_status === 'paid' ? 'Cancel & Request Refund' : 'Confirm Cancellation'}
+                  </Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
@@ -899,6 +959,44 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     marginBottom: spacing.md,
+  },
+
+    inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  textInput: {
+    fontSize: 14,
+    color: '#1F2937',
+    backgroundColor: '#F9FAFB',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  helperText: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: spacing.xs,
+  },
+  refundNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: '#EFF6FF',
+    padding: spacing.md,
+    marginTop: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  refundNoticeText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#1E40AF',
   },
   textArea: {
     fontSize: 14,
