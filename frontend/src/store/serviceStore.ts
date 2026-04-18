@@ -110,6 +110,7 @@ export const useServiceStore = create<ServiceState>((set, get) => ({
         .from('services')
         .select('*')
         .eq('seller_id', sellerId)
+          .eq('is_deleted', false) // ✅ FIX: Filter out soft-deleted services
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -230,17 +231,36 @@ export const useServiceStore = create<ServiceState>((set, get) => ({
     }
   },
 
-  deleteService: async (id) => {
+   deleteService: async (id) => {
     try {
+      // ✅ FIX: Implement soft delete instead of hard delete
+      // This prevents foreign key constraint violation errors with bookings
+      console.log('🗑️ Soft deleting service:', id);
+      
       const { error } = await supabase
         .from('services')
-        .delete()
+        .update({ 
+          is_deleted: true,
+          is_active: false, // Also deactivate the service
+          updated_at: new Date().toISOString()
+        })
         .eq('id', id);
 
       if (error) {
-        console.error('Error deleting service:', error);
+        console.error('Error soft deleting service:', error);
+        
+        // Check if it's a foreign key constraint error (fallback)
+        if (error.message.includes('foreign key constraint')) {
+          return { 
+            success: false, 
+            error: 'Cannot delete service: It has existing bookings. The service has been deactivated instead.' 
+          };
+        }
+        
         return { success: false, error: error.message };
       }
+
+      console.log('✅ Service soft deleted successfully');
 
       // Remove from local state
       set(state => ({
@@ -253,6 +273,5 @@ export const useServiceStore = create<ServiceState>((set, get) => ({
       return { success: false, error: error.message };
     }
   },
-
   setSelectedService: (service) => set({ selectedService: service }),
 }));

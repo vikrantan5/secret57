@@ -115,6 +115,7 @@ export const useProductStore = create<ProductState>((set, get) => ({
         .from('products')
         .select('*')
         .eq('seller_id', sellerId)
+          .eq('is_deleted', false) // ✅ FIX: Filter out soft-deleted products
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -250,15 +251,34 @@ export const useProductStore = create<ProductState>((set, get) => ({
 
   deleteProduct: async (id) => {
     try {
+      // ✅ FIX: Implement soft delete instead of hard delete
+      // This prevents foreign key constraint violation errors
+      console.log('🗑️ Soft deleting product:', id);
+      
       const { error } = await supabase
         .from('products')
-        .delete()
+        .update({ 
+          is_deleted: true,
+          is_active: false, // Also deactivate the product
+          updated_at: new Date().toISOString()
+        })
         .eq('id', id);
 
       if (error) {
-        console.error('Error deleting product:', error);
+        console.error('Error soft deleting product:', error);
+        
+        // Check if it's a foreign key constraint error (fallback)
+        if (error.message.includes('foreign key constraint')) {
+          return { 
+            success: false, 
+            error: 'Cannot delete product: It has existing orders. The product has been deactivated instead.' 
+          };
+        }
+        
         return { success: false, error: error.message };
       }
+
+      console.log('✅ Product soft deleted successfully');
 
       // Remove from local state
       set(state => ({
