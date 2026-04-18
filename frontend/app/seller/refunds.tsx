@@ -26,21 +26,43 @@ export default function SellerRefundsScreen() {
   const { seller } = useSellerStore();
   const { refunds, loading, fetchSellerRefunds } = useRefundStore();
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Fix: Initialize animation with proper ref
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [isMounted, setIsMounted] = useState(true);
 
+  // Fix: Reset and start animation properly
+  useEffect(() => {
+    setIsMounted(true);
+    
+    // Reset animation value
+    fadeAnim.setValue(0);
+    
+    // Add small delay to ensure component is mounted
+    const timer = setTimeout(() => {
+      if (isMounted) {
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        }).start();
+      }
+    }, 100);
+    
+    return () => {
+      setIsMounted(false);
+      clearTimeout(timer);
+      // Clean up animation
+      fadeAnim.stopAnimation();
+    };
+  }, []); // Empty dependency array - runs once on mount
+
+  // Fix: Add proper dependencies
   useEffect(() => {
     if (seller?.id) {
       fetchSellerRefunds(seller.id);
     }
-  }, [seller]);
-
-  useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 600,
-      useNativeDriver: true,
-    }).start();
-  }, []);
+  }, [seller?.id, fetchSellerRefunds]); // Added proper dependencies
 
   const onRefresh = async () => {
     if (!seller?.id) return;
@@ -67,6 +89,7 @@ export default function SellerRefundsScreen() {
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-IN', {
       day: 'numeric',
@@ -75,11 +98,52 @@ export default function SellerRefundsScreen() {
     });
   };
 
+  // Fix: Create animated item component with individual animation
   const renderRefundCard = ({ item, index }: { item: any; index: number }) => {
     const statusGradient = getStatusColor(item.status);
+    
+    // Create individual animation for each item
+    const itemFadeAnim = useRef(new Animated.Value(0)).current;
+    const itemSlideAnim = useRef(new Animated.Value(20)).current;
+    const [isItemMounted, setIsItemMounted] = useState(true);
+    
+    useEffect(() => {
+      setIsItemMounted(true);
+      
+      const timer = setTimeout(() => {
+        if (isItemMounted) {
+          Animated.parallel([
+            Animated.timing(itemFadeAnim, {
+              toValue: 1,
+              duration: 400,
+              delay: index * 100,
+              useNativeDriver: true,
+            }),
+            Animated.timing(itemSlideAnim, {
+              toValue: 0,
+              duration: 400,
+              delay: index * 100,
+              useNativeDriver: true,
+            }),
+          ]).start();
+        }
+      }, 50);
+      
+      return () => {
+        setIsItemMounted(false);
+        clearTimeout(timer);
+        itemFadeAnim.stopAnimation();
+        itemSlideAnim.stopAnimation();
+      };
+    }, []);
 
     return (
-      <Animated.View style={{ opacity: fadeAnim }}>
+      <Animated.View 
+        style={{ 
+          opacity: itemFadeAnim,
+          transform: [{ translateY: itemSlideAnim }]
+        }}
+      >
         <TouchableOpacity
           style={styles.refundCard}
           onPress={() => {
@@ -98,7 +162,7 @@ export default function SellerRefundsScreen() {
               </LinearGradient>
               <View style={styles.refundInfo}>
                 <Text style={styles.refundOrderNumber} numberOfLines={1}>
-                  Order #{item.order?.order_number?.slice(0, 12) || item.order_id?.slice(0, 8)}
+                  Order #{item.order?.order_number?.slice(0, 12) || item.order_id?.slice(0, 8) || 'N/A'}
                 </Text>
                 <Text style={styles.refundCustomer}>
                   {item.order?.shipping_name || 'Customer'}
@@ -109,20 +173,20 @@ export default function SellerRefundsScreen() {
                 style={styles.statusBadge}
               >
                 <Text style={styles.statusText}>
-                  {item.status.toUpperCase()}
+                  {item.status?.toUpperCase() || 'UNKNOWN'}
                 </Text>
               </LinearGradient>
             </View>
           </View>
 
           <Text style={styles.refundReason} numberOfLines={2}>
-            {item.reason}
+            {item.reason || 'No reason provided'}
           </Text>
 
           <View style={styles.refundFooter}>
             <View style={styles.amountContainer}>
               <Ionicons name="cash-outline" size={16} color="#8B5CF6" />
-              <Text style={styles.amountText}>₹{item.amount?.toFixed(2)}</Text>
+              <Text style={styles.amountText}>₹{(item.amount || 0).toFixed(2)}</Text>
             </View>
             <Text style={styles.refundDate}>{formatDate(item.created_at)}</Text>
           </View>
@@ -192,7 +256,7 @@ export default function SellerRefundsScreen() {
           <FlatList
             data={refunds}
             renderItem={renderRefundCard}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => item.id || Math.random().toString()}
             contentContainerStyle={styles.listContainer}
             showsVerticalScrollIndicator={false}
             refreshControl={
@@ -203,6 +267,11 @@ export default function SellerRefundsScreen() {
                 colors={['#8B5CF6']}
               />
             }
+            // Fix: Add performance optimizations
+            initialNumToRender={10}
+            maxToRenderPerBatch={10}
+            windowSize={5}
+            removeClippedSubviews={Platform.OS === 'android'}
           />
         )}
       </Animated.View>

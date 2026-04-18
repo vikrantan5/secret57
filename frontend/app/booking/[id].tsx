@@ -26,8 +26,8 @@ const { width, height } = Dimensions.get('window');
 
 export default function BookingDetailScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string }>();
-  const bookingId = params.id as string;
+  const params = useLocalSearchParams();
+  const bookingId = params.id;
   
   const { selectedBooking, loading, fetchBookingById, cancelBooking } = useBookingStore();
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -38,26 +38,37 @@ export default function BookingDetailScreen() {
   const slideAnim = useRef(new Animated.Value(30)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
+  // Fix: Reset animation values on mount and add proper cleanup
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 8,
-        tension: 40,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
+    // Reset animation values before starting
+    fadeAnim.setValue(0);
+    slideAnim.setValue(30);
+    scaleAnim.setValue(0.95);
+    
+    // Add small delay to ensure component is mounted
+    const timer = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []); // Empty dependency array - runs once on mount
 
   useEffect(() => {
     if (bookingId) {
@@ -101,6 +112,7 @@ export default function BookingDetailScreen() {
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-IN', {
       weekday: 'long',
@@ -111,6 +123,7 @@ export default function BookingDetailScreen() {
   };
 
   const formatTime = (timeString: string) => {
+    if (!timeString) return 'N/A';
     const [hours, minutes] = timeString.split(':');
     const hour = parseInt(hours);
     const ampm = hour >= 12 ? 'PM' : 'AM';
@@ -148,11 +161,12 @@ export default function BookingDetailScreen() {
     }
   };
 
+  // Fix: Add safe navigation for optional chaining
   if (loading || !selectedBooking) {
     return (
       <SafeAreaView style={styles.container}>
         <LinearGradient
-          colors={['#F3F4F6', '#E5E7EB']} // Changed from white to gray
+          colors={['#F3F4F6', '#E5E7EB']}
           style={styles.loadingContainer}
         >
           <ActivityIndicator size="large" color="#8B5CF6" />
@@ -202,11 +216,11 @@ export default function BookingDetailScreen() {
         >
           <Ionicons name={statusIcon} size={24} color="#FFFFFF" />
           <Text style={styles.statusBannerText}>
-            {booking.status.toUpperCase()}
+            {booking.status?.toUpperCase() || 'UNKNOWN'}
           </Text>
         </LinearGradient>
 
-        {/* Service Info Card - Now with solid white background and shadow */}
+        {/* Service Info Card */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <LinearGradient
@@ -220,12 +234,12 @@ export default function BookingDetailScreen() {
           
           <View style={styles.infoRow}>
             <Text style={styles.label}>Service</Text>
-            <Text style={styles.value}>{booking.service?.name}</Text>
+            <Text style={styles.value}>{booking.service?.name || 'N/A'}</Text>
           </View>
           
           <View style={styles.infoRow}>
             <Text style={styles.label}>Provider</Text>
-            <Text style={styles.value}>{booking.seller?.company_name}</Text>
+            <Text style={styles.value}>{booking.seller?.company_name || 'N/A'}</Text>
           </View>
           
           {booking.service?.duration && (
@@ -292,7 +306,7 @@ export default function BookingDetailScreen() {
                 style={styles.contactButton}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  const emailUrl = `mailto:${booking.seller.user.email}?subject=Regarding Booking ${booking.id.slice(0, 8)}`;
+                  const emailUrl = `mailto:${booking.seller.user.email}?subject=Regarding Booking ${booking.id?.slice(0, 8)}`;
                   Alert.alert(
                     'Email Provider',
                     `Do you want to send email to ${booking.seller.user.email}?`,
@@ -376,7 +390,7 @@ export default function BookingDetailScreen() {
           </View>
         </View>
 
-        {/* OTP Card */}
+        {/* OTP Card - Fix: Add safe check for payment_method */}
         {booking.payment_method && booking.otp && booking.status !== 'completed' && booking.status !== 'cancelled' && (
           <LinearGradient
             colors={['#8B5CF6', '#7C3AED']}
@@ -416,7 +430,7 @@ export default function BookingDetailScreen() {
           </LinearGradient>
         )}
 
-        {/* Address Card */}
+        {/* Address Card - Fix: Add safe check for address fields */}
         {booking.location_type === 'visit_customer' && booking.address && (
           <View style={styles.card}>
             <View style={styles.cardHeader}>
@@ -430,9 +444,11 @@ export default function BookingDetailScreen() {
             </View>
             
             <Text style={styles.address}>{booking.address}</Text>
-            <Text style={styles.address}>
-              {booking.city}, {booking.state} - {booking.pincode}
-            </Text>
+            {booking.city && booking.state && booking.pincode && (
+              <Text style={styles.address}>
+                {booking.city}, {booking.state} - {booking.pincode}
+              </Text>
+            )}
           </View>
         )}
 
@@ -450,7 +466,7 @@ export default function BookingDetailScreen() {
           
           <View style={styles.paymentRow}>
             <Text style={styles.paymentLabel}>Total Amount</Text>
-            <Text style={styles.paymentValue}>₹{booking.total_amount.toFixed(2)}</Text>
+            <Text style={styles.paymentValue}>₹{(booking.total_amount || 0).toFixed(2)}</Text>
           </View>
         </View>
 
@@ -478,7 +494,7 @@ export default function BookingDetailScreen() {
           )}
         </View>
 
-        <View style={{ height: spacing.xxl }} />
+        <View style={{ height: spacing.xxl || 40 }} />
       </Animated.ScrollView>
 
       {/* Cancel Modal */}
@@ -545,7 +561,7 @@ export default function BookingDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F4F6', // Changed from white to light gray background
+    backgroundColor: '#F3F4F6',
   },
   scrollContent: {
     paddingBottom: 20,
@@ -618,7 +634,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   card: {
-    backgroundColor: '#FFFFFF', // Solid white background
+    backgroundColor: '#FFFFFF',
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
     padding: spacing.lg,
@@ -631,7 +647,7 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
       },
       android: {
-        elevation: 4, // Increased elevation for better visibility
+        elevation: 4,
       },
     }),
   },
@@ -857,7 +873,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    backgroundColor: '#FFFFFF', // Solid white background
+    backgroundColor: '#FFFFFF',
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
   },

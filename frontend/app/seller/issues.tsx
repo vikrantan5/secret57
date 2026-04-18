@@ -26,21 +26,43 @@ export default function SellerIssuesScreen() {
   const { seller } = useSellerStore();
   const { issues, loading, fetchSellerIssues } = useIssueReportStore();
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Fix: Initialize animation with proper ref
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [isMounted, setIsMounted] = useState(true);
 
+  // Fix: Reset and start animation properly
+  useEffect(() => {
+    setIsMounted(true);
+    
+    // Reset animation value
+    fadeAnim.setValue(0);
+    
+    // Add small delay to ensure component is mounted
+    const timer = setTimeout(() => {
+      if (isMounted) {
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        }).start();
+      }
+    }, 100);
+    
+    return () => {
+      setIsMounted(false);
+      clearTimeout(timer);
+      // Clean up animation
+      fadeAnim.stopAnimation();
+    };
+  }, []); // Empty dependency array - runs once on mount
+
+  // Fix: Add dependency array properly
   useEffect(() => {
     if (seller?.id) {
       fetchSellerIssues(seller.id);
     }
-  }, [seller]);
-
-  useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 600,
-      useNativeDriver: true,
-    }).start();
-  }, []);
+  }, [seller?.id, fetchSellerIssues]); // Added proper dependencies
 
   const onRefresh = async () => {
     if (!seller?.id) return;
@@ -67,6 +89,7 @@ export default function SellerIssuesScreen() {
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-IN', {
       day: 'numeric',
@@ -75,11 +98,42 @@ export default function SellerIssuesScreen() {
     });
   };
 
+  // Fix: Create animated item component with individual animation
   const renderIssueCard = ({ item, index }: { item: any; index: number }) => {
     const statusGradient = getStatusColor(item.status);
+    
+    // Create individual animation for each item
+    const itemFadeAnim = useRef(new Animated.Value(0)).current;
+    const itemSlideAnim = useRef(new Animated.Value(20)).current;
+    
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(itemFadeAnim, {
+            toValue: 1,
+            duration: 400,
+            delay: index * 100,
+            useNativeDriver: true,
+          }),
+          Animated.timing(itemSlideAnim, {
+            toValue: 0,
+            duration: 400,
+            delay: index * 100,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }, 50);
+      
+      return () => clearTimeout(timer);
+    }, []);
 
     return (
-      <Animated.View style={{ opacity: fadeAnim }}>
+      <Animated.View 
+        style={{ 
+          opacity: itemFadeAnim,
+          transform: [{ translateY: itemSlideAnim }]
+        }}
+      >
         <TouchableOpacity
           style={styles.issueCard}
           onPress={() => {
@@ -98,10 +152,10 @@ export default function SellerIssuesScreen() {
               </LinearGradient>
               <View style={styles.issueInfo}>
                 <Text style={styles.issueSubject} numberOfLines={1}>
-                  {item.subject}
+                  {item.subject || 'No Subject'}
                 </Text>
                 <Text style={styles.issueOrderNumber}>
-                  Order #{item.order?.order_number?.slice(0, 12) || item.order_id?.slice(0, 8)}
+                  Order #{item.order?.order_number?.slice(0, 12) || item.order_id?.slice(0, 8) || 'N/A'}
                 </Text>
               </View>
               <LinearGradient
@@ -109,14 +163,14 @@ export default function SellerIssuesScreen() {
                 style={styles.statusBadge}
               >
                 <Text style={styles.statusText}>
-                  {item.status.toUpperCase().replace('_', ' ')}
+                  {item.status?.toUpperCase().replace('_', ' ') || 'UNKNOWN'}
                 </Text>
               </LinearGradient>
             </View>
           </View>
 
           <Text style={styles.issueMessage} numberOfLines={2}>
-            {item.message}
+            {item.message || 'No message provided'}
           </Text>
 
           <View style={styles.issueFooter}>
@@ -178,7 +232,7 @@ export default function SellerIssuesScreen() {
           <FlatList
             data={issues}
             renderItem={renderIssueCard}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => item.id || Math.random().toString()}
             contentContainerStyle={styles.listContainer}
             showsVerticalScrollIndicator={false}
             refreshControl={
@@ -189,6 +243,10 @@ export default function SellerIssuesScreen() {
                 colors={['#8B5CF6']}
               />
             }
+            // Fix: Add initialNumToRender for better performance
+            initialNumToRender={10}
+            maxToRenderPerBatch={10}
+            windowSize={5}
           />
         )}
       </Animated.View>

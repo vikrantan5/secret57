@@ -33,7 +33,7 @@ export default function SplashScreen() {
   const glowAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
   
-  // Particle animations - fixed to use proper transform
+  // Particle animations
   const particle1X = useRef(new Animated.Value(0)).current;
   const particle1Y = useRef(new Animated.Value(0)).current;
   const particle2X = useRef(new Animated.Value(0)).current;
@@ -78,7 +78,7 @@ export default function SplashScreen() {
       ])
     ).start();
 
-    // Rotation animation for logo
+    // Rotation animation
     Animated.loop(
       Animated.timing(rotateAnim, {
         toValue: 1,
@@ -88,7 +88,7 @@ export default function SplashScreen() {
     ).start();
 
     // Particle floating animations
-    const createParticleAnimation = (xAnim, yAnim, xRange, yRange) => {
+    const createParticleAnimation = (xAnim, yAnim) => {
       return Animated.loop(
         Animated.parallel([
           Animated.sequence([
@@ -119,15 +119,15 @@ export default function SplashScreen() {
       );
     };
 
-    const particle1Anim = createParticleAnimation(particle1X, particle1Y, [-30, 30], [-30, 30]);
-    const particle2Anim = createParticleAnimation(particle2X, particle2Y, [-40, 40], [-20, 20]);
-    const particle3Anim = createParticleAnimation(particle3X, particle3Y, [20, -20], [30, -30]);
+    const particle1Anim = createParticleAnimation(particle1X, particle1Y);
+    const particle2Anim = createParticleAnimation(particle2X, particle2Y);
+    const particle3Anim = createParticleAnimation(particle3X, particle3Y);
 
     particle1Anim.start();
     particle2Anim.start();
     particle3Anim.start();
 
-    // Haptic feedback on mount (for premium feel)
+    // Haptic feedback
     if (Platform.OS === 'ios') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
@@ -162,7 +162,6 @@ export default function SplashScreen() {
 
     checkUserStatus();
     
-    // Cleanup animations on unmount
     return () => {
       particle1Anim.stop();
       particle2Anim.stop();
@@ -181,7 +180,6 @@ export default function SplashScreen() {
     outputRange: ['0deg', '360deg'],
   });
 
-  // Particle transform values
   const particle1Transform = {
     transform: [
       { translateX: particle1X.interpolate({ inputRange: [0, 1], outputRange: [-25, 25] }) },
@@ -212,7 +210,6 @@ export default function SplashScreen() {
           style={styles.backgroundImage}
           blurRadius={20}
         >
-          {/* Premium Gradient Overlay */}
           <LinearGradient
             colors={[
               'rgba(40, 37, 79, 0.95)',
@@ -224,7 +221,6 @@ export default function SplashScreen() {
             end={{ x: 1, y: 1 }}
             style={styles.gradient}
           >
-            {/* Animated Particles */}
             <View style={styles.particleContainer}>
               <Animated.View style={[styles.particle, styles.particle1, particle1Transform, { opacity: glowIntensity }]} />
               <Animated.View style={[styles.particle, styles.particle2, particle2Transform, { opacity: glowIntensity * 0.7 }]} />
@@ -234,7 +230,6 @@ export default function SplashScreen() {
             </View>
 
             <View style={styles.content}>
-              {/* Animated Glow Ring */}
               <Animated.View
                 style={[
                   styles.glowRing,
@@ -245,7 +240,6 @@ export default function SplashScreen() {
                 ]}
               />
 
-              {/* Rotating Ring */}
               <Animated.View
                 style={[
                   styles.rotatingRing,
@@ -255,12 +249,11 @@ export default function SplashScreen() {
                 ]}
               >
                 <LinearGradient
-                  colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.3)', 'rgba(255,255,255,0)']}
+                  colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.2)', 'rgba(255,255,255,0)']}
                   style={styles.rotatingRingGradient}
                 />
               </Animated.View>
 
-              {/* Logo Container with Animation */}
               <Animated.View
                 style={[
                   styles.logoContainer,
@@ -275,12 +268,11 @@ export default function SplashScreen() {
                   style={styles.logoGlow}
                 >
                   <View style={styles.logoInner}>
-                    <Text style={styles.logo}>🛍️</Text>
+                    <Text style={styles.logo}>✨</Text>
                   </View>
                 </LinearGradient>
               </Animated.View>
 
-              {/* Title Animation */}
               <Animated.View
                 style={[
                   styles.titleContainer,
@@ -290,28 +282,30 @@ export default function SplashScreen() {
                   },
                 ]}
               >
-                <LinearGradient
-                  colors={['#FFFFFF', '#E0E7FF', '#F3E8FF']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.titleGradient}
-                >
-                  <Text style={styles.title}>ServiceHub</Text>
-                </LinearGradient>
+              
+                  <Text style={styles.title}>
+                    Service
+                    <Text style={styles.titleHub}>Hub</Text>
+                    {/* <Text style={styles.titleDot}>®</Text> */}
+                  </Text>
+              
 
                 <View style={styles.underlineContainer}>
                   <LinearGradient
-                    colors={['#FFFFFF', '#E0E7FF']}
+                    colors={['#FF6B9D', '#C5E4FF', '#E0C3FF']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
                     style={styles.underline}
                   />
                   <LinearGradient
-                    colors={['#E0E7FF', '#F3E8FF']}
+                    colors={['#E0C3FF', '#FF6B9D']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
                     style={[styles.underline, styles.underlineShort]}
                   />
                 </View>
               </Animated.View>
 
-              {/* Subtitle Animation */}
               <Animated.Text
                 style={[
                   styles.subtitle,
@@ -324,7 +318,6 @@ export default function SplashScreen() {
                 Premium Marketplace & Services
               </Animated.Text>
 
-              {/* Animated Loader with Gradient */}
               <Animated.View
                 style={[
                   styles.loaderContainer,
@@ -341,7 +334,6 @@ export default function SplashScreen() {
                 </LinearGradient>
               </Animated.View>
 
-              {/* Tagline Animation */}
               <Animated.View
                 style={[
                   styles.taglineContainer,
@@ -351,18 +343,19 @@ export default function SplashScreen() {
                   },
                 ]}
               >
-                <Text style={styles.tagline}>✨ Your one-stop solution for everything ✨</Text>
+                <Text style={styles.tagline}>⚡ Your one-stop solution for everything ⚡</Text>
                 <View style={styles.decorativeLine}>
+                  <LinearGradient colors={['#FF6B9D', '#C5E4FF']} style={styles.smallLine} />
                   <View style={styles.dot} />
-                  <LinearGradient colors={['#FFFFFF', 'rgba(255,255,255,0.3)']} style={styles.line} />
+                  <LinearGradient colors={['#C5E4FF', '#E0C3FF']} style={styles.smallLine} />
                   <View style={styles.dot} />
+                  <LinearGradient colors={['#E0C3FF', '#FF6B9D']} style={styles.smallLine} />
                 </View>
               </Animated.View>
             </View>
 
-            {/* Footer Animation */}
             <Animated.View style={[styles.footer, { opacity: fadeAnim }]}>
-              <Text style={styles.footerText}>© 2026 ServiceHub • All rights reserved</Text>
+              <Text style={styles.footerText}>© 2026 ServiceHub • Premium Experience</Text>
             </Animated.View>
           </LinearGradient>
         </ImageBackground>
@@ -395,6 +388,10 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: 'rgba(255,255,255,0.7)',
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
   },
   particle1: {
     top: '15%',
@@ -490,13 +487,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   title: {
-    fontSize: 48,
+    fontSize: 52,
     fontWeight: '800',
-    letterSpacing: 3,
-    textShadowColor: 'rgba(0,0,0,0.2)',
+    letterSpacing: 2,
+    textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 8,
-  
+    textShadowRadius: 10,
+    color: '#FFFFFF',
+  },
+  titleHub: {
+    fontSize: 52,
+    fontWeight: '800',
+    letterSpacing: 2,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 10,
+    color: '#FFFFFF',
+    backgroundClip: 'text',
+  },
+  titleDot: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFD700',
   },
   underlineContainer: {
     flexDirection: 'row',
@@ -504,23 +516,25 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   underline: {
-    width: 45,
+    width: 50,
     height: 3,
     borderRadius: 2,
-    marginHorizontal: 5,
+    marginHorizontal: 4,
   },
   underlineShort: {
-    width: 25,
+    width: 30,
   },
   subtitle: {
     fontSize: 16,
-    // color: '#FFFFFF',
-    opacity: 0.95,
+    color: 'rgba(255,255,255,0.95)',
     marginBottom: spacing.xl,
-    letterSpacing: 1,
-    fontWeight: '500',
+    letterSpacing: 1.5,
+    fontWeight: '600',
     textAlign: 'center',
     zIndex: 1,
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 4,
   },
   loaderContainer: {
     marginTop: spacing.xl,
@@ -534,7 +548,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   taglineContainer: {
     alignItems: 'center',
@@ -544,10 +558,10 @@ const styles = StyleSheet.create({
   tagline: {
     fontSize: 13,
     color: '#FFFFFF',
-    opacity: 0.85,
+    opacity: 0.9,
     textAlign: 'center',
     letterSpacing: 0.5,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   decorativeLine: {
     flexDirection: 'row',
@@ -555,17 +569,22 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   dot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#FFFFFF',
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FFD700',
     marginHorizontal: 8,
-    opacity: 0.7,
+    opacity: 0.9,
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
   },
-  line: {
-    width: 50,
-    height: 1.5,
-    opacity: 0.5,
+  smallLine: {
+    width: 40,
+    height: 2,
+    borderRadius: 1,
+    opacity: 0.8,
   },
   footer: {
     position: 'absolute',
@@ -576,9 +595,9 @@ const styles = StyleSheet.create({
   },
   footerText: {
     color: '#FFFFFF',
-    opacity: 0.6,
+    opacity: 0.7,
     fontSize: 11,
-    letterSpacing: 0.8,
-    fontWeight: '500',
+    letterSpacing: 1,
+    fontWeight: '600',
   },
 });

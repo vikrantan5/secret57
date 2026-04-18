@@ -34,10 +34,17 @@ const REFUND_REASONS = [
   { id: 'other', label: 'Other', icon: 'ellipsis-horizontal-outline', color: '#6B7280' },
 ];
 
+// Helper function to lighten color (replaces string concatenation)
+const lightenColor = (color, percent) => {
+  // Simple color lightening - for demo
+  // For production, use a library like 'color'
+  return color;
+};
+
 export default function OrderRefundRequestScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string }>();
-  const orderId = params.id as string;
+  const params = useLocalSearchParams();
+  const orderId = params.id;
   
   const { selectedOrder, loading: orderLoading, fetchOrderById } = useOrderStore();
   const { createRefundRequest, loading: refundLoading } = useRefundStore();
@@ -50,8 +57,10 @@ export default function OrderRefundRequestScreen() {
   const [bankIfsc, setBankIfsc] = useState('');
   const [bankName, setBankName] = useState('');
   const [accountHolderName, setAccountHolderName] = useState('');
-  const [paymentMode, setPaymentMode] = useState<'upi' | 'bank'>('upi');
+  const [paymentMode, setPaymentMode] = useState('upi');
   const [submitting, setSubmitting] = useState(false);
+  
+  // Fix 1: Reset animation values on mount
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
@@ -62,19 +71,28 @@ export default function OrderRefundRequestScreen() {
   }, [orderId]);
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
+    // Fix 2: Reset animation values before starting
+    fadeAnim.setValue(0);
+    slideAnim.setValue(30);
+    
+    // Fix 3: Add a small delay to ensure component is mounted
+    const timer = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []); // Empty dependency array - runs once on mount
 
   const handleSubmitRefund = async () => {
     if (!selectedReason) {
@@ -93,7 +111,6 @@ export default function OrderRefundRequestScreen() {
       return;
     }
 
-    // Validate payment details
     if (paymentMode === 'upi') {
       if (!upiId.trim()) {
         Alert.alert('Error', 'Please provide your UPI ID');
@@ -112,15 +129,14 @@ export default function OrderRefundRequestScreen() {
 
       const reason = selectedReason === 'other' ? customReason : (selectedReasonData?.label || '');
 
-      const refundData: any = {
+      const refundData = {
         order_id: orderId,
-          seller_id: selectedOrder?.order_items?.[0]?.seller_id || selectedOrder?.items?.[0]?.seller_id,
+        seller_id: selectedOrder?.order_items?.[0]?.seller_id || selectedOrder?.items?.[0]?.seller_id,
         amount: selectedOrder?.total_amount || 0,
         reason,
         description,
       };
 
-      // Add payment details based on mode
       if (paymentMode === 'upi') {
         refundData.upi_id = upiId;
       } else {
@@ -142,7 +158,7 @@ export default function OrderRefundRequestScreen() {
       } else {
         Alert.alert('Error', result.error || 'Failed to submit refund request');
       }
-    } catch (error: any) {
+    } catch (error) {
       Alert.alert('Error', error.message || 'Something went wrong');
     } finally {
       setSubmitting(false);
@@ -152,6 +168,15 @@ export default function OrderRefundRequestScreen() {
   const getSelectedReasonColor = () => {
     const reason = REFUND_REASONS.find(r => r.id === selectedReason);
     return reason?.color || '#8B5CF6';
+  };
+
+  // Fix 4: Get gradient colors array properly
+  const getSubmitButtonGradient = () => {
+    const color = getSelectedReasonColor();
+    if (selectedReason) {
+      return [color, color]; // Use same color instead of string concatenation
+    }
+    return ['#8B5CF6', '#7C3AED'];
   };
 
   if (orderLoading || !selectedOrder) {
@@ -170,7 +195,6 @@ export default function OrderRefundRequestScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Premium Header */}
       <LinearGradient
         colors={['#1E1B4B', '#312E81', '#4C1D95']}
         start={{ x: 0, y: 0 }}
@@ -188,7 +212,13 @@ export default function OrderRefundRequestScreen() {
 
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
-        style={[styles.scrollView, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+        style={[
+          styles.scrollView, 
+          { 
+            opacity: fadeAnim, 
+            transform: [{ translateY: slideAnim }] 
+          }
+        ]}
       >
         {/* Order Info Card */}
         <LinearGradient
@@ -223,7 +253,7 @@ export default function OrderRefundRequestScreen() {
               colors={['#1E1B4B', '#312E81']}
               style={styles.amountBadge}
             >
-              <Text style={styles.amountValue}>₹{selectedOrder.total_amount.toFixed(2)}</Text>
+              <Text style={styles.amountValue}>₹{selectedOrder.total_amount?.toFixed(2) || '0.00'}</Text>
             </LinearGradient>
           </View>
           
@@ -235,12 +265,13 @@ export default function OrderRefundRequestScreen() {
             >
               <Ionicons name="checkmark-circle" size={14} color="#10B981" />
               <Text style={[styles.statusText, { color: '#10B981' }]}>
-                {selectedOrder.status.toUpperCase()}
+                {selectedOrder.status?.toUpperCase() || 'N/A'}
               </Text>
             </LinearGradient>
           </View>
         </LinearGradient>
 
+        {/* Rest of your component remains the same */}
         {/* Reason Selection */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
@@ -267,10 +298,10 @@ export default function OrderRefundRequestScreen() {
                   activeOpacity={0.8}
                 >
                   <LinearGradient
-                    colors={isSelected ? [reason.color, reason.color + 'CC'] : ['#F9FAFB', '#FFFFFF']}
+                    colors={isSelected ? [reason.color, reason.color] : ['#F9FAFB', '#FFFFFF']}
                     style={styles.reasonIconContainer}
                   >
-                    <Ionicons name={reason.icon as any} size={20} color={isSelected ? '#FFFFFF' : reason.color} />
+                    <Ionicons name={reason.icon} size={20} color={isSelected ? '#FFFFFF' : reason.color} />
                   </LinearGradient>
                   <Text
                     style={[
@@ -338,8 +369,7 @@ export default function OrderRefundRequestScreen() {
           </LinearGradient>
         </View>
 
-
-            {/* Payment Mode Selection */}
+        {/* Payment Mode Selection */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <LinearGradient
@@ -397,7 +427,6 @@ export default function OrderRefundRequestScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* UPI Input */}
           {paymentMode === 'upi' && (
             <Animated.View style={styles.paymentInputContainer}>
               <LinearGradient
@@ -418,7 +447,6 @@ export default function OrderRefundRequestScreen() {
             </Animated.View>
           )}
 
-          {/* Bank Account Inputs */}
           {paymentMode === 'bank' && (
             <Animated.View style={styles.paymentInputContainer}>
               <LinearGradient
@@ -482,7 +510,6 @@ export default function OrderRefundRequestScreen() {
           )}
         </View>
 
-
         {/* Important Notice */}
         <LinearGradient
           colors={['#FEF3C7', '#FDE68A']}
@@ -510,7 +537,7 @@ export default function OrderRefundRequestScreen() {
           </View>
         </LinearGradient>
 
-        {/* Submit Button */}
+        {/* Submit Button - FIXED gradient */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={[styles.submitButton, (submitting || refundLoading) && styles.submitButtonDisabled]}
@@ -519,7 +546,7 @@ export default function OrderRefundRequestScreen() {
             activeOpacity={0.9}
           >
             <LinearGradient
-              colors={selectedReason ? [getSelectedReasonColor(), getSelectedReasonColor() + 'CC'] : ['#8B5CF6', '#7C3AED']}
+              colors={getSubmitButtonGradient()}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.submitGradient}
@@ -542,6 +569,7 @@ export default function OrderRefundRequestScreen() {
   );
 }
 
+// Keep your existing styles as they are
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -819,9 +847,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
-
-
-   paymentModeContainer: {
+  paymentModeContainer: {
     flexDirection: 'row',
     gap: spacing.md,
     marginBottom: spacing.md,

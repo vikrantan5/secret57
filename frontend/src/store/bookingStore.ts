@@ -28,6 +28,16 @@ export interface Booking {
   payout_status?: string;
   status: 'pending_payment' | 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'rejected';
   cancellation_reason: string | null;
+    cancelled_at?: string | null;
+  cancelled_by?: string | null;
+  refund_method?: string | null;
+  refund_status?: string | null;
+  refund_upi_id?: string | null;
+  refund_account_number?: string | null;
+  refund_bank_ifsc?: string | null;
+  refund_bank_name?: string | null;
+  refund_account_holder_name?: string | null;
+  refund_processed_at?: string | null;
   customer_name?: string;
   customer_email?: string;
   customer_phone?: string;
