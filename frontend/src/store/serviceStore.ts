@@ -9,7 +9,7 @@ export interface Service {
   category_id: string;
   name: string;
   description: string;
- price: number;
+  price: number;
   duration: number | null; // in minutes
   images: string[] | null;
   video_url: string | null; // YouTube video URL
@@ -31,6 +31,7 @@ interface ServiceState {
   fetchServices: (categoryId?: string) => Promise<void>;
   fetchServiceById: (id: string) => Promise<void>;
   fetchSellerServices: (sellerId: string) => Promise<void>;
+  fetchServicesByCategory: (categorySlug: string) => Promise<void>;
   
   createService: (service: Partial<Service>) => Promise<{ success: boolean; error?: string; service?: Service }>;
   updateService: (id: string, updates: Partial<Service>) => Promise<{ success: boolean; error?: string }>;
@@ -69,7 +70,12 @@ export const useServiceStore = create<ServiceState>((set, get) => ({
         return;
       }
 
-      set({ services: data || [], loading: false });
+      // Filter out soft-deleted services if the field exists
+      const filteredData = (data || []).filter((service: any) => {
+        return !service.is_deleted;
+      });
+
+      set({ services: filteredData, loading: false });
     } catch (error: any) {
       console.error('Error in fetchServices:', error);
       set({ error: error.message, loading: false });
@@ -124,6 +130,64 @@ export const useServiceStore = create<ServiceState>((set, get) => ({
     } catch (error: any) {
       console.error('Error in fetchSellerServices:', error);
       set({ error: error.message, loading: false });
+    }
+  },
+
+
+  fetchServicesByCategory: async (categorySlug: string) => {
+    try {
+      set({ loading: true, error: null });
+      
+      // First get the category ID from the slug - use array approach to avoid single() error
+      const { data: categoryDataArray, error: categoryError } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('slug', categorySlug)
+        .limit(1);
+
+      // Only log real errors, not \"no results\" scenarios
+      if (categoryError) {
+        console.error('Error fetching category:', categoryError);
+        set({ error: categoryError.message, loading: false, services: [] });
+        return;
+      }
+
+      // If no category found with this slug, return empty services
+      if (!categoryDataArray || categoryDataArray.length === 0) {
+        console.log('No category found with slug:', categorySlug);
+        set({ services: [], loading: false });
+        return;
+      }
+
+      const categoryData = categoryDataArray[0];
+
+      // Fetch services by category ID
+      const { data, error } = await supabase
+        .from('services')
+        .select(`
+          *,
+          seller:sellers(*),
+          category:categories(*)
+        `)
+        .eq('category_id', categoryData.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching services by category:', error);
+        set({ error: error.message, loading: false });
+        return;
+      }
+
+      // Filter out soft-deleted services if the field exists
+      const filteredData = (data || []).filter((service: any) => {
+        return !service.is_deleted;
+      });
+
+      set({ services: filteredData, loading: false });
+    } catch (error: any) {
+      console.error('Error in fetchServicesByCategory:', error);
+      set({ error: error.message, loading: false, services: [] });
     }
   },
 

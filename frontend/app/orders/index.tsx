@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -234,18 +234,50 @@ const OrderCard: React.FC<OrderCardProps> = ({ item, index, onPress }) => {
 
 export default function OrdersScreen() {
   const router = useRouter();
-  const { user } = useAuthStore();
-  const { orders, loading, fetchOrders } = useOrderStore();
+  const { user, isAuthenticated } = useAuthStore();
+  const { orders, loading, fetchOrders, clearOrders } = useOrderStore();
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [refreshing, setRefreshing] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
+  // Function to load orders
+  const loadOrders = useCallback(async () => {
+    if (user?.id && !loading) {
+      try {
+        console.log('🔄 Loading orders for user:', user.id);
+        await fetchOrders(user.id);
+        setInitialLoadDone(true);
+      } catch (error) {
+        console.error('Error loading orders:', error);
+      }
+    }
+  }, [user?.id, fetchOrders, loading]);
+
+  // Load orders when component mounts or user changes
   useEffect(() => {
     if (user?.id) {
-      fetchOrders(user.id);
+      loadOrders();
+    } else if (!isAuthenticated) {
+      // Redirect to login if not authenticated
+      router.replace('/login');
     }
-  }, [user]);
+  }, [user?.id, isAuthenticated]);
+
+  // Use useFocusEffect to reload orders when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      // Reload orders when screen is focused (coming back from order details)
+      if (user?.id && initialLoadDone) {
+        console.log('🔄 Screen focused, refreshing orders...');
+        loadOrders();
+      }
+      return () => {
+        // Cleanup if needed
+      };
+    }, [user?.id, initialLoadDone, loadOrders])
+  );
 
   useEffect(() => {
     Animated.parallel([
@@ -262,24 +294,32 @@ export default function OrdersScreen() {
     ]).start();
   }, []);
 
+  // Auto-refresh for pending orders
   useEffect(() => {
+    let refreshTimer: NodeJS.Timeout;
+    
     const hasPendingOrders = orders.some(order => order.payment_status === 'pending');
     
-    if (hasPendingOrders && user?.id) {
-      const refreshTimer = setInterval(() => {
+    if (hasPendingOrders && user?.id && initialLoadDone) {
+      refreshTimer = setInterval(() => {
         console.log('🔄 Auto-refreshing orders (pending orders detected)...');
         fetchOrders(user.id);
       }, 10000);
-
-      return () => clearInterval(refreshTimer);
     }
-  }, [orders, user?.id]);
+
+    return () => {
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+      }
+    };
+  }, [orders, user?.id, initialLoadDone, fetchOrders]);
 
   const onRefresh = async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (user?.id) {
       await fetchOrders(user.id);
+      setInitialLoadDone(true);
     }
     setRefreshing(false);
   };
@@ -298,7 +338,8 @@ export default function OrdersScreen() {
     return order.status === activeFilter;
   });
 
-  if (loading && orders.length === 0) {
+  // Show loading only on initial load
+  if (loading && !initialLoadDone && orders.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
         <LinearGradient
@@ -381,7 +422,7 @@ export default function OrdersScreen() {
       </View>
 
       {/* Orders List */}
-      {filteredOrders.length === 0 ? (
+      {filteredOrders.length === 0 && initialLoadDone ? (
         <Animated.View style={[styles.emptyContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
           <LinearGradient
             colors={['#F3F4F6', '#E5E7EB']}
