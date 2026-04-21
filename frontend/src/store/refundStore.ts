@@ -21,7 +21,7 @@ export interface RefundRequest {
   reason: string;
   description?: string;
   images?: string[];
-  status: 'requested' | 'approved' | 'rejected' | 'processed' | 'refunded';
+  status: 'pending' | 'requested' | 'approved' | 'rejected' | 'processed' | 'refunded';
   seller_response?: string;
   seller_response_at?: string;
   razorpay_refund_id?: string;
@@ -101,7 +101,7 @@ export const useRefundStore = create<RefundState>((set, get) => ({
         ...data,
         images: imageUrls.length ? imageUrls : (data.images || []),
         user_id: user.id,
-        status: 'requested',
+     status: 'pending',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };

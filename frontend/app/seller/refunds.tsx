@@ -20,6 +20,117 @@ import { useSellerStore } from '../../src/store/sellerStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 
+// Separate component — hooks must live inside a real component, never inside
+// a FlatList renderItem callback (causes "Invalid hook call").
+function RefundCard({
+  item,
+  index,
+  router,
+  getStatusColor,
+  formatDate,
+}: {
+  item: any;
+  index: number;
+  router: any;
+  getStatusColor: (status: string) => string[];
+  formatDate: (dateString: string) => string;
+}) {
+  const statusGradient = getStatusColor(item.status);
+  const itemFadeAnim = useRef(new Animated.Value(0)).current;
+  const itemSlideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(itemFadeAnim, {
+          toValue: 1,
+          duration: 400,
+          delay: index * 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(itemSlideAnim, {
+          toValue: 0,
+          duration: 400,
+          delay: index * 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, 50);
+    return () => {
+      clearTimeout(timer);
+      itemFadeAnim.stopAnimation();
+      itemSlideAnim.stopAnimation();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <Animated.View
+      style={{
+        opacity: itemFadeAnim,
+        transform: [{ translateY: itemSlideAnim }],
+      }}
+      testID={`refund-card-${item.id}`}
+    >
+      <TouchableOpacity
+        style={styles.refundCard}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          router.push(`/seller/refund-detail/${item.id}` as any);
+        }}
+        activeOpacity={0.8}
+        testID={`refund-card-touch-${item.id}`}
+      >
+        <View style={styles.refundHeader}>
+          <View style={styles.refundTopRow}>
+            <LinearGradient colors={['#3B82F6', '#2563EB']} style={styles.refundIcon}>
+              <Ionicons name="return-down-back-outline" size={18} color="#FFFFFF" />
+            </LinearGradient>
+            <View style={styles.refundInfo}>
+              <Text style={styles.refundOrderNumber} numberOfLines={1}>
+                Order #{item.order?.order_number?.slice(0, 12) || item.order_id?.slice(0, 8) || 'N/A'}
+              </Text>
+              <Text style={styles.refundCustomer}>
+                {item.order?.shipping_name || 'Customer'}
+              </Text>
+            </View>
+            <LinearGradient colors={statusGradient} style={styles.statusBadge}>
+              <Text style={styles.statusText}>
+                {item.status?.toUpperCase() || 'UNKNOWN'}
+              </Text>
+            </LinearGradient>
+          </View>
+        </View>
+
+        <Text style={styles.refundReason} numberOfLines={2}>
+          {item.reason || 'No reason provided'}
+        </Text>
+
+        <View style={styles.refundFooter}>
+          <View style={styles.amountContainer}>
+            <Ionicons name="cash-outline" size={16} color="#8B5CF6" />
+            <Text style={styles.amountText}>₹{(item.amount || 0).toFixed(2)}</Text>
+          </View>
+          <Text style={styles.refundDate}>{formatDate(item.created_at)}</Text>
+        </View>
+
+        {(item.upi_id || item.bank_account_number) && (
+          <View style={styles.paymentMethodBadge}>
+            <Ionicons
+              name={item.upi_id ? 'phone-portrait-outline' : 'business-outline'}
+              size={12}
+              color="#6B7280"
+            />
+            <Text style={styles.paymentMethodText}>
+              {item.upi_id ? 'UPI' : 'Bank Transfer'}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
 export default function SellerRefundsScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
@@ -73,6 +184,7 @@ export default function SellerRefundsScreen() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'pending':
       case 'requested':
         return ['#F59E0B', '#D97706'];
       case 'approved':
@@ -99,115 +211,9 @@ export default function SellerRefundsScreen() {
   };
 
   // Fix: Create animated item component with individual animation
-  const renderRefundCard = ({ item, index }: { item: any; index: number }) => {
-    const statusGradient = getStatusColor(item.status);
-    
-    // Create individual animation for each item
-    const itemFadeAnim = useRef(new Animated.Value(0)).current;
-    const itemSlideAnim = useRef(new Animated.Value(20)).current;
-    const [isItemMounted, setIsItemMounted] = useState(true);
-    
-    useEffect(() => {
-      setIsItemMounted(true);
-      
-      const timer = setTimeout(() => {
-        if (isItemMounted) {
-          Animated.parallel([
-            Animated.timing(itemFadeAnim, {
-              toValue: 1,
-              duration: 400,
-              delay: index * 100,
-              useNativeDriver: true,
-            }),
-            Animated.timing(itemSlideAnim, {
-              toValue: 0,
-              duration: 400,
-              delay: index * 100,
-              useNativeDriver: true,
-            }),
-          ]).start();
-        }
-      }, 50);
-      
-      return () => {
-        setIsItemMounted(false);
-        clearTimeout(timer);
-        itemFadeAnim.stopAnimation();
-        itemSlideAnim.stopAnimation();
-      };
-    }, []);
-
-    return (
-      <Animated.View 
-        style={{ 
-          opacity: itemFadeAnim,
-          transform: [{ translateY: itemSlideAnim }]
-        }}
-      >
-        <TouchableOpacity
-          style={styles.refundCard}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push(`/seller/refund-detail/${item.id}` as any);
-          }}
-          activeOpacity={0.8}
-        >
-          <View style={styles.refundHeader}>
-            <View style={styles.refundTopRow}>
-              <LinearGradient
-                colors={['#3B82F6', '#2563EB']}
-                style={styles.refundIcon}
-              >
-                <Ionicons name="return-down-back-outline" size={18} color="#FFFFFF" />
-              </LinearGradient>
-              <View style={styles.refundInfo}>
-                <Text style={styles.refundOrderNumber} numberOfLines={1}>
-                  Order #{item.order?.order_number?.slice(0, 12) || item.order_id?.slice(0, 8) || 'N/A'}
-                </Text>
-                <Text style={styles.refundCustomer}>
-                  {item.order?.shipping_name || 'Customer'}
-                </Text>
-              </View>
-              <LinearGradient
-                colors={statusGradient}
-                style={styles.statusBadge}
-              >
-                <Text style={styles.statusText}>
-                  {item.status?.toUpperCase() || 'UNKNOWN'}
-                </Text>
-              </LinearGradient>
-            </View>
-          </View>
-
-          <Text style={styles.refundReason} numberOfLines={2}>
-            {item.reason || 'No reason provided'}
-          </Text>
-
-          <View style={styles.refundFooter}>
-            <View style={styles.amountContainer}>
-              <Ionicons name="cash-outline" size={16} color="#8B5CF6" />
-              <Text style={styles.amountText}>₹{(item.amount || 0).toFixed(2)}</Text>
-            </View>
-            <Text style={styles.refundDate}>{formatDate(item.created_at)}</Text>
-          </View>
-
-          {/* Payment Method Badge */}
-          {(item.upi_id || item.bank_account_number) && (
-            <View style={styles.paymentMethodBadge}>
-              <Ionicons 
-                name={item.upi_id ? "phone-portrait-outline" : "business-outline"} 
-                size={12} 
-                color="#6B7280" 
-              />
-              <Text style={styles.paymentMethodText}>
-                {item.upi_id ? 'UPI' : 'Bank Transfer'}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  };
+  const renderRefundCard = ({ item, index }: { item: any; index: number }) => (
+    <RefundCard item={item} index={index} router={router} getStatusColor={getStatusColor} formatDate={formatDate} />
+  );
 
   if (loading && refunds.length === 0) {
     return (

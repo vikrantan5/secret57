@@ -20,6 +20,103 @@ import { useSellerStore } from '../../src/store/sellerStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 
+
+
+// Separate component so hooks (useRef/useEffect) are used inside a real component,
+// not inside a FlatList renderItem callback. Prevents "Invalid hook call".
+function IssueCard({
+  item,
+  index,
+  router,
+  getStatusColor,
+  formatDate,
+}: {
+  item: any;
+  index: number;
+  router: any;
+  getStatusColor: (status: string) => string[];
+  formatDate: (dateString: string) => string;
+}) {
+  const statusGradient = getStatusColor(item.status);
+  const itemFadeAnim = useRef(new Animated.Value(0)).current;
+  const itemSlideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(itemFadeAnim, {
+          toValue: 1,
+          duration: 400,
+          delay: index * 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(itemSlideAnim, {
+          toValue: 0,
+          duration: 400,
+          delay: index * 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, 50);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <Animated.View
+      style={{
+        opacity: itemFadeAnim,
+        transform: [{ translateY: itemSlideAnim }],
+      }}
+      testID={`issue-card-${item.id}`}
+    >
+      <TouchableOpacity
+        style={styles.issueCard}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          router.push(`/seller/issue-detail/${item.id}` as any);
+        }}
+        activeOpacity={0.8}
+        testID={`issue-card-touch-${item.id}`}
+      >
+        <View style={styles.issueHeader}>
+          <View style={styles.issueTopRow}>
+            <LinearGradient colors={['#F59E0B', '#D97706']} style={styles.issueIcon}>
+              <Ionicons name="alert-circle-outline" size={18} color="#FFFFFF" />
+            </LinearGradient>
+            <View style={styles.issueInfo}>
+              <Text style={styles.issueSubject} numberOfLines={1}>
+                {item.subject || 'No Subject'}
+              </Text>
+              <Text style={styles.issueOrderNumber}>
+                Order #{item.order?.order_number?.slice(0, 12) || item.order_id?.slice(0, 8) || 'N/A'}
+              </Text>
+            </View>
+            <LinearGradient colors={statusGradient} style={styles.statusBadge}>
+              <Text style={styles.statusText}>
+                {item.status?.toUpperCase().replace('_', ' ') || 'UNKNOWN'}
+              </Text>
+            </LinearGradient>
+          </View>
+        </View>
+
+        <Text style={styles.issueMessage} numberOfLines={2}>
+          {item.message || 'No message provided'}
+        </Text>
+
+        <View style={styles.issueFooter}>
+          <View style={styles.issueType}>
+            <Ionicons name="pricetag-outline" size={14} color="#8B5CF6" />
+            <Text style={styles.issueTypeText}>{item.issue_type || 'General'}</Text>
+          </View>
+          <Text style={styles.issueDate}>{formatDate(item.created_at)}</Text>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+
 export default function SellerIssuesScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
@@ -99,91 +196,9 @@ export default function SellerIssuesScreen() {
   };
 
   // Fix: Create animated item component with individual animation
-  const renderIssueCard = ({ item, index }: { item: any; index: number }) => {
-    const statusGradient = getStatusColor(item.status);
-    
-    // Create individual animation for each item
-    const itemFadeAnim = useRef(new Animated.Value(0)).current;
-    const itemSlideAnim = useRef(new Animated.Value(20)).current;
-    
-    useEffect(() => {
-      const timer = setTimeout(() => {
-        Animated.parallel([
-          Animated.timing(itemFadeAnim, {
-            toValue: 1,
-            duration: 400,
-            delay: index * 100,
-            useNativeDriver: true,
-          }),
-          Animated.timing(itemSlideAnim, {
-            toValue: 0,
-            duration: 400,
-            delay: index * 100,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      }, 50);
-      
-      return () => clearTimeout(timer);
-    }, []);
-
-    return (
-      <Animated.View 
-        style={{ 
-          opacity: itemFadeAnim,
-          transform: [{ translateY: itemSlideAnim }]
-        }}
-      >
-        <TouchableOpacity
-          style={styles.issueCard}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push(`/seller/issue-detail/${item.id}` as any);
-          }}
-          activeOpacity={0.8}
-        >
-          <View style={styles.issueHeader}>
-            <View style={styles.issueTopRow}>
-              <LinearGradient
-                colors={['#F59E0B', '#D97706']}
-                style={styles.issueIcon}
-              >
-                <Ionicons name="alert-circle-outline" size={18} color="#FFFFFF" />
-              </LinearGradient>
-              <View style={styles.issueInfo}>
-                <Text style={styles.issueSubject} numberOfLines={1}>
-                  {item.subject || 'No Subject'}
-                </Text>
-                <Text style={styles.issueOrderNumber}>
-                  Order #{item.order?.order_number?.slice(0, 12) || item.order_id?.slice(0, 8) || 'N/A'}
-                </Text>
-              </View>
-              <LinearGradient
-                colors={statusGradient}
-                style={styles.statusBadge}
-              >
-                <Text style={styles.statusText}>
-                  {item.status?.toUpperCase().replace('_', ' ') || 'UNKNOWN'}
-                </Text>
-              </LinearGradient>
-            </View>
-          </View>
-
-          <Text style={styles.issueMessage} numberOfLines={2}>
-            {item.message || 'No message provided'}
-          </Text>
-
-          <View style={styles.issueFooter}>
-            <View style={styles.issueType}>
-              <Ionicons name="pricetag-outline" size={14} color="#8B5CF6" />
-              <Text style={styles.issueTypeText}>{item.issue_type || 'General'}</Text>
-            </View>
-            <Text style={styles.issueDate}>{formatDate(item.created_at)}</Text>
-          </View>
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  };
+  const renderIssueCard = ({ item, index }: { item: any; index: number }) => (
+    <IssueCard item={item} index={index} router={router} getStatusColor={getStatusColor} formatDate={formatDate} />
+  );
 
   if (loading && issues.length === 0) {
     return (

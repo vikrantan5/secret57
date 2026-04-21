@@ -74,6 +74,7 @@ export default function RefundDetailScreen() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'pending':
       case 'requested':
         return ['#F59E0B', '#D97706'];
       case 'approved':
@@ -116,7 +117,7 @@ export default function RefundDetailScreen() {
 
   const refund = selectedRefund;
   const statusGradient = getStatusColor(refund.status);
-  const canUpdate = refund.status === 'requested' || refund.status === 'approved';
+  const canUpdate = refund.status === 'pending' || refund.status === 'requested' || refund.status === 'approved';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
