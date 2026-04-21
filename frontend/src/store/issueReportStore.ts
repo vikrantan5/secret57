@@ -1,14 +1,21 @@
+// Issue Report Store - seller-facing view of customer reports stored in the
+// `reports` table. Field mapping:
+//   issue_type   = reports.reason
+//   subject      = first line of description (\"SUBJECT: ...\")
+//   message      = remainder of description
+//   seller_response    = reports.seller_response (new column)
+//   seller_response_at = reports.seller_response_at (new column)
 import { create } from 'zustand';
-import { supabase, supabaseAdmin } from '../services/supabase';
+import { supabase } from '../services/supabase';
 import { notificationService } from '../services/notificationService';
 
 export interface IssueReport {
   id: string;
-  user_id: string;
+  user_id: string;          // alias of customer_id (for existing UI compat)
+  customer_id: string;
   seller_id?: string;
   order_id?: string;
   booking_id?: string;
-  order_item_id?: string;
   issue_type: string;
   subject: string;
   message: string;
@@ -17,12 +24,8 @@ export interface IssueReport {
   seller_response?: string;
   seller_response_at?: string;
   admin_notes?: string;
-  resolution?: string;
-  resolved_by?: string;
-  resolved_at?: string;
   created_at: string;
   updated_at: string;
-  // Joined data
   order?: any;
   customer?: any;
 }
@@ -32,7 +35,6 @@ interface IssueReportState {
   selectedIssue: IssueReport | null;
   loading: boolean;
 
-  createIssueReport: (data: Partial<IssueReport>) => Promise<{ success: boolean; error?: string }>;
   fetchUserIssues: (userId: string) => Promise<void>;
   fetchSellerIssues: (sellerId: string) => Promise<void>;
   fetchIssueById: (id: string) => Promise<void>;
@@ -40,106 +42,52 @@ interface IssueReportState {
   setSelectedIssue: (issue: IssueReport | null) => void;
 }
 
+const SUBJECT_PREFIX = 'SUBJECT: ';
+
+function mapRow(row: any): IssueReport {
+  const desc: string = row?.description || '';
+  let subject = '';
+  let message = desc;
+  if (desc.startsWith(SUBJECT_PREFIX)) {
+    const nl = desc.indexOf('\n');
+    if (nl > 0) {
+      subject = desc.slice(SUBJECT_PREFIX.length, nl).trim();
+      message = desc.slice(nl + 1).trimStart();
+    } else {
+      subject = desc.slice(SUBJECT_PREFIX.length).trim();
+      message = '';
+    }
+  }
+  return {
+    ...row,
+    user_id: row.customer_id,
+    issue_type: row.reason,
+    subject,
+    message,
+  } as IssueReport;
+}
+
 export const useIssueReportStore = create<IssueReportState>((set, get) => ({
   issues: [],
   selectedIssue: null,
   loading: false,
 
-  createIssueReport: async (data) => {
-    try {
-      set({ loading: true });
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        set({ loading: false });
-        return { success: false, error: 'User not authenticated' };
-      }
-
-      const issueData = {
-        ...data,
-        user_id: user.id,
-        status: 'pending',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      const { data: newIssue, error } = await supabaseAdmin
-        .from('issue_reports')
-        .insert([issueData])
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Error creating issue report:', error);
-        set({ loading: false });
-        return { success: false, error: error.message };
-      }
-
-      // Send notification to seller
-      if (data.seller_id) {
-        const { data: seller } = await supabase
-          .from('sellers')
-          .select('user_id')
-          .eq('id', data.seller_id)
-          .single();
-
-        if (seller) {
-              // Get order number for better notification message
-          let orderLabel = data.order_id?.slice(0, 8) || '';
-          if (data.order_id) {
-            const { data: orderData } = await supabase
-              .from('orders')
-              .select('order_number')
-              .eq('id', data.order_id)
-              .single();
-            if (orderData?.order_number) orderLabel = orderData.order_number;
-          }
-          await notificationService.sendNotification(
-            seller.user_id,
-            'issue',
-            'Customer Reported an Issue',
-            `Order #${orderLabel} - ${data.subject}. Tap to view details.`,
-            { 
-              issue_id: newIssue.id,
-              order_id: data.order_id,
-              type: 'issue_report'
-            }
-          );
-        }
-      }
-
-      set({
-        issues: [newIssue, ...get().issues],
-        loading: false,
-      });
-
-      return { success: true };
-    } catch (error: any) {
-      console.error('Error in createIssueReport:', error);
-      set({ loading: false });
-      return { success: false, error: error.message };
-    }
-  },
-
   fetchUserIssues: async (userId: string) => {
     try {
       set({ loading: true });
-
       const { data, error } = await supabase
-        .from('issue_reports')
-        .select('*')
-        .eq('user_id', userId)
+        .from('reports')
+        .select('*, order:orders(id, order_number, total_amount, status, shipping_name)')
+        .eq('customer_id', userId)
         .order('created_at', { ascending: false });
-
       if (error) {
-        console.error('Error fetching user issues:', error);
+        console.error('fetchUserIssues error:', error);
         set({ loading: false });
         return;
       }
-
-      set({ issues: data || [], loading: false });
-    } catch (error) {
-      console.error('Error in fetchUserIssues:', error);
+      set({ issues: (data || []).map(mapRow), loading: false });
+    } catch (e) {
+      console.error('fetchUserIssues ex:', e);
       set({ loading: false });
     }
   },
@@ -147,25 +95,19 @@ export const useIssueReportStore = create<IssueReportState>((set, get) => ({
   fetchSellerIssues: async (sellerId: string) => {
     try {
       set({ loading: true });
-
-      const { data, error } = await supabaseAdmin
-        .from('issue_reports')
-        .select(`
-          *,
-          order:orders(id, order_number, total_amount, status, shipping_name)
-        `)
+      const { data, error } = await supabase
+        .from('reports')
+        .select('*, order:orders(id, order_number, total_amount, status, shipping_name, shipping_phone)')
         .eq('seller_id', sellerId)
         .order('created_at', { ascending: false });
-
       if (error) {
-        console.error('Error fetching seller issues:', error);
+        console.error('fetchSellerIssues error:', error);
         set({ loading: false });
         return;
       }
-
-      set({ issues: data || [], loading: false });
-    } catch (error) {
-      console.error('Error in fetchSellerIssues:', error);
+      set({ issues: (data || []).map(mapRow), loading: false });
+    } catch (e) {
+      console.error('fetchSellerIssues ex:', e);
       set({ loading: false });
     }
   },
@@ -173,25 +115,19 @@ export const useIssueReportStore = create<IssueReportState>((set, get) => ({
   fetchIssueById: async (id: string) => {
     try {
       set({ loading: true });
-
-      const { data, error } = await supabaseAdmin
-        .from('issue_reports')
-        .select(`
-          *,
-          order:orders(id, order_number, total_amount, status, shipping_name, shipping_phone, created_at)
-        `)
+      const { data, error } = await supabase
+        .from('reports')
+        .select('*, order:orders(id, order_number, total_amount, status, shipping_name, shipping_phone, created_at)')
         .eq('id', id)
         .single();
-
       if (error) {
-        console.error('Error fetching issue:', error);
+        console.error('fetchIssueById error:', error);
         set({ loading: false });
         return;
       }
-
-      set({ selectedIssue: data, loading: false });
-    } catch (error) {
-      console.error('Error in fetchIssueById:', error);
+      set({ selectedIssue: mapRow(data), loading: false });
+    } catch (e) {
+      console.error('fetchIssueById ex:', e);
       set({ loading: false });
     }
   },
@@ -202,53 +138,45 @@ export const useIssueReportStore = create<IssueReportState>((set, get) => ({
         status,
         updated_at: new Date().toISOString(),
       };
-
       if (response) {
         updateData.seller_response = response;
         updateData.seller_response_at = new Date().toISOString();
+        updateData.action_taken = response;
       }
-
       if (status === 'resolved' || status === 'closed') {
         const { data: { user } } = await supabase.auth.getUser();
-        updateData.resolved_by = user?.id;
-        updateData.resolved_at = new Date().toISOString();
-        updateData.resolution = response || 'Issue resolved';
+        updateData.reviewed_by = user?.id;
+        updateData.reviewed_at = new Date().toISOString();
       }
 
-      const { error } = await supabaseAdmin
-        .from('issue_reports')
+      const { error } = await supabase
+        .from('reports')
         .update(updateData)
         .eq('id', id);
 
-      if (error) {
-        return { success: false, error: error.message };
-      }
+      if (error) return { success: false, error: error.message };
 
-      // Send notification to customer
+      // Notify customer
       const issue = get().issues.find(i => i.id === id) || get().selectedIssue;
-      if (issue?.user_id) {
-        await notificationService.sendNotification(
-          issue.user_id,
-         'issue',
-          `Issue ${status === 'resolved' ? 'Resolved' : 'Updated'}`,
-          `Your issue report has been ${status}. ${response ? 'Seller responded: ' + response.slice(0, 50) : ''}`,
-          {
-            issue_id: id,
-            order_id: issue.order_id,
-            type: 'issue_update'
-          }
-        );
+      if (issue?.customer_id) {
+        try {
+          await notificationService.sendNotification(
+            issue.customer_id,
+            'issue',
+            `Issue ${status === 'resolved' ? 'Resolved' : 'Updated'}`,
+            `Your report has been ${status}.${response ? ' Seller: ' + response.slice(0, 60) : ''}`,
+            { issue_id: id, order_id: issue.order_id, type: 'issue_update' }
+          );
+        } catch (e) {
+          console.error('notify error:', e);
+        }
       }
 
-      const updatedIssues = get().issues.map(i =>
-        i.id === id ? { ...i, ...updateData } : i
-      );
-      set({ issues: updatedIssues });
-
+      const updated = get().issues.map(i => (i.id === id ? { ...i, ...updateData } : i));
+      set({ issues: updated });
       if (get().selectedIssue?.id === id) {
-        set({ selectedIssue: { ...get().selectedIssue!, ...updateData } });
+        set({ selectedIssue: { ...(get().selectedIssue as IssueReport), ...updateData } });
       }
-
       return { success: true };
     } catch (error: any) {
       return { success: false, error: error.message };

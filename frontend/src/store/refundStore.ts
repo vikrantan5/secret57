@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 import { supabase, supabaseAdmin } from '../services/supabase';
 import { notificationService } from '../services/notificationService';
+import { uploadMultipleImages } from '../utils/imageUpload';
+
+async function uploadRefundImages(localUris: string[], userId: string): Promise<string[]> {
+  const remote = (localUris || []).filter(u => u?.startsWith('http'));
+  const local = (localUris || []).filter(u => u && !u.startsWith('http'));
+  const uploaded = local.length ? await uploadMultipleImages(local, 'report-images', `refund/${userId}`, 5) : [];
+  return [...remote, ...uploaded];
+}
 
 export interface RefundRequest {
   id: string;
@@ -55,11 +63,43 @@ export const useRefundStore = create<RefundState>((set, get) => ({
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
+        set({ loading: false });
         return { success: false, error: 'User not authenticated' };
       }
 
-      const refundData = {
+      // ✅ Guard: order must exist, belong to this user, and be 'delivered'
+      if (data.order_id) {
+        const { data: order, error: orderErr } = await supabase
+          .from('orders')
+          .select('id, status, customer_id, payment_status')
+          .eq('id', data.order_id)
+          .single();
+        if (orderErr || !order) {
+          set({ loading: false });
+          return { success: false, error: 'Order not found' };
+        }
+        if (order.customer_id !== user.id) {
+          set({ loading: false });
+          return { success: false, error: 'You can only request refund for your own orders' };
+        }
+        // Allow also when order was already marked refund_requested (retry), but
+        // primary rule: must be delivered (or was delivered and now refund_requested).
+        const allowed = ['delivered', 'refund_requested'];
+        if (!allowed.includes(order.status)) {
+          set({ loading: false });
+          return { success: false, error: 'Refund can only be requested after delivery' };
+        }
+      }
+
+      // Upload any local images
+      let imageUrls: string[] = [];
+      if (data.images && data.images.length > 0) {
+        imageUrls = await uploadRefundImages(data.images, user.id);
+      }
+
+      const refundData: any = {
         ...data,
+        images: imageUrls.length ? imageUrls : (data.images || []),
         user_id: user.id,
         status: 'requested',
         created_at: new Date().toISOString(),
@@ -73,6 +113,7 @@ export const useRefundStore = create<RefundState>((set, get) => ({
         .single();
 
       if (error) {
+        console.error('[refund_requests] insert error:', error);
         set({ loading: false });
         return { success: false, error: error.message };
       }
