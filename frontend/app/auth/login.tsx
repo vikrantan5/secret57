@@ -78,7 +78,7 @@ export default function LoginScreen() {
       ],
     },
     admin: {
-      gradient: ['#F59E0B', '#D97706'],
+      gradient: ['#92908c', '#05513b'],
       darkGradient: ['#92400e', '#92400e'],
       icon: 'shield-checkmark' as const,
       title: 'Admin Login',
