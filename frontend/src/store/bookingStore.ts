@@ -68,6 +68,7 @@ interface BookingState {
   updatePaymentStatus: (id: string, paymentStatus: string, paymentId?: string) => Promise<{ success: boolean; error?: string }>;
   verifyOTP: (bookingId: string, otp: string) => Promise<{ success: boolean; error?: string }>;
   clearError: () => void;
+   setSelectedBooking: (booking: Booking | null) => void;
 }
 
 export const useBookingStore = create<BookingState>((set, get) => ({
@@ -701,4 +702,5 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
+   setSelectedBooking: (booking) => set({ selectedBooking: booking }),
 }));

@@ -27,18 +27,28 @@ export default function SellerOrderDetailScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const orderId = params.id as string;
   
-  const { selectedOrder, loading, fetchOrderById, updateSellerStatus, verifyDeliveryOTP } = useOrderStore();
+  const { selectedOrder, loading, fetchOrderById, updateSellerStatus, verifyDeliveryOTP, setSelectedOrder } = useOrderStore();
   const [selectedStatus, setSelectedStatus] = useState<string>('');
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showOTPModal, setShowOTPModal] = useState(false);
   const [otpInput, setOtpInput] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [statusNotes, setStatusNotes] = useState('');
+  const [hasLoaded, setHasLoaded] = useState(false);
 
+  // ✅ Fix: Clear previous order & refetch on id change for reliable data load
   useEffect(() => {
-    if (orderId) {
-      fetchOrderById(orderId);
-    }
+    let active = true;
+    if (!orderId) return;
+    console.log('[SellerOrderDetail] Fetching order for id:', orderId);
+    setHasLoaded(false);
+    setSelectedOrder(null);
+    fetchOrderById(orderId).finally(() => {
+      if (active) setHasLoaded(true);
+    });
+    return () => {
+      active = false;
+    };
   }, [orderId]);
 
   useEffect(() => {
@@ -158,7 +168,7 @@ export default function SellerOrderDetailScreen() {
     { value: 'delivered', label: 'Delivered', icon: 'checkmark-circle-outline', color: '#10b981' },
   ];
 
-  if (loading || !selectedOrder) {
+  if (!hasLoaded || loading || !selectedOrder || String(selectedOrder.id) !== String(orderId)) {
     return (
       <LinearGradient
         colors={['#0a0a0a', '#1a1a1a']}

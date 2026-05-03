@@ -235,29 +235,31 @@ const OrderCard: React.FC<OrderCardProps> = ({ item, index, onPress }) => {
 export default function OrdersScreen() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
-  const { orders, loading, fetchOrders, clearOrders } = useOrderStore();
+  const { orders, loading, fetchOrders } = useOrderStore();
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
-  // Function to load orders
+  // ✅ Fix: Always load orders on mount. Remove the !loading race guard that
+  // could skip fetching when zustand's loading was already true from another screen.
   const loadOrders = useCallback(async () => {
-    if (user?.id && !loading) {
-      try {
-        console.log('🔄 Loading orders for user:', user.id);
-        await fetchOrders(user.id);
-        setInitialLoadDone(true);
-      } catch (error) {
-        console.error('Error loading orders:', error);
-      }
+    if (!user?.id) return;
+    try {
+      console.log('🔄 Loading orders for user:', user.id);
+      await fetchOrders(user.id);
+    } catch (error) {
+      console.error('Error loading orders:', error);
+    } finally {
+      setInitialLoadDone(true);
     }
-  }, [user?.id, fetchOrders, loading]);
+  }, [user?.id, fetchOrders]);
 
   // Load orders when component mounts or user changes
   useEffect(() => {
     if (user?.id) {
+      setInitialLoadDone(false);
       loadOrders();
     } else if (!isAuthenticated) {
       // Redirect to login if not authenticated
@@ -265,18 +267,15 @@ export default function OrdersScreen() {
     }
   }, [user?.id, isAuthenticated]);
 
-  // Use useFocusEffect to reload orders when screen comes into focus
+  // Refresh on screen focus (return from order detail / back from checkout)
   useFocusEffect(
     useCallback(() => {
-      // Reload orders when screen is focused (coming back from order details)
-      if (user?.id && initialLoadDone) {
+      if (user?.id) {
         console.log('🔄 Screen focused, refreshing orders...');
-        loadOrders();
+        fetchOrders(user.id);
       }
-      return () => {
-        // Cleanup if needed
-      };
-    }, [user?.id, initialLoadDone, loadOrders])
+      return () => {};
+    }, [user?.id, fetchOrders])
   );
 
   useEffect(() => {
@@ -338,8 +337,8 @@ export default function OrdersScreen() {
     return order.status === activeFilter;
   });
 
-  // Show loading only on initial load
-  if (loading && !initialLoadDone && orders.length === 0) {
+  // Show loading while initial load is in progress
+  if (!initialLoadDone) {
     return (
       <SafeAreaView style={styles.container}>
         <LinearGradient

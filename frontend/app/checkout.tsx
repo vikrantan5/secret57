@@ -93,7 +93,11 @@ export default function CheckoutScreen() {
 
   const deliveryCharges = 0;
   const discount = 0;
-  const finalTotal = total + deliveryCharges - discount;
+ // ✅ Fix: GST must be included in checkout total (was previously dropped)
+  // Keep in sync with cart.tsx — same 18% GST rate
+  const TAX_RATE = 0.18;
+  const taxAmount = total * TAX_RATE;
+  const finalTotal = total + taxAmount + deliveryCharges - discount;
 
   const handlePayment = async () => {
     if (!shippingInfo.name || !shippingInfo.phone || !shippingInfo.address || 
@@ -568,6 +572,11 @@ export default function CheckoutScreen() {
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Subtotal ({items.length} items)</Text>
               <Text style={styles.summaryValue}>₹{total.toFixed(2)}</Text>
+            </View>
+
+                <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>GST (18%)</Text>
+              <Text style={styles.summaryValue}>₹{taxAmount.toFixed(2)}</Text>
             </View>
             
             <View style={styles.summaryRow}>

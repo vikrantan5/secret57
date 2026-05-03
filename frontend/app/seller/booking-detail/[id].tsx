@@ -27,15 +27,25 @@ export default function SellerBookingDetailScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const bookingId = params.id as string;
   
-  const { selectedBooking, loading, fetchBookingById, verifyOTP } = useBookingStore();
+  const { selectedBooking, loading, fetchBookingById, verifyOTP, setSelectedBooking } = useBookingStore();
   const [showOTPModal, setShowOTPModal] = useState(false);
   const [otpInput, setOtpInput] = useState('');
   const [verifying, setVerifying] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
+  // ✅ Fix: Clear stale booking & refetch on id change
   useEffect(() => {
-    if (bookingId) {
-      fetchBookingById(bookingId);
-    }
+    let active = true;
+    if (!bookingId) return;
+    console.log('[SellerBookingDetail] Fetching booking for id:', bookingId);
+    setHasLoaded(false);
+    setSelectedBooking(null);
+    fetchBookingById(bookingId).finally(() => {
+      if (active) setHasLoaded(true);
+    });
+    return () => {
+      active = false;
+    };
   }, [bookingId]);
 
   const handleVerifyOTP = async () => {
@@ -110,7 +120,7 @@ export default function SellerBookingDetailScreen() {
     return `${formattedHour}:${minutes} ${ampm}`;
   };
 
-  if (loading || !selectedBooking) {
+  if (!hasLoaded || loading || !selectedBooking || String(selectedBooking.id) !== String(bookingId)) {
     return (
       <LinearGradient
         colors={['#0a0a0a', '#1a1a1a']}

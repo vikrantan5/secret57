@@ -31,19 +31,29 @@ export default function OrderDetailScreen() {
   const params = useLocalSearchParams();
   const orderId = params.id;
   
-  const { selectedOrder, loading, fetchOrderById, cancelOrder } = useOrderStore();
+  const { selectedOrder, loading, fetchOrderById, cancelOrder, setSelectedOrder } = useOrderStore();
   const { createRefundRequest } = useRefundStore();
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancellationReason, setCancellationReason] = useState('');
   const [upiId, setUpiId] = useState('');
   const [paymentId, setPaymentId] = useState('');
+  const [hasLoaded, setHasLoaded] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
+  // ✅ Fix: Always clear stale data & re-fetch on id change to avoid showing previous order
   useEffect(() => {
-    if (orderId) {
-      fetchOrderById(orderId);
-    }
+    let active = true;
+    if (!orderId) return;
+    console.log('[OrderDetail] Fetching order for id:', orderId);
+    setHasLoaded(false);
+    setSelectedOrder(null);
+    fetchOrderById(orderId as string).finally(() => {
+      if (active) setHasLoaded(true);
+    });
+    return () => {
+      active = false;
+    };
   }, [orderId]);
 
   // Auto-fill payment ID when opening cancel modal
@@ -233,7 +243,7 @@ export default function OrderDetailScreen() {
     }
   };
 
-  if (loading || !selectedOrder) {
+  if (!hasLoaded || loading || !selectedOrder || String(selectedOrder.id) !== String(orderId)) {
     return (
       <SafeAreaView style={styles.container}>
         <LinearGradient

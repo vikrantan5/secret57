@@ -31,15 +31,25 @@ export default function RefundDetailScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const refundId = params.id as string;
   
-  const { selectedRefund, loading, fetchRefundById, updateRefundStatus } = useRefundStore();
+  const { selectedRefund, loading, fetchRefundById, updateRefundStatus, setSelectedRefund } = useRefundStore();
   const [response, setResponse] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
+  // ✅ Fix: Clear stale data & fetch fresh every time the screen mounts or id changes
   useEffect(() => {
-    if (refundId) {
-      fetchRefundById(refundId);
-    }
+    let active = true;
+    if (!refundId) return;
+    console.log('[RefundDetail] Fetching refund for id:', refundId);
+    setHasLoaded(false);
+    setSelectedRefund(null); // clear stale data from a previous navigation
+    fetchRefundById(refundId).finally(() => {
+      if (active) setHasLoaded(true);
+    });
+    return () => {
+      active = false;
+    };
   }, [refundId]);
 
   useEffect(() => {
@@ -101,7 +111,7 @@ export default function RefundDetailScreen() {
     });
   };
 
-  if (loading || !selectedRefund) {
+   if (!hasLoaded || loading || !selectedRefund || selectedRefund.id !== refundId) {
     return (
       <SafeAreaView style={styles.container}>
         <LinearGradient

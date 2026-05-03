@@ -167,8 +167,16 @@ export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
   const { items: cartItems } = useCartStore();
   const { items: wishlistItems } = useWishlistStore();
-  const { orders } = useOrderStore();
+  const { orders, fetchOrders } = useOrderStore();
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // ✅ Fix: Prefetch orders as soon as profile mounts so \"My Orders\" shows data on first click
+  useEffect(() => {
+    if (user?.id) {
+      console.log('[Profile] Prefetching orders for user:', user.id);
+      fetchOrders(user.id);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
