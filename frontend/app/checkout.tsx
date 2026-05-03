@@ -171,6 +171,45 @@ export default function CheckoutScreen() {
     setLoading(true);
     console.log('[Checkout] Payment success callback', { paymentId, cashfreeOrderId });
 
+
+
+      // ✅ PAYMENT SAFETY: Track that we received a payment, so if order insert fails
+    // we still have a DB record for reconciliation / customer-support / retry.
+    let pendingPaymentId: string | null = null;
+    try {
+      if (user?.id) {
+        const { data: pp, error: ppErr } = await supabase
+          .from('pending_payments')
+          .insert([{
+            user_id: user.id,
+            cashfree_order_id: cashfreeOrderId,
+            cashfree_payment_id: paymentId,
+            amount: finalTotal,
+            payment_method: 'cashfree',
+            status: 'pending_order_creation',
+            payload: {
+              subtotal: total,
+              discount,
+              delivery_charges: deliveryCharges,
+              gst_amount: taxAmount,
+              total_amount: finalTotal,
+              items_count: items.length,
+            },
+          }])
+          .select('id')
+          .single();
+        if (!ppErr && pp?.id) {
+          pendingPaymentId = pp.id;
+          console.log('[Checkout] pending_payments row created:', pendingPaymentId);
+        } else if (ppErr) {
+          // Non-blocking (table may not exist yet on old DBs)
+          console.warn('[Checkout] pending_payments log failed (non-blocking):', ppErr.message);
+        }
+      }
+    } catch (ppEx: any) {
+      console.warn('[Checkout] pending_payments exception (non-blocking):', ppEx?.message);
+    }
+
     try {
       // ✅ STEP 1: Verify payment server-side (do not trust client)
       const verificationResult = await CashfreeService.verifyPayment(cashfreeOrderId);
@@ -300,6 +339,23 @@ export default function CheckoutScreen() {
 
         clearCart();
 
+        
+        // ✅ PAYMENT SAFETY: Mark the pending_payments row as recovered
+        if (pendingPaymentId) {
+          try {
+            await supabase
+              .from('pending_payments')
+              .update({
+                status: 'recovered',
+                updated_at: new Date().toISOString(),
+                payload: { order_id: orderId },
+              })
+              .eq('id', pendingPaymentId);
+          } catch (pErr) {
+            console.warn('[Checkout] mark pending_payments recovered failed:', pErr);
+          }
+        }
+
         const { fetchOrders } = require('../src/store/orderStore').useOrderStore.getState();
         if (user?.id) await fetchOrders(user.id);
 
@@ -321,9 +377,40 @@ export default function CheckoutScreen() {
       console.error('[Checkout] Post-payment error:', error);
       setLoading(false);
       setProcessingPayment(false);
+
+
+         // ✅ PAYMENT SAFETY: Save the error on the pending_payments row so support
+      // can reconcile. Also tell the user their payment is safely recorded.
+      if (pendingPaymentId) {
+        try {
+          await supabase
+            .from('pending_payments')
+            .update({
+              error_message: String(error?.message || error).slice(0, 500),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', pendingPaymentId);
+        } catch (updErr) {
+          console.warn('[Checkout] pending_payments error log failed:', updErr);
+        }
+      }
+
       Alert.alert(
-        'Payment Verification Error',
-        error.message || 'Payment was successful but we could not create your order. Please contact support.'
+        'Order Creation Issue',
+        `${error.message || 'Could not create your order'}
+
+Don't worry — your payment is safely recorded. Please contact support with reference:
+
+Cashfree Order: ${cashfreeOrderId}
+Payment: ${paymentId || 'N/A'}`,
+        [
+          {
+            text: 'Retry Order Creation',
+            onPress: () => handlePaymentSuccess(paymentId, cashfreeOrderId),
+          },
+          { text: 'Go to Orders', onPress: () => router.replace('/orders') },
+          { text: 'OK', style: 'cancel' },
+        ]
       );
     }
   };

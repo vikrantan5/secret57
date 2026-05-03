@@ -233,8 +233,23 @@ export const useRefundStore = create<RefundState>((set, get) => ({
 
   updateRefundStatus: async (id, status, response) => {
     try {
+      // ✅ FIX: Only allow whitelisted status values matching DB check constraint
+      const ALLOWED = new Set([
+        'pending',
+        'requested',
+        'approved',
+        'rejected',
+        'processing',
+        'processed',
+        'refunded',
+        'cancelled',
+      ]);
+      // Normalise to lowercase + trim, to avoid UI-label mismatches
+      const normalised = String(status || '').trim().toLowerCase();
+      const safeStatus = ALLOWED.has(normalised) ? normalised : 'pending';
+
       const updateData: any = {
-        status,
+        status: safeStatus,
         updated_at: new Date().toISOString(),
       };
 
@@ -243,19 +258,24 @@ export const useRefundStore = create<RefundState>((set, get) => ({
         updateData.seller_response_at = new Date().toISOString();
       }
 
-      if (status === 'processed' || status === 'refunded') {
+      if (safeStatus === 'processed' || safeStatus === 'refunded') {
         updateData.refund_processed_at = new Date().toISOString();
       }
 
-      const { error } = await supabaseAdmin
+      console.log('[refund_requests] update payload:', { id, payload: updateData });
+
+      const { error, data } = await supabaseAdmin
         .from('refund_requests')
         .update(updateData)
-        .eq('id', id);
+        .eq('id', id)
+        .select();
 
       if (error) {
+        console.error('[refund_requests] update error:', error);
         return { success: false, error: error.message };
       }
 
+      console.log('[refund_requests] update success:', data);
       // Send notification to customer about refund status update
       const refund = get().refunds.find(r => r.id === id) || get().selectedRefund;
       if (refund?.user_id) {

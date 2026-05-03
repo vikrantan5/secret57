@@ -8,6 +8,9 @@ export interface Order {
   subtotal: number;
   discount: number;
   delivery_charges: number;
+    gst_amount?: number;
+  
+
   total_amount: number;
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
   seller_status?: 'pending' | 'processing' | 'processed' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled';
@@ -181,18 +184,30 @@ export const useOrderStore = create<OrderState>((set, get) => ({
     try {
       // Generate order number
       const orderNumber = 'ORD' + Date.now();
-      
+
+      // ✅ Safe default: if gst_amount missing on payload, default to 0
+      const orderPayload: any = {
+        ...order,
+        gst_amount: typeof order.gst_amount === 'number' ? order.gst_amount : 0,
+        order_number: orderNumber,
+        status: 'pending',
+        payment_status: 'pending',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      console.log('[orderStore.createOrder] Insert payload:', JSON.stringify({
+        customer_id: orderPayload.customer_id,
+        subtotal: orderPayload.subtotal,
+        gst_amount: orderPayload.gst_amount,
+        delivery_charges: orderPayload.delivery_charges,
+        total_amount: orderPayload.total_amount,
+      }));
+
       // Create order
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
-        .insert([{
-          ...order,
-          order_number: orderNumber,
-          status: 'pending',
-          payment_status: 'pending',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }])
+        .insert([orderPayload])
         .select()
         .single();
 
