@@ -173,32 +173,29 @@ export default function AllUsersScreen() {
             <Text style={styles.statValue}>{filteredUsers.length}</Text>
             <Text style={styles.statLabel}>Total Users</Text>
           </LinearGradient>
-
           <LinearGradient
-            colors={['#4F7C8220', '#4F7C8240']}
+            colors={[colors.primaryVeryLight, colors.primaryLight]}
             style={[styles.statCard, shadows.md]}
           >
-            <View style={[styles.statIconBox, { backgroundColor: colors.customer + '20' }]}>
-              <Ionicons name="cart" size={24} color={colors.customer} />
+            <View style={styles.statIconBox}>
+              <Ionicons name="cart" size={24} color={colors.primaryDark} />
             </View>
-            <Text style={[styles.statValue, { color: colors.customer }]}>
-              {users.filter(u => u.role === 'customer').length}
-            </Text>
+            <Text style={styles.statValue}>{users.filter(u => u.role === 'customer').length}</Text>
             <Text style={styles.statLabel}>Customers</Text>
           </LinearGradient>
-
           <LinearGradient
-            colors={['#5B9BA520', '#5B9BA540']}
+            colors={[colors.primaryVeryLight, colors.primaryLight]}
             style={[styles.statCard, shadows.md]}
           >
-            <View style={[styles.statIconBox, { backgroundColor: colors.seller + '20' }]}>
-              <Ionicons name="storefront" size={24} color={colors.seller} />
+            <View style={styles.statIconBox}>
+              <Ionicons name="cart" size={24} color={colors.primaryDark} />
             </View>
-            <Text style={[styles.statValue, { color: colors.seller }]}>
-              {users.filter(u => u.role === 'seller').length}
-            </Text>
+            <Text style={styles.statValue}>{users.filter(u => u.role === 'seller').length}</Text>
             <Text style={styles.statLabel}>Sellers</Text>
           </LinearGradient>
+
+        
+
         </View>
 
         <ScrollView

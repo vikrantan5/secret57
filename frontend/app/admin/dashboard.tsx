@@ -126,14 +126,14 @@ export default function AdminDashboardScreen() {
       gradient: ['#8B5CF6', '#7C3AED'],
       route: '/admin/sellers',
     },
-    {
-      id: 'categories',
-      title: 'Manage Categories',
-      icon: 'apps' as const,
-      count: null,
-      gradient: [colors.primary, colors.primaryDark],
-      route: '/admin/categories',
-    },
+    // {
+    //   id: 'categories',
+    //   title: 'Manage Categories',
+    //   icon: 'apps' as const,
+    //   count: null,
+    //   gradient: [colors.primary, colors.primaryDark],
+    //   route: '/admin/categories',
+    // },
   ];
 
     const financialMenuItems = [
