@@ -9,6 +9,8 @@ interface CashfreePaymentProps {
   paymentSessionId?: string;
   paymentUrl?: string;
   orderId?: string;
+  returnUrl?: string;
+  mode?: 'sandbox' | 'production';
   onSuccess: (paymentId: string, orderId: string) => void;
   onFailure: (error: string) => void;
   onCancel: () => void;
@@ -19,113 +21,145 @@ export default function CashfreePayment({
   paymentSessionId,
   paymentUrl,
   orderId,
+  returnUrl,
+  mode = 'sandbox',
   onSuccess,
   onFailure,
   onCancel,
 }: CashfreePaymentProps) {
   const webViewRef = useRef<WebView>(null);
   const [loading, setLoading] = useState(true);
+  const settledRef = useRef(false); // prevent double-fire of success/failure
+
+
+
+  
+  // Reset settled state every time the modal becomes visible (retry support)
+  React.useEffect(() => {
+    if (visible) settledRef.current = false;
+  }, [visible]);
 
   // Determine if we should use direct URL or embed Cashfree SDK
   const useDirectUrl = !!paymentUrl && !paymentSessionId;
 
+  const finalReturnUrl =
+    returnUrl || 'https://hybrid-bazaar.preview.emergentagent.com/payment-success';
+
   const getHtmlContent = () => {
-    // Use the raw payment_session_id as-is
     const sessionId = paymentSessionId;
-    
     return `
       <!DOCTYPE html>
       <html>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
+        <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">
+        <script src=\"https://sdk.cashfree.com/js/v3/cashfree.js\"></script>
         <style>
-          body { margin: 0; padding: 0; }
+          body { margin: 0; padding: 0; font-family: -apple-system, sans-serif; }
           #payment-form { width: 100%; height: 100vh; }
-          .loader { text-align: center; padding: 50px; font-family: sans-serif; }
+          .loader { text-align: center; padding: 50px; }
+          .err { color: #b91c1c; padding: 20px; text-align: center; }
         </style>
       </head>
       <body>
-        <div id="payment-form">
-          <div class="loader">Loading payment gateway...</div>
+        <div id=\"payment-form\">
+          <div class=\"loader\">Loading payment gateway...</div>
         </div>
-        
+
         <script>
-          // Initialize Cashfree checkout
-          const cashfree = new Cashfree({
-            mode: "sandbox" // Change to "production" for live
-          });
-          
-          let checkoutOptions = {
-            paymentSessionId: "${sessionId}",
-            returnUrl: "https://hybrid-bazaar.preview.emergentagent.com/seller/subscription-success",
-            redirectTarget: "_self"
-          };
-          
-          cashfree.checkout(checkoutOptions).then(function(result) {
-            if(result.error) {
-              console.log("Payment error:", result.error);
+          (function () {
+            try {
+              var cashfree = new Cashfree({ mode: \"${mode}\" });
+              var checkoutOptions = {
+                paymentSessionId: \"${sessionId}\",
+                returnUrl: \"${finalReturnUrl}\",
+                redirectTarget: \"_self\"
+              };
+              cashfree.checkout(checkoutOptions).then(function (result) {
+                if (result && result.error) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'error',
+                    message: result.error.message || 'Payment failed'
+                  }));
+                } else if (result && result.paymentDetails) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'success',
+                    paymentId: result.paymentDetails.paymentId || '',
+                    orderId: result.paymentDetails.orderId || '${orderId}'
+                  }));
+                }
+              }).catch(function (error) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'error',
+                  message: (error && error.message) || 'Failed to initialize payment'
+                }));
+              });
+            } catch (e) {
+              document.getElementById('payment-form').innerHTML =
+                '<div class=\"err\">Unable to start payment. Please try again.</div>';
               window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'error',
-                message: result.error.message || 'Payment failed'
-              }));
-            } else {
-              console.log("Payment success:", result);
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'success',
-                paymentId: result.paymentDetails?.paymentId || '',
-                orderId: result.paymentDetails?.orderId || '${orderId}'
+                type: 'error', message: (e && e.message) || 'SDK init failed'
               }));
             }
-          }).catch(function(error) {
-            console.log("Checkout error:", error);
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'error',
-              message: error.message || 'Failed to initialize payment'
-            }));
-          });
+          })();
         </script>
       </body>
       </html>
     `;
   };
 
+  const settleSuccess = (pid: string, oid: string) => {
+    if (settledRef.current) return;
+    settledRef.current = true;
+    onSuccess(pid, oid);
+  };
+  const settleFailure = (msg: string) => {
+    if (settledRef.current) return;
+    settledRef.current = true;
+    onFailure(msg);
+  };
+
   const handleMessage = (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
-      console.log('Payment message:', data);
-      
+      console.log('[CashfreePayment] msg:', data);
       if (data.type === 'success') {
-        onSuccess(data.paymentId, data.orderId);
+        settleSuccess(data.paymentId, data.orderId || orderId || '');
       } else if (data.type === 'error') {
-        onFailure(data.message);
+        settleFailure(data.message);
       }
     } catch (error) {
-      console.error('Message parse error:', error);
+      console.error('[CashfreePayment] msg parse error:', error);
     }
   };
 
-   const handleNavigationStateChange = (navState: any) => {
+  const handleNavigationStateChange = (navState: any) => {
     const { url } = navState;
-    console.log('Navigation URL:', url);
-    
-    // Handle success redirects
-    if (url && (url.includes('subscription-success') || url.includes('payment-success') || url.includes('booking-success'))) {
-      // Payment completed via redirect
-      onSuccess('', orderId || '');
-    }
-    
-    // Handle Cashfree payment status from URL
-    if (url && url.includes('order_status=')) {
-      const urlParams = new URLSearchParams(url.split('?')[1]);
+    if (!url) return;
+    console.log('[CashfreePayment] nav:', url);
+
+    // Detect Cashfree returnUrl with order_status query param
+    if (url.includes('order_status=')) {
+      const urlParams = new URLSearchParams(url.split('?')[1] || '');
       const orderStatus = urlParams.get('order_status');
       const orderIdFromUrl = urlParams.get('order_id') || orderId || '';
-      
+
       if (orderStatus === 'PAID' || orderStatus === 'SUCCESS') {
-        onSuccess('', orderIdFromUrl);
-      } else if (orderStatus === 'FAILED' || orderStatus === 'CANCELLED') {
-        onFailure(orderStatus === 'CANCELLED' ? 'Payment cancelled' : 'Payment failed');
+        settleSuccess('', orderIdFromUrl);
+      } else if (orderStatus === 'FAILED') {
+        settleFailure('Payment failed');
+      } else if (orderStatus === 'CANCELLED') {
+        settleFailure('Payment cancelled');
       }
+      return;
+    }
+
+    // Generic success URLs (e.g. customer return_url landing pages)
+    if (
+      url.includes('payment-success') ||
+      url.includes('booking-success') ||
+      url.includes('subscription-success')
+    ) {
+      settleSuccess('', orderId || '');
     }
   };
 

@@ -20,10 +20,10 @@ import { useRefundStore } from '../../../src/store/refundStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../../src/constants/theme';
 
 const STATUS_OPTIONS = [
-  { value: 'approved', label: 'Approve', icon: 'checkmark-circle-outline', gradient: ['#3B82F6', '#2563EB'] },
-  { value: 'rejected', label: 'Reject', icon: 'close-circle-outline', gradient: ['#EF4444', '#DC2626'] },
-  { value: 'processed', label: 'Processing', icon: 'refresh-outline', gradient: ['#8B5CF6', '#7C3AED'] },
-  { value: 'refunded', label: 'Refunded', icon: 'checkmark-done-outline', gradient: ['#10B981', '#059669'] },
+  { value: 'approved', label: 'Approve', icon: 'checkmark-circle-outline', gradient: ['#3B82F6', '#2563EB'], showFor: ['pending', 'requested'] },
+  { value: 'rejected', label: 'Reject', icon: 'close-circle-outline', gradient: ['#EF4444', '#DC2626'], showFor: ['pending', 'requested'] },
+  { value: 'processing', label: 'Processing', icon: 'refresh-outline', gradient: ['#8B5CF6', '#7C3AED'], showFor: ['approved'] },
+  { value: 'refunded', label: 'Mark Refunded', icon: 'checkmark-done-outline', gradient: ['#10B981', '#059669'], showFor: ['approved', 'processing'] },
 ];
 
 export default function RefundDetailScreen() {
@@ -127,7 +127,12 @@ export default function RefundDetailScreen() {
 
   const refund = selectedRefund;
   const statusGradient = getStatusColor(refund.status);
-  const canUpdate = refund.status === 'pending' || refund.status === 'requested' || refund.status === 'approved';
+  // ✅ Allow updates whenever refund is not in a terminal state (rejected/refunded)
+  const canUpdate = !['rejected', 'refunded'].includes(refund.status);
+  // Only show buttons that are valid transitions from current status
+  const visibleStatusOptions = STATUS_OPTIONS.filter(opt =>
+    opt.showFor.includes(refund.status === 'pending' ? 'pending' : refund.status)
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -317,11 +322,12 @@ export default function RefundDetailScreen() {
             />
 
             <View style={styles.actionButtons}>
-              {STATUS_OPTIONS.map((option) => (
+              {visibleStatusOptions.map((option) => (
                 <TouchableOpacity
                   key={option.value}
                   style={styles.actionButton}
                   onPress={() => {
+                    if (submitting) return; // prevent double-click
                     Alert.alert(
                       'Confirm Action',
                       `Are you sure you want to ${option.label.toLowerCase()} this refund request?`,
@@ -332,6 +338,7 @@ export default function RefundDetailScreen() {
                     );
                   }}
                   disabled={submitting}
+                  testID={`refund-action-${option.value}`}
                 >
                   <LinearGradient
                     colors={option.gradient}

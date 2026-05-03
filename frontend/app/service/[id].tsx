@@ -403,39 +403,45 @@ const handleBookService = async () => {
       );
     }
   };
-   const handlePaymentFailure = (error: string) => {
-    console.error('Service payment failed:', error);
+   const handlePaymentFailure = async (error: string) => {
+    console.error('[Service] payment failed:', error);
     setShowCashfree(false);
     setProcessingPayment(false);
-    
-    // Notify seller about payment cancellation
+
+    // ✅ Roll back: delete the unpaid booking so no orphan entry exists
     if (currentBookingId) {
-      notifySellerOfBookingCancellation(currentBookingId);
+      try {
+        await supabase.from('bookings').delete().eq('id', currentBookingId).eq('payment_status', 'pending');
+        console.log('[Service] Rolled back unpaid booking:', currentBookingId);
+      } catch (e) {
+        console.warn('[Service] Failed to rollback booking', e);
+      }
+      setCurrentBookingId('');
     }
-    
+
     Alert.alert(
       'Payment Failed',
       error || 'Payment was not successful. Please try again.',
       [
-        {
-          text: 'Try Again',
-          onPress: () => handleBookService(),
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
+        { text: 'Try Again', onPress: () => handleBookService() },
+        { text: 'Cancel', style: 'cancel' },
       ]
     );
   };
 
-  const handlePaymentCancel = () => {
+  const handlePaymentCancel = async () => {
     setShowCashfree(false);
     setProcessingPayment(false);
-    
-    // Notify seller about payment cancellation
+
+    // ✅ Roll back: delete the unpaid booking on cancel
     if (currentBookingId) {
-      notifySellerOfBookingCancellation(currentBookingId);
+      try {
+        await supabase.from('bookings').delete().eq('id', currentBookingId).eq('payment_status', 'pending');
+        console.log('[Service] Rolled back unpaid booking on cancel:', currentBookingId);
+      } catch (e) {
+        console.warn('[Service] Failed to rollback booking', e);
+      }
+      setCurrentBookingId('');
     }
   };
 
@@ -958,8 +964,10 @@ const handleBookService = async () => {
       {showCashfree && cashfreePaymentSessionId && (
   <CashfreePayment
     visible={showCashfree}
-    paymentSessionId={cashfreePaymentSessionId}  // Pass session ID, not URL
+    paymentSessionId={cashfreePaymentSessionId}
     orderId={cashfreeOrderId}
+    returnUrl="https://hybrid-bazaar.preview.emergentagent.com/booking-success"
+    mode="sandbox"
     onSuccess={handlePaymentSuccess}
     onFailure={handlePaymentFailure}
     onCancel={handlePaymentCancel}

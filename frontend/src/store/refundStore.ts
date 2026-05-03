@@ -21,7 +21,7 @@ export interface RefundRequest {
   reason: string;
   description?: string;
   images?: string[];
-  status: 'pending' | 'requested' | 'approved' | 'rejected' | 'processed' | 'refunded';
+  status: 'pending' | 'requested' | 'approved' | 'rejected' | 'processing' | 'refunded';
   seller_response?: string;
   seller_response_at?: string;
   razorpay_refund_id?: string;

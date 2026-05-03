@@ -27,6 +27,7 @@ import CashfreePayment from '../src/components/CashfreePayment';
 import CashfreeService from '../src/services/cashfreeService';
 import CashfreePayoutService from '../src/services/cashfreePayoutService';
 import { supabase } from '../src/services/supabase';
+import { calculateOrderSummary } from '../src/utils/pricing';
 
 const { width, height } = Dimensions.get('window');
 
@@ -91,13 +92,12 @@ export default function CheckoutScreen() {
     }
   }, [user]);
 
-  const deliveryCharges = 0;
-  const discount = 0;
- // ✅ Fix: GST must be included in checkout total (was previously dropped)
-  // Keep in sync with cart.tsx — same 18% GST rate
-  const TAX_RATE = 0.18;
-  const taxAmount = total * TAX_RATE;
-  const finalTotal = total + taxAmount + deliveryCharges - discount;
+  // ✅ Centralized pricing — single source of truth across cart/checkout/payment/order
+  const summary = calculateOrderSummary(items);
+  const taxAmount = summary.gst;
+  const deliveryCharges = summary.deliveryCharge;
+  const discount = summary.discount;
+  const finalTotal = summary.totalAmount;
 
   const handlePayment = async () => {
     if (!shippingInfo.name || !shippingInfo.phone || !shippingInfo.address || 
@@ -114,42 +114,23 @@ export default function CheckoutScreen() {
     }
 
     if (loading || processingPayment) {
-      Alert.alert('Please Wait', 'Your order is being processed. Please do not press back or refresh.');
+      // Prevent double-tap; do not pop alert mid-flow
       return;
     }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     setProcessingPayment(true);
+    console.log('[Checkout] Entering payment flow', { finalTotal, subtotal: total, gst: taxAmount, delivery: deliveryCharges });
 
     try {
-      const orderData = {
-        customer_id: user.id,
-        subtotal: total,
-        discount: discount,
-        delivery_charges: deliveryCharges,
-        total_amount: finalTotal,
-        shipping_name: shippingInfo.name,
-        shipping_phone: shippingInfo.phone,
-        shipping_address: shippingInfo.address,
-        shipping_city: shippingInfo.city,
-        shipping_state: shippingInfo.state,
-        shipping_pincode: shippingInfo.pincode,
-      };
-
-      const result = await createOrder(orderData, items);
-
-      if (!result.success || !result.order) {
-        throw new Error(result.error || 'Failed to create order');
-      }
-
-      const orderId = result.order.id;
-      setCurrentOrderId(orderId);
-
+      // ✅ FIX: Do NOT create the order yet. Create Cashfree session FIRST.
+      // Order will only be created after Cashfree confirms payment success.
+      console.log('[Checkout] Creating Cashfree payment session...');
       const cashfreeOrderResult = await CashfreeService.createOrder({
         amount: finalTotal,
         currency: 'INR',
-        order_note: `Order #${orderId}`,
+        order_note: `Cart checkout for ${user.email || user.id}`,
         customer_id: user.id,
         customer_name: shippingInfo.name,
         customer_email: user.email || '',
@@ -163,187 +144,187 @@ export default function CheckoutScreen() {
 
       const cfOrderId = cashfreeOrderResult.data.order_id;
       const cfPaymentSessionId = cashfreeOrderResult.data.payment_session_id;
-      
+
       if (!cfPaymentSessionId) {
         throw new Error('Payment session ID not received from Cashfree');
       }
-      
+
+      console.log('[Checkout] Cashfree session created', { cfOrderId });
       setCashfreeOrderId(cfOrderId);
       setCashfreePaymentSessionId(cfPaymentSessionId);
 
-      const { error: updateError } = await supabase
-        .from('orders')
-        .update({
-          cashfree_order_id: cfOrderId,
-          payment_method: 'cashfree',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', orderId);
-
-      if (updateError) {
-        throw new Error('Failed to link payment gateway. Please try again.');
-      }
-
+      // Open the gateway. Order is created only on payment success.
       setLoading(false);
       setShowCashfree(true);
-
     } catch (error: any) {
-      console.error('Checkout error:', error);
+      console.error('[Checkout] Payment session error:', error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', error.message || 'Failed to process checkout');
+      Alert.alert('Error', error.message || 'Failed to start payment');
       setLoading(false);
       setProcessingPayment(false);
     }
   };
 
-  const handlePaymentSuccess = async (paymentId: string, orderId: string) => {
+  const handlePaymentSuccess = async (paymentId: string, cashfreeOrderId: string) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setShowCashfree(false);
     setLoading(true);
+    console.log('[Checkout] Payment success callback', { paymentId, cashfreeOrderId });
 
     try {
-      const verificationResult = await CashfreeService.verifyPayment(orderId);
-
+      // ✅ STEP 1: Verify payment server-side (do not trust client)
+      const verificationResult = await CashfreeService.verifyPayment(cashfreeOrderId);
       if (!verificationResult.success || !verificationResult.data) {
         throw new Error(verificationResult.error || 'Payment verification failed');
       }
 
       const paymentStatus = verificationResult.data.payment_status || verificationResult.data.order_status;
       const paymentStatusUpper = paymentStatus?.toUpperCase();
-      const isSuccess = paymentStatusUpper === 'SUCCESS' || 
-                        paymentStatusUpper === 'PAID' || 
-                        paymentStatusUpper === 'ACTIVE';
-      
+      const isSuccess =
+        paymentStatusUpper === 'SUCCESS' ||
+        paymentStatusUpper === 'PAID' ||
+        paymentStatusUpper === 'ACTIVE';
+
       if (!isSuccess) {
         throw new Error(`Payment not confirmed. Status: ${paymentStatus}`);
       }
 
+      // ✅ STEP 2: Now create the order (only after payment success)
+      console.log('[Checkout] Creating order after verified payment...');
+      const orderData = {
+        customer_id: user!.id,
+        subtotal: total,
+        discount: discount,
+        delivery_charges: deliveryCharges,
+        gst_amount: taxAmount,
+        total_amount: finalTotal,
+        shipping_name: shippingInfo.name,
+        shipping_phone: shippingInfo.phone,
+        shipping_address: shippingInfo.address,
+        shipping_city: shippingInfo.city,
+        shipping_state: shippingInfo.state,
+        shipping_pincode: shippingInfo.pincode,
+      };
+
+      const result = await createOrder(orderData, items);
+      if (!result.success || !result.order) {
+        throw new Error(result.error || 'Failed to create order after payment');
+      }
+      const orderId = result.order.id;
+      setCurrentOrderId(orderId);
+      console.log('[Checkout] Order created', { orderId });
+
+      // Link Cashfree order id to Supabase order
+      await supabase
+        .from('orders')
+        .update({
+          cashfree_order_id: cashfreeOrderId,
+          payment_method: 'cashfree',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId);
+
+      // ✅ STEP 3: Record payment & mark paid
       const paymentResult = await createPayment({
-        order_id: currentOrderId,
+        order_id: orderId,
         amount: finalTotal,
         payment_method: 'cashfree',
       });
 
       if (paymentResult.success && paymentResult.payment) {
-        await updatePaymentStatusInStore(
-          paymentResult.payment.id,
-          'success',
-          {
-            cashfree_order_id: orderId,
-            cashfree_payment_id: paymentId || verificationResult.data.cf_payment_id,
-            payment_status: paymentStatus,
-          }
-        );
-
-        const paymentData = {
-          method: 'cashfree',
-          cashfree_order_id: orderId,
+        await updatePaymentStatusInStore(paymentResult.payment.id, 'success', {
+          cashfree_order_id: cashfreeOrderId,
           cashfree_payment_id: paymentId || verificationResult.data.cf_payment_id,
-        };
-        await updatePaymentStatus(currentOrderId, paymentData);
+          payment_status: paymentStatus,
+        });
+
+        await updatePaymentStatus(orderId, {
+          method: 'cashfree',
+          cashfree_order_id: cashfreeOrderId,
+          cashfree_payment_id: paymentId || verificationResult.data.cf_payment_id,
+        });
 
         const { updateOrderStatus: updateStatus } = require('../src/store/orderStore').useOrderStore.getState();
-        await updateStatus(currentOrderId, 'processing');
+        await updateStatus(orderId, 'processing');
 
-        // Send notifications
-        const { data: orderItems, error: itemsError } = await supabase
-          .from('order_items')
-          .select('id, seller_id, product_name, quantity, price')
-          .eq('order_id', currentOrderId);
+        // Notifications (best-effort, non-blocking)
+        try {
+          const { data: orderItems } = await supabase
+            .from('order_items')
+            .select('id, seller_id, product_name, quantity, price')
+            .eq('order_id', orderId);
 
-        if (orderItems && orderItems.length > 0) {
-          const { data: adminUsers } = await supabase
-            .from('users')
-            .select('id')
-            .eq('role', 'admin');
+          if (orderItems && orderItems.length > 0) {
+            const { data: adminUsers } = await supabase
+              .from('users')
+              .select('id')
+              .eq('role', 'admin');
 
-          if (adminUsers && adminUsers.length > 0) {
-            for (const admin of adminUsers) {
-              await supabase.from('notifications').insert({
-                user_id: admin.id,
-                title: '🛒 New Product Order',
-                message: `New order #${currentOrderId.substring(0, 8)} placed. Total: ₹${finalTotal}. Customer: ${shippingInfo.name}`,
-                type: 'new_order',
-                reference_id: currentOrderId,
-                reference_type: 'order',
-                created_at: new Date().toISOString(),
-              });
+            if (adminUsers) {
+              for (const admin of adminUsers) {
+                await supabase.from('notifications').insert({
+                  user_id: admin.id,
+                  title: '🛒 New Product Order',
+                  message: `New order #${orderId.substring(0, 8)} placed. Total: ₹${finalTotal}. Customer: ${shippingInfo.name}`,
+                  type: 'new_order',
+                  reference_id: orderId,
+                  reference_type: 'order',
+                  created_at: new Date().toISOString(),
+                });
+              }
+            }
+
+            const sellerIds = [...new Set(orderItems.map(i => i.seller_id).filter(Boolean))];
+            for (const sellerId of sellerIds) {
+              const { data: sellers } = await supabase
+                .from('sellers')
+                .select('id, user_id, company_name')
+                .eq('id', sellerId)
+                .limit(1);
+              if (sellers && sellers.length > 0 && sellers[0].user_id) {
+                await supabase.from('notifications').insert({
+                  user_id: sellers[0].user_id,
+                  title: '🎉 New Order Received!',
+                  message: `You have a new order #${orderId.substring(0, 8)}. Payment received: ₹${finalTotal}`,
+                  type: 'new_order',
+                  reference_id: orderId,
+                  reference_type: 'order',
+                  created_at: new Date().toISOString(),
+                });
+              }
             }
           }
-
-          const sellerIds = [...new Set(orderItems.map(item => item.seller_id).filter(Boolean))];
-          
-          for (const sellerId of sellerIds) {
-            const { data: sellers } = await supabase
-              .from('sellers')
-              .select('id, user_id, company_name')
-              .eq('id', sellerId)
-              .limit(1);
-
-            if (sellers && sellers.length > 0 && sellers[0].user_id) {
-              await supabase.from('notifications').insert({
-                user_id: sellers[0].user_id,
-                title: '🎉 New Order Received!',
-                message: `You have a new order #${currentOrderId.substring(0, 8)}. Payment received: ₹${finalTotal}`,
-                type: 'new_order',
-                reference_id: currentOrderId,
-                reference_type: 'order',
-                created_at: new Date().toISOString(),
-              });
-            }
-          }
+        } catch (notifyErr) {
+          console.warn('[Checkout] notify failed (non-blocking):', notifyErr);
         }
 
         clearCart();
 
         const { fetchOrders } = require('../src/store/orderStore').useOrderStore.getState();
-        if (user?.id) {
-          await fetchOrders(user.id);
-        }
-        
+        if (user?.id) await fetchOrders(user.id);
+
         setLoading(false);
         setProcessingPayment(false);
-        
+
         Alert.alert(
           '🎉 Order Placed Successfully!',
           'Your order has been placed and payment confirmed',
           [
-            {
-              text: 'View Orders',
-              onPress: () => router.replace('/orders'),
-            },
-            {
-              text: 'Continue Shopping',
-              onPress: () => router.replace('/(tabs)/home'),
-            },
+            { text: 'View Orders', onPress: () => router.replace('/orders') },
+            { text: 'Continue Shopping', onPress: () => router.replace('/(tabs)/home') },
           ]
         );
       } else {
         throw new Error(paymentResult.error || 'Failed to record payment');
       }
     } catch (error: any) {
-      console.error('Payment record error:', error);
+      console.error('[Checkout] Post-payment error:', error);
       setLoading(false);
       setProcessingPayment(false);
-      
-      if (error.message?.includes('pending')) {
-        Alert.alert(
-          'Order Placed!',
-          'Your order has been placed successfully. Payment is being processed.',
-          [
-            {
-              text: 'View Orders',
-              onPress: () => router.replace('/orders'),
-            },
-          ]
-        );
-        clearCart();
-      } else {
-        Alert.alert(
-          'Payment Verification Error',
-          error.message || 'Payment successful but verification failed. Please contact support.'
-        );
-      }
+      Alert.alert(
+        'Payment Verification Error',
+        error.message || 'Payment was successful but we could not create your order. Please contact support.'
+      );
     }
   };
 
@@ -380,7 +361,7 @@ export default function CheckoutScreen() {
     
     Alert.alert(
       'Payment Cancelled',
-      'You cancelled the payment. Your order is still pending.',
+  'Payment was cancelled. No order has been created.',
       [
         {
           text: 'Try Again',
@@ -581,12 +562,16 @@ export default function CheckoutScreen() {
             
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Delivery Charges</Text>
-              <LinearGradient
-                colors={['#10B981', '#059669']}
-                style={styles.freeBadge}
-              >
-                <Text style={styles.freeBadgeText}>FREE</Text>
-              </LinearGradient>
+              {deliveryCharges === 0 ? (
+                <LinearGradient
+                  colors={['#10B981', '#059669']}
+                  style={styles.freeBadge}
+                >
+                  <Text style={styles.freeBadgeText}>FREE</Text>
+                </LinearGradient>
+              ) : (
+                <Text style={styles.summaryValue}>₹{deliveryCharges.toFixed(2)}</Text>
+              )}
             </View>
             
             <View style={styles.dashedDivider} />
@@ -693,6 +678,8 @@ export default function CheckoutScreen() {
           visible={showCashfree}
           paymentSessionId={cashfreePaymentSessionId}
           orderId={cashfreeOrderId}
+           returnUrl="https://hybrid-bazaar.preview.emergentagent.com/payment-success"
+          mode="sandbox"
           onSuccess={handlePaymentSuccess}
           onFailure={handlePaymentFailure}
           onCancel={handlePaymentCancel}

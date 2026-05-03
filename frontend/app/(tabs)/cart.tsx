@@ -20,6 +20,7 @@ import { BlurView } from 'expo-blur';
 import { useCartStore } from '../../src/store/cartStore';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { colors, typography, spacing, borderRadius, shadows } from '../../src/constants/theme';
+import { calculateOrderSummary, FREE_DELIVERY_THRESHOLD } from '../../src/utils/pricing';
 
 const { width } = Dimensions.get('window');
 
@@ -221,10 +222,10 @@ export default function CartScreen() {
     }).start();
   }, []);
 
-  const TAX_RATE = 0.18;
-  const DELIVERY_CHARGE = items.length > 0 ? (total > 500 ? 0 : 40) : 0;
-  const taxAmount = total * TAX_RATE;
-  const finalTotal = total + taxAmount + DELIVERY_CHARGE;
+  const summary = calculateOrderSummary(items);
+  const taxAmount = summary.gst;
+  const DELIVERY_CHARGE = summary.deliveryCharge;
+  const finalTotal = summary.totalAmount;
 
   const handleCheckout = () => {
     if (items.length === 0) {
@@ -409,7 +410,7 @@ export default function CartScreen() {
             </LinearGradient>
           </View>
 
-          {total < 500 && (
+          {total < FREE_DELIVERY_THRESHOLD && (
             <LinearGradient
               colors={['#FEF3C7', '#FDE68A']}
               start={{ x: 0, y: 0 }}
@@ -418,7 +419,7 @@ export default function CartScreen() {
             >
               <Ionicons name="information-circle" size={18} color="#92400E" />
               <Text style={styles.deliveryInfoText}>
-                Add ₹{(500 - total).toFixed(2)} more to get FREE delivery
+                Add ₹{(FREE_DELIVERY_THRESHOLD - total).toFixed(2)} more to get FREE delivery
               </Text>
             </LinearGradient>
           )}
