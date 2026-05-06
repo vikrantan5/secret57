@@ -320,6 +320,10 @@ export default function PayoutSettingsScreen() {
 
                     <Input
                       label="Account Holder Name *"
+                        labelStyle={styles.darkLabel}
+                  inputContainerStyle={styles.darkInputContainer}
+                  inputStyle={styles.darkInputText}
+                  placeholderTextColor="#9CA3AF"
                       value={accountHolderName}
                       onChangeText={setAccountHolderName}
                       placeholder="Enter account holder name"
@@ -328,6 +332,10 @@ export default function PayoutSettingsScreen() {
 
                     <Input
                       label="Account Number *"
+                        labelStyle={styles.darkLabel}
+                  inputContainerStyle={styles.darkInputContainer}
+                  inputStyle={styles.darkInputText}
+                  placeholderTextColor="#9CA3AF"
                       value={accountNumber}
                       onChangeText={setAccountNumber}
                       placeholder="Enter account number"
@@ -337,6 +345,10 @@ export default function PayoutSettingsScreen() {
 
                     <Input
                       label="Confirm Account Number *"
+                        labelStyle={styles.darkLabel}
+                  inputContainerStyle={styles.darkInputContainer}
+                  inputStyle={styles.darkInputText}
+                  placeholderTextColor="#9CA3AF"
                       value={confirmAccountNumber}
                       onChangeText={setConfirmAccountNumber}
                       placeholder="Re-enter account number"
@@ -346,6 +358,10 @@ export default function PayoutSettingsScreen() {
 
                     <Input
                       label="IFSC Code *"
+                        labelStyle={styles.darkLabel}
+                  inputContainerStyle={styles.darkInputContainer}
+                  inputStyle={styles.darkInputText}
+                  placeholderTextColor="#9CA3AF"
                       value={ifscCode}
                       onChangeText={(text) => setIfscCode(text.toUpperCase())}
                       placeholder="Enter IFSC code"
@@ -356,6 +372,10 @@ export default function PayoutSettingsScreen() {
 
                     <Input
                       label="Bank Name *"
+                        labelStyle={styles.darkLabel}
+                  inputContainerStyle={styles.darkInputContainer}
+                  inputStyle={styles.darkInputText}
+                  placeholderTextColor="#9CA3AF"
                       value={bankName}
                       onChangeText={setBankName}
                       placeholder="Enter bank name"
@@ -364,6 +384,10 @@ export default function PayoutSettingsScreen() {
                     
                     <Input
                       label="UPI ID (Optional)"
+                        labelStyle={styles.darkLabel}
+                  inputContainerStyle={styles.darkInputContainer}
+                  inputStyle={styles.darkInputText}
+                  placeholderTextColor="#9CA3AF"
                       value={upiId}
                       onChangeText={setUpiId}
                       placeholder="yourname@upi"
@@ -373,6 +397,10 @@ export default function PayoutSettingsScreen() {
 
                     <Input
                       label="PAN Number (Optional)"
+                        labelStyle={styles.darkLabel}
+                  inputContainerStyle={styles.darkInputContainer}
+                  inputStyle={styles.darkInputText}
+                  placeholderTextColor="#9CA3AF"
                       value={panNumber}
                       onChangeText={(text) => setPanNumber(text.toUpperCase())}
                       placeholder="ABCDE1234F"
@@ -1050,5 +1078,22 @@ const styles = StyleSheet.create({
     color: '#d1d5db',
     marginTop: spacing.sm,
     fontStyle: 'italic',
+  },
+
+     // Dark theme overrides for Input component
+  darkLabel: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
+    marginBottom: 8,
+    letterSpacing: 0.2,
+  },
+  darkInputContainer: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+  },
+  darkInputText: {
+    color: '#FFFFFF',
   },
 });

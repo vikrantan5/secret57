@@ -154,7 +154,7 @@ export default function AddServiceScreen() {
       if (!address.trim()) newErrors.address = 'Service address is required';
       if (!city.trim()) newErrors.city = 'City is required';
       if (!pincode.trim()) newErrors.pincode = 'Pincode is required';
-      if (pincode.trim() && !/^d{6}$/.test(pincode.trim())) {
+     if (pincode.trim() && !/^\d{6}$/.test(pincode.trim())) {
         newErrors.pincode = 'Invalid pincode (6 digits required)';
       }
     }
