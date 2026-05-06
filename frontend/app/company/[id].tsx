@@ -318,32 +318,20 @@ export default function CompanyDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-        {tab === 'services' ? (
-          // ✅ FIX: Unique `key` per FlatList so React re-mounts when numColumns differs.
-          // This prevents the "Changing numColumns on the fly" invariant violation.
-          <FlatList
-            key="services-list-1col"
-            testID="company-services-list"
-            data={services}
-            keyExtractor={(item) => item.id}
-            ListHeaderComponent={ListHeader}
-            renderItem={({ item }) => (
+        {/* ✅ Single FlatList with key based on tab forces remount when numColumns changes,
+            preventing \"Changing numColumns on the fly\" invariant violation. */}
+        <FlatList
+          key={`company-list-${tab}`}
+          testID={tab === 'services' ? 'company-services-list' : 'company-products-list'}
+          data={tab === 'services' ? services : products}
+          keyExtractor={(item) => item.id}
+          numColumns={tab === 'products' ? 2 : 1}
+          columnWrapperStyle={tab === 'products' && products.length > 0 ? styles.row : undefined}
+          ListHeaderComponent={ListHeader}
+          renderItem={({ item }) => (
+            tab === 'services' ? (
               <ServiceCard service={item} onPress={() => handleServicePress(item.id)} />
-            )}
-            ListEmptyComponent={renderEmpty}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          />
-        ) : (
-          <FlatList
-            key="products-list-2col"
-            testID="company-products-list"
-            data={products}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            columnWrapperStyle={products.length > 0 ? styles.row : undefined}
-            ListHeaderComponent={ListHeader}
-            renderItem={({ item }) => (
+            ) : (
               <EnhancedProductCard
                 product={item}
                 onPress={() => handleProductPress(item.id)}
@@ -351,12 +339,12 @@ export default function CompanyDetailScreen() {
                 onToggleWishlist={() => handleToggleWishlist(item.id)}
                 isInWishlist={isInWishlist(item.id)}
               />
-            )}
-            ListEmptyComponent={renderEmpty}
-            contentContainerStyle={styles.gridContent}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
+            )
+          )}
+          ListEmptyComponent={renderEmpty}
+          contentContainerStyle={tab === 'services' ? styles.listContent : styles.gridContent}
+          showsVerticalScrollIndicator={false}
+        />
       </Animated.View>
     </SafeAreaView>
   );

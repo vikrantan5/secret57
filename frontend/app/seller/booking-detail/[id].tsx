@@ -142,7 +142,55 @@ export default function SellerBookingDetailScreen() {
   const booking = selectedBooking;
  const isCancelled = booking.status === 'cancelled';
   const canComplete = booking.status === 'confirmed' && !booking.otp_verified && !isCancelled;
+  const isPending = booking.status === 'pending';
   const statusColor = getStatusColor(booking.status);
+
+  const handleAccept = async () => {
+    Alert.alert(
+      'Accept Booking?',
+      'Customer will be notified to make payment. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Accept',
+          onPress: async () => {
+            setActionLoading(true);
+            const res = await acceptBooking(bookingId);
+            setActionLoading(false);
+            if (res.success) {
+              Alert.alert('Booking Accepted', 'The customer has been notified to complete payment.');
+            } else {
+              Alert.alert('Error', res.error || 'Failed to accept booking');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReject = async () => {
+    Alert.alert(
+      'Reject Booking?',
+      'The customer will be notified. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reject',
+          style: 'destructive',
+          onPress: async () => {
+            setActionLoading(true);
+            const res = await rejectBooking(bookingId, 'Rejected by seller');
+            setActionLoading(false);
+            if (res.success) {
+              Alert.alert('Booking Rejected', 'The customer has been notified.');
+            } else {
+              Alert.alert('Error', res.error || 'Failed to reject booking');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <LinearGradient
@@ -513,6 +561,66 @@ export default function SellerBookingDetailScreen() {
                   </Text>
                 </View>
               </View>
+            </LinearGradient>
+          )}
+                    {/* Accept / Reject Buttons (Seller approval flow) */}
+          {isPending && (
+            <LinearGradient
+              colors={['#1e1e1e', '#161616']}
+              style={[styles.card, { borderWidth: 1, borderColor: 'rgba(99,102,241,0.3)' }]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.cardHeader}>
+                <View style={styles.cardIconContainer}>
+                  <Ionicons name="hourglass-outline" size={20} color="#f59e0b" />
+                </View>
+                <Text style={styles.cardTitle}>Action Required</Text>
+              </View>
+              <Text style={[styles.label, { marginBottom: spacing.md }]}>
+                This customer is waiting for your approval. Accept to allow payment, or reject to close this booking.
+              </Text>
+
+              <View style={{ flexDirection: 'row', gap: spacing.md }}>
+                <TouchableOpacity
+                  testID="seller-reject-booking-btn"
+                  style={{ flex: 1, borderRadius: borderRadius.md, overflow: 'hidden' }}
+                  onPress={handleReject}
+                  disabled={actionLoading}
+                  activeOpacity={0.85}
+                >
+                  <LinearGradient
+                    colors={['#ef4444', '#dc2626']}
+                    style={{ paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Ionicons name="close-circle" size={18} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>Reject</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  testID="seller-accept-booking-btn"
+                  style={{ flex: 1, borderRadius: borderRadius.md, overflow: 'hidden' }}
+                  onPress={handleAccept}
+                  disabled={actionLoading}
+                  activeOpacity={0.85}
+                >
+                  <LinearGradient
+                    colors={['#10b981', '#059669']}
+                    style={{ paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>Accept</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+              {actionLoading && (
+                <ActivityIndicator size="small" color="#a78bfa" style={{ marginTop: spacing.sm }} />
+              )}
             </LinearGradient>
           )}
 
