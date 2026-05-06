@@ -27,11 +27,12 @@ export default function SellerBookingDetailScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const bookingId = params.id as string;
   
-  const { selectedBooking, loading, fetchBookingById, verifyOTP, setSelectedBooking } = useBookingStore();
+  const { selectedBooking, loading, fetchBookingById, verifyOTP, setSelectedBooking, acceptBooking, rejectBooking } = useBookingStore();
   const [showOTPModal, setShowOTPModal] = useState(false);
   const [otpInput, setOtpInput] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   // ✅ Fix: Clear stale booking & refetch on id change
   useEffect(() => {

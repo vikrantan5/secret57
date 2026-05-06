@@ -83,6 +83,8 @@ export default function BookingDetailScreen() {
     switch (status) {
       case 'pending':
         return ['#F59E0B', '#D97706'];
+      case 'accepted':
+        return ['#3B82F6', '#1D4ED8'];
       case 'confirmed':
         return ['#8B5CF6', '#7C3AED'];
       case 'in_progress':
@@ -100,20 +102,35 @@ export default function BookingDetailScreen() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'pending':
-        return 'time-outline';
-      case 'confirmed':
+        return 'hourglass-outline';
+      case 'accepted':
         return 'checkmark-circle-outline';
+      case 'confirmed':
+        return 'shield-checkmark-outline';
       case 'in_progress':
         return 'play-circle-outline';
       case 'completed':
         return 'checkmark-done-circle-outline';
       case 'cancelled':
+      case 'rejected':
         return 'close-circle-outline';
       default:
         return 'information-circle-outline';
     }
   };
 
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'AWAITING SELLER APPROVAL';
+      case 'accepted':
+        return 'ACCEPTED — PAY TO CONFIRM';
+      case 'rejected':
+        return 'REJECTED BY SELLER';
+      default:
+        return (status || 'unknown').toUpperCase();
+    }
+  };
   const formatDate = (dateString: string) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
@@ -248,9 +265,70 @@ export default function BookingDetailScreen() {
         >
           <Ionicons name={statusIcon} size={24} color="#FFFFFF" />
           <Text style={styles.statusBannerText}>
-            {booking.status?.toUpperCase() || 'UNKNOWN'}
+            {getStatusLabel(booking.status)}
           </Text>
         </LinearGradient>
+
+        {/* 🔑 APPROVAL FLOW STATUS CARD */}
+        {booking.status === 'pending' && (
+          <View style={[styles.card, { borderWidth: 1, borderColor: '#FCD34D', backgroundColor: '#FFFBEB' }]}>
+            <View style={styles.cardHeader}>
+              <LinearGradient colors={['#F59E0B', '#D97706']} style={styles.cardIcon}>
+                <Ionicons name="hourglass-outline" size={16} color="#FFFFFF" />
+              </LinearGradient>
+              <Text style={[styles.cardTitle, { color: '#92400E' }]}>Awaiting Approval</Text>
+            </View>
+            <Text style={{ color: '#78350F', fontSize: 13, lineHeight: 19 }}>
+              Your booking request has been sent to the seller. You will get a notification once they accept. No payment is required yet.
+            </Text>
+          </View>
+        )}
+
+        {booking.status === 'rejected' && (
+          <View style={[styles.card, { borderWidth: 1, borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' }]}>
+            <View style={styles.cardHeader}>
+              <LinearGradient colors={['#EF4444', '#DC2626']} style={styles.cardIcon}>
+                <Ionicons name="close-circle-outline" size={16} color="#FFFFFF" />
+              </LinearGradient>
+              <Text style={[styles.cardTitle, { color: '#991B1B' }]}>Booking Rejected</Text>
+            </View>
+            <Text style={{ color: '#7F1D1D', fontSize: 13, lineHeight: 19 }}>
+              {booking.cancellation_reason || 'The seller has rejected this booking. No payment was taken.'}
+            </Text>
+          </View>
+        )}
+
+        {booking.status === 'accepted' && (
+          <View style={[styles.card, { borderWidth: 1, borderColor: '#93C5FD', backgroundColor: '#EFF6FF' }]}>
+            <View style={styles.cardHeader}>
+              <LinearGradient colors={['#3B82F6', '#1D4ED8']} style={styles.cardIcon}>
+                <Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" />
+              </LinearGradient>
+              <Text style={[styles.cardTitle, { color: '#1E3A8A' }]}>Seller Accepted!</Text>
+            </View>
+            <Text style={{ color: '#1E40AF', fontSize: 13, lineHeight: 19, marginBottom: spacing.md }}>
+              The seller has accepted your booking. Complete payment now to confirm.
+            </Text>
+            <TouchableOpacity
+              testID="pay-now-button"
+              activeOpacity={0.85}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                router.push(`/service/${booking.service_id}?continueBooking=${booking.id}` as any);
+              }}
+            >
+              <LinearGradient
+                colors={['#10B981', '#059669']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.cancelButtonGradient, { borderRadius: borderRadius.lg }]}
+              >
+                <Ionicons name="card-outline" size={20} color="#FFFFFF" />
+                <Text style={styles.cancelButtonText}>Pay ₹{(booking.total_amount || 0).toFixed(2)} Now</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Service Info Card */}
         <View style={styles.card}>

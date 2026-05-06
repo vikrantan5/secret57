@@ -35,8 +35,9 @@ const { width } = Dimensions.get('window');
 
 export default function ServiceDetailScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string; continueBooking?: string }>();
   const serviceId = params.id as string;
+  const continueBookingId = params.continueBooking as string | undefined;
   
   const { user } = useAuthStore();
  const { selectedService, loading, fetchServiceById, fetchSellerServices, services } = useServiceStore();
@@ -91,6 +92,74 @@ const [cashfreePaymentSessionId, setCashfreePaymentSessionId] = useState<string>
     }
   }, [serviceId, user?.id]);
 
+
+
+  
+  // 🔑 NEW APPROVAL FLOW: When user navigates here with `?continueBooking=ID`
+  // (after seller accepts), pre-populate the existing booking and jump to Cashfree.
+  useEffect(() => {
+    const startPay = async () => {
+      if (!continueBookingId || !selectedService || !user?.id) return;
+      try {
+        setProcessingPayment(true);
+        const { data: existingBooking, error } = await supabase
+          .from('bookings')
+          .select('*')
+          .eq('id', continueBookingId)
+          .single();
+        if (error || !existingBooking) {
+          Alert.alert('Error', 'Booking not found');
+          setProcessingPayment(false);
+          return;
+        }
+        if (existingBooking.status !== 'accepted' && existingBooking.status !== 'pending_payment') {
+          Alert.alert('Cannot Pay', `This booking is currently ${existingBooking.status}. Payment is only possible after seller acceptance.`);
+          setProcessingPayment(false);
+          return;
+        }
+
+        setCurrentBookingId(continueBookingId);
+        const amount = existingBooking.total_amount || selectedService?.price || 0;
+
+        const cashfreeOrderResult = await CashfreeService.createOrder({
+          amount,
+          currency: 'INR',
+          order_note: `Service Booking: ${selectedService?.name}`,
+          customer_id: user.id,
+          customer_name: user.name || existingBooking.customer_name || 'Customer',
+          customer_email: user.email || existingBooking.customer_email || '',
+          customer_phone: user.phone || existingBooking.customer_phone || '',
+          return_url: 'https://hybrid-bazaar.preview.emergentagent.com/booking-success',
+        });
+
+        if (!cashfreeOrderResult.success || !cashfreeOrderResult.data) {
+          throw new Error(cashfreeOrderResult.error || 'Failed to create Cashfree order');
+        }
+
+        const orderId = cashfreeOrderResult.data.order_id;
+        const paymentSessionId = cashfreeOrderResult.data.payment_session_id;
+        setCashfreeOrderId(orderId);
+        setCashfreePaymentSessionId(paymentSessionId);
+
+        await supabase
+          .from('bookings')
+          .update({
+            cashfree_order_id: orderId,
+            payment_method: 'cashfree',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', continueBookingId);
+
+        setProcessingPayment(false);
+        setShowCashfree(true);
+      } catch (e: any) {
+        console.error('continueBooking pay error:', e);
+        setProcessingPayment(false);
+        Alert.alert('Error', e?.message || 'Failed to start payment');
+      }
+    };
+    startPay();
+  }, [continueBookingId, selectedService?.id, user?.id]);
 
 
    // Fetch seller's other services when selectedService is available
@@ -154,6 +223,8 @@ const [cashfreePaymentSessionId, setCashfreePaymentSessionId] = useState<string>
   };
 
  // Update the handleBookService function
+// 🔑 NEW APPROVAL FLOW: Just create booking (status='pending'). No payment yet.
+// Payment happens later from booking detail screen — only after seller accepts.
 const handleBookService = async () => {
   if (!user?.id) {
     Alert.alert('Login Required', 'Please login to book a service');
@@ -176,7 +247,6 @@ const handleBookService = async () => {
   setProcessingPayment(true);
 
   try {
-     // Step 1: Create booking with customer information
     const result = await createBooking({
       customer_id: user.id,
       seller_id: selectedService?.seller_id,
@@ -194,17 +264,29 @@ const handleBookService = async () => {
       customer_email: user.email || '',
       customer_phone: user.phone || '',
     });
+
     if (!result.success || !result.booking) {
       throw new Error(result.error || 'Failed to create booking');
     }
 
     const bookingId = result.booking.id;
-    setCurrentBookingId(bookingId);
+    setProcessingPayment(false);
 
-    console.log('Booking created, ID:', bookingId);
+    Alert.alert(
+      'Booking Request Sent',
+      'Your booking request has been sent to the seller. You will be notified once the seller accepts. Payment is required only after acceptance.',
+      [
+        {
+          text: 'View Booking',
+          onPress: () => router.replace(`/booking/${bookingId}` as any),
+        },
+      ]
+    );
+    return;
 
-    // Step 2: Create Cashfree order
-    const amount = selectedService?.price || 0;
+    // (Legacy direct-payment flow disabled below — kept commented for reference)
+    // eslint-disable-next-line no-unreachable
+    const _legacyAmount = selectedService?.price || 0;
     console.log('Creating Cashfree order for booking, amount:', amount);
     
     if (!user.email || !user.phone) {

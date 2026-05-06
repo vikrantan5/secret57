@@ -1,5 +1,6 @@
 // app/company/[id].tsx
 // Company Detail page - shows the company profile + tabs for Services & Products
+// FIXED: numColumns FlatList error + collapsible header that scrolls with the list
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
@@ -64,7 +65,6 @@ export default function CompanyDetailScreen() {
     if (user?.id) fetchWishlist(user.id);
   }, [user?.id]);
 
-  // When company loads, set default tab based on category type
   useEffect(() => {
     if (!selectedCompany) return;
     const type = selectedCompany.category?.type;
@@ -72,7 +72,6 @@ export default function CompanyDetailScreen() {
     else setTab('services');
   }, [selectedCompany?.id]);
 
-  // Load both services and products for this company
   useEffect(() => {
     if (!companyId) return;
     let cancelled = false;
@@ -150,12 +149,11 @@ export default function CompanyDetailScreen() {
 
   const initials = selectedCompany?.company_name
     ?.split(' ')
-    .map((w) => w[0])
+    .map((w: string) => w[0])
     .slice(0, 2)
     .join('')
     .toUpperCase();
 
-  // Determine which tabs to show based on category type
   const categoryType = selectedCompany?.category?.type;
   const showServicesTab = categoryType === 'booking' || categoryType === 'hybrid' || categoryType == null;
   const showProductsTab = categoryType === 'ecommerce' || categoryType === 'hybrid' || categoryType == null;
@@ -171,9 +169,10 @@ export default function CompanyDetailScreen() {
     );
   }
 
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* Premium Header */}
+  // The header is rendered as ListHeaderComponent so it scrolls up with the list,
+  // freeing screen space for service/product cards.
+  const ListHeader = (
+    <View>
       <LinearGradient
         colors={['#1E1B4B', '#312E81', '#4C1D95']}
         start={{ x: 0, y: 0 }}
@@ -196,14 +195,10 @@ export default function CompanyDetailScreen() {
           <View style={styles.iconButton} />
         </View>
 
-        {/* Hero / Profile section */}
         <View style={styles.profileSection}>
           <View style={styles.heroLogo}>
             {selectedCompany.company_logo ? (
-              <Image
-                source={{ uri: selectedCompany.company_logo }}
-                style={styles.heroLogoImg}
-              />
+              <Image source={{ uri: selectedCompany.company_logo }} style={styles.heroLogoImg} />
             ) : (
               <View style={styles.heroLogoFallback}>
                 <Text style={styles.heroLogoInitials}>{initials || 'C'}</Text>
@@ -237,7 +232,6 @@ export default function CompanyDetailScreen() {
             )}
           </View>
 
-          {/* Stats row */}
           <View style={styles.statsRow}>
             {showServicesTab && (
               <View style={styles.statBox}>
@@ -262,7 +256,7 @@ export default function CompanyDetailScreen() {
         </View>
       </LinearGradient>
 
-      {/* Tabs */}
+      {/* Tabs - sit just below the header in the scroll area */}
       <View style={styles.tabsContainer}>
         <View style={styles.tabsWrapper}>
           {showServicesTab && (
@@ -301,38 +295,54 @@ export default function CompanyDetailScreen() {
           )}
         </View>
       </View>
+    </View>
+  );
 
-      {/* Lists */}
+  const renderEmpty = () => {
+    if (tabLoading) {
+      return (
+        <View style={styles.loadingContainerInline}>
+          <ActivityIndicator size="large" color="#8B5CF6" />
+          <Text style={styles.loadingText}>Loading {tab}...</Text>
+        </View>
+      );
+    }
+    return (
+      <EmptyState
+        icon={tab === 'services' ? 'construct-outline' : 'cube-outline'}
+        message={tab === 'services' ? 'No services offered yet' : 'No products available yet'}
+      />
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-        {tabLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#8B5CF6" />
-            <Text style={styles.loadingText}>Loading {tab}...</Text>
-          </View>
-        ) : tab === 'services' ? (
-          services.length === 0 ? (
-            <EmptyState icon="construct-outline" message="No services offered yet" />
-          ) : (
-            <FlatList
-              testID="company-services-list"
-              data={services}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <ServiceCard service={item} onPress={() => handleServicePress(item.id)} />
-              )}
-              contentContainerStyle={styles.listContent}
-              showsVerticalScrollIndicator={false}
-            />
-          )
-        ) : products.length === 0 ? (
-          <EmptyState icon="cube-outline" message="No products available yet" />
+        {tab === 'services' ? (
+          // ✅ FIX: Unique `key` per FlatList so React re-mounts when numColumns differs.
+          // This prevents the "Changing numColumns on the fly" invariant violation.
+          <FlatList
+            key="services-list-1col"
+            testID="company-services-list"
+            data={services}
+            keyExtractor={(item) => item.id}
+            ListHeaderComponent={ListHeader}
+            renderItem={({ item }) => (
+              <ServiceCard service={item} onPress={() => handleServicePress(item.id)} />
+            )}
+            ListEmptyComponent={renderEmpty}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+          />
         ) : (
           <FlatList
+            key="products-list-2col"
             testID="company-products-list"
             data={products}
             keyExtractor={(item) => item.id}
             numColumns={2}
-            columnWrapperStyle={styles.row}
+            columnWrapperStyle={products.length > 0 ? styles.row : undefined}
+            ListHeaderComponent={ListHeader}
             renderItem={({ item }) => (
               <EnhancedProductCard
                 product={item}
@@ -342,6 +352,7 @@ export default function CompanyDetailScreen() {
                 isInWishlist={isInWishlist(item.id)}
               />
             )}
+            ListEmptyComponent={renderEmpty}
             contentContainerStyle={styles.gridContent}
             showsVerticalScrollIndicator={false}
           />
@@ -362,10 +373,7 @@ const EmptyState = ({ icon, message }: { icon: any; message: string }) => (
 );
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
+  container: { flex: 1, backgroundColor: '#F9FAFB' },
   headerGradient: {
     paddingTop: Platform.OS === 'ios' ? 50 : 32,
     paddingBottom: spacing.xl,
@@ -378,9 +386,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.25,
         shadowRadius: 12,
       },
-      android: {
-        elevation: 8,
-      },
+      android: { elevation: 8 },
     }),
   },
   topRow: {
@@ -408,47 +414,40 @@ const styles = StyleSheet.create({
   },
   profileSection: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+    paddingTop: spacing.md,
     alignItems: 'center',
   },
   heroLogo: {
-    width: 88,
-    height: 88,
-    borderRadius: 24,
+    width: 76,
+    height: 76,
+    borderRadius: 22,
     overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.18)',
     borderWidth: 3,
     borderColor: 'rgba(255,255,255,0.4)',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
-  heroLogoImg: {
-    width: '100%',
-    height: '100%',
-  },
+  heroLogoImg: { width: '100%', height: '100%' },
   heroLogoFallback: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.15)',
   },
-  heroLogoInitials: {
-    fontSize: 30,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
+  heroLogoInitials: { fontSize: 28, fontWeight: '800', color: '#FFFFFF' },
   companyName: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: '#FFFFFF',
     textAlign: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   companyDesc: {
-    fontSize: 13,
+    fontSize: 12,
     color: 'rgba(255,255,255,0.85)',
     textAlign: 'center',
-    lineHeight: 19,
-    marginBottom: spacing.md,
+    lineHeight: 18,
+    marginBottom: spacing.sm,
     paddingHorizontal: spacing.md,
   },
   metaRow: {
@@ -456,7 +455,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   metaChip: {
     flexDirection: 'row',
@@ -467,11 +466,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 999,
   },
-  metaChipText: {
-    fontSize: 11,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
+  metaChipText: { fontSize: 11, color: '#FFFFFF', fontWeight: '600' },
   statsRow: {
     flexDirection: 'row',
     gap: spacing.md,
@@ -480,21 +475,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.lg,
   },
-  statBox: {
-    minWidth: 70,
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
+  statBox: { minWidth: 70, alignItems: 'center', paddingHorizontal: spacing.sm },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  statValue: { fontSize: 17, fontWeight: '800', color: '#FFFFFF' },
   statLabel: {
     fontSize: 10,
     color: 'rgba(255,255,255,0.8)',
@@ -532,17 +515,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 999,
   },
-  tabActive: {
-    backgroundColor: '#8B5CF6',
-  },
-  tabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  tabTextActive: {
-    color: '#FFFFFF',
-  },
+  tabActive: { backgroundColor: '#8B5CF6' },
+  tabText: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
+  tabTextActive: { color: '#FFFFFF' },
   listContent: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
@@ -553,27 +528,16 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.xxl,
   },
-  row: {
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  loadingContainer: {
-    flex: 1,
+  row: { justifyContent: 'space-between', gap: spacing.md, marginBottom: spacing.md },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
+  loadingContainerInline: {
+    paddingVertical: spacing.xxl,
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.md,
   },
-  loadingText: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-  },
+  loadingText: { fontSize: 14, color: '#6B7280' },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   emptyIconContainer: {
     width: 120,
     height: 120,

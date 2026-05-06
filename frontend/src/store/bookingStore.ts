@@ -26,7 +26,8 @@ export interface Booking {
   otp_verified?: boolean;
   otp_generated_at?: string;
   payout_status?: string;
-  status: 'pending_payment' | 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'rejected';
+  status: 'pending_payment' | 'pending' | 'accepted' | 'rejected' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+  payment_status?: 'unpaid' | 'pending' | 'paid' | 'failed' | 'refunded';
   cancellation_reason: string | null;
     cancelled_at?: string | null;
   cancelled_by?: string | null;
@@ -61,6 +62,8 @@ interface BookingState {
   fetchSellerBookings: (sellerId: string) => Promise<void>;
   createBooking: (booking: Partial<Booking>) => Promise<{ success: boolean; error?: string; booking?: Booking }>;
   updateBookingStatus: (id: string, status: string, reason?: string) => Promise<{ success: boolean; error?: string }>;
+   acceptBooking: (id: string) => Promise<{ success: boolean; error?: string }>;
+  rejectBooking: (id: string, reason?: string) => Promise<{ success: boolean; error?: string }>;
   cancelBooking: (id: string, reason: string) => Promise<{ success: boolean; error?: string }>;
   rescheduleBooking: (id: string, newDate: string, newTime: string) => Promise<{ success: boolean; error?: string }>;
   confirmCompletion: (id: string) => Promise<{ success: boolean; error?: string }>;
@@ -177,11 +180,12 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     }
   },
 
-  createBooking: async (booking) => {
+   createBooking: async (booking) => {
     try {
       set({ loading: true, error: null });
       
-      // ✅ CRITICAL FIX: Fetch service with beneficiary info for payout
+      // ✅ NEW APPROVAL FLOW: Bookings start as PENDING (no payment yet).
+      // Seller must accept before customer pays.
       const { data: serviceData, error: serviceError } = await supabase
         .from('services')
         .select('id, seller_id, seller_bank_account_id, cashfree_bene_id, price')
@@ -194,25 +198,18 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         return { success: false, error: 'Service not found' };
       }
 
-      // Prepare booking data with beneficiary info from service
       const bookingData: any = {
         ...booking,
-        status: 'pending_payment',
+        status: 'pending',           // 🔑 awaiting seller approval
+        payment_status: 'unpaid',    // 🔑 no payment yet
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
 
-      // ✅ CRITICAL FIX: Copy beneficiary info from service to booking
       if (serviceData.cashfree_bene_id && serviceData.seller_bank_account_id) {
         bookingData.cashfree_bene_id = serviceData.cashfree_bene_id;
         bookingData.seller_bank_account_id = serviceData.seller_bank_account_id;
         bookingData.seller_payout_amount = booking.total_amount || serviceData.price;
-        console.log('✅ Booking created with payout info from service:', {
-          cashfree_bene_id: serviceData.cashfree_bene_id,
-          seller_bank_account_id: serviceData.seller_bank_account_id
-        });
-      } else {
-        console.warn('⚠️ Service missing beneficiary info. Payout will be fetched during payment.');
       }
 
       const { data, error } = await supabase
@@ -231,10 +228,32 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         .from('booking_timeline')
         .insert([{
           booking_id: data.id,
-          status: 'pending_payment',
-          notes: 'Booking created, awaiting payment',
+          status: 'pending',
+          notes: 'Booking created, awaiting seller approval',
           created_at: new Date().toISOString(),
         }]);
+
+      // 🔔 Notify seller of new booking request
+      try {
+        const { data: sellerData } = await supabase
+          .from('sellers')
+          .select('user_id')
+          .eq('id', booking.seller_id)
+          .single();
+
+        if (sellerData?.user_id) {
+          await supabase.from('notifications').insert({
+            user_id: sellerData.user_id,
+            type: 'booking',
+            title: '🆕 New Booking Request',
+            message: `${booking.customer_name || 'A customer'} has requested a new service booking. Please review and accept or reject.`,
+            data: { booking_id: data.id, action: 'review' },
+            created_at: new Date().toISOString(),
+          });
+        }
+      } catch (notifErr) {
+        console.warn('Notification dispatch failed (non-critical):', notifErr);
+      }
 
       set(state => ({ 
         bookings: [data, ...state.bookings],
@@ -301,6 +320,128 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     }
   },
 
+  acceptBooking: async (id) => {
+    try {
+      set({ loading: true });
+
+      const updates = {
+        status: 'accepted',
+        payment_status: 'pending',
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data: updated, error } = await supabase
+        .from('bookings')
+        .update(updates)
+        .eq('id', id)
+        .select('*, customer_id')
+        .single();
+
+      if (error) {
+        set({ loading: false });
+        return { success: false, error: error.message };
+      }
+
+      await supabase.from('booking_timeline').insert([{
+        booking_id: id,
+        status: 'accepted',
+        notes: 'Seller accepted the booking. Awaiting payment from customer.',
+        created_at: new Date().toISOString(),
+      }]);
+
+      // 🔔 Notify customer to pay
+      try {
+        if (updated?.customer_id) {
+          await supabase.from('notifications').insert({
+            user_id: updated.customer_id,
+            type: 'booking',
+            title: '✅ Booking Accepted',
+            message: 'Your booking has been accepted by the seller. Please complete payment to confirm.',
+            data: { booking_id: id, action: 'pay' },
+            created_at: new Date().toISOString(),
+          });
+        }
+      } catch (e) {
+        console.warn('Notify customer failed (non-critical):', e);
+      }
+
+      set(state => ({
+        bookings: state.bookings.map(b => (b.id === id ? { ...b, ...updates } : b)),
+        selectedBooking: state.selectedBooking?.id === id
+          ? { ...state.selectedBooking, ...updates }
+          : state.selectedBooking,
+        loading: false,
+      }));
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error in acceptBooking:', error);
+      set({ loading: false });
+      return { success: false, error: error.message };
+    }
+  },
+
+  rejectBooking: async (id, reason) => {
+    try {
+      set({ loading: true });
+
+      const updates = {
+        status: 'rejected',
+        cancellation_reason: reason || 'Rejected by seller',
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data: updated, error } = await supabase
+        .from('bookings')
+        .update(updates)
+        .eq('id', id)
+        .select('*, customer_id')
+        .single();
+
+      if (error) {
+        set({ loading: false });
+        return { success: false, error: error.message };
+      }
+
+      await supabase.from('booking_timeline').insert([{
+        booking_id: id,
+        status: 'rejected',
+        notes: reason || 'Booking rejected by seller',
+        created_at: new Date().toISOString(),
+      }]);
+
+      // 🔔 Notify customer of rejection
+      try {
+        if (updated?.customer_id) {
+          await supabase.from('notifications').insert({
+            user_id: updated.customer_id,
+            type: 'booking',
+            title: '❌ Booking Rejected',
+            message: reason ? `Your booking has been rejected. Reason: ${reason}` : 'Your booking has been rejected by the seller.',
+            data: { booking_id: id, action: 'view' },
+            created_at: new Date().toISOString(),
+          });
+        }
+      } catch (e) {
+        console.warn('Notify customer failed (non-critical):', e);
+      }
+
+      set(state => ({
+        bookings: state.bookings.map(b => (b.id === id ? { ...b, ...updates } : b)),
+        selectedBooking: state.selectedBooking?.id === id
+          ? { ...state.selectedBooking, ...updates }
+          : state.selectedBooking,
+        loading: false,
+      }));
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error in rejectBooking:', error);
+      set({ loading: false });
+      return { success: false, error: error.message };
+    }
+  },
+
   cancelBooking: async (id, reason) => {
      try {
       set({ loading: true });
@@ -356,46 +497,13 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   rescheduleBooking: async (id, newDate, newTime) => {
     try {
       set({ loading: true });
-      
-            // ✅ CRITICAL FIX: Fetch seller's bank account details for payout
-      let updateData: any = {
-          booking_date: newDate,
-          booking_time: newTime,
-          updated_at: new Date().toISOString(),
-          status: 'pending',
-            };
 
-      if (paymentStatus === 'success' || paymentStatus === 'paid') {
-        console.log('💰 Fetching seller bank account for future payout...');
-        
-        // Get booking to find seller_id
-        const { data: bookingData, error: fetchError } = await supabase
-          .from('bookings')
-          .select('seller_id, total_amount')
-          .eq('id', id)
-          .single();
-
-        if (!fetchError && bookingData) {
-          // Get seller's primary verified bank account
-          const { data: bankAccounts, error: bankError } = await supabase
-            .from('seller_bank_accounts')
-            .select('id, cashfree_bene_id')
-            .eq('seller_id', bookingData.seller_id)
-            .eq('is_primary', true)
-            .eq('verification_status', 'verified')
-            .limit(1);
-
-          if (!bankError && bankAccounts && bankAccounts.length > 0) {
-            const bankAccount = bankAccounts[0];
-            updateData.cashfree_bene_id = bankAccount.cashfree_bene_id;
-            updateData.seller_bank_account_id = bankAccount.id;
-            updateData.seller_payout_amount = bookingData.total_amount; // Full amount for now, adjust if commission needed
-            console.log('✅ Seller bank account stored for payout:', bankAccount.cashfree_bene_id);
-          } else {
-            console.warn('⚠️ No verified bank account found for seller. Payout will need manual setup.');
-          }
-        }
-      }
+      const updateData: any = {
+        booking_date: newDate,
+        booking_time: newTime,
+        updated_at: new Date().toISOString(),
+        status: 'pending',
+      };
 
       const { error } = await supabase
         .from('bookings')
@@ -440,7 +548,6 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       return { success: false, error: error.message };
     }
   },
-
   confirmCompletion: async (id) => {
     return get().updateBookingStatus(id, 'completed');
   },
