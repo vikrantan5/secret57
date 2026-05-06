@@ -7,27 +7,39 @@ import {
   TextInputProps,
   TouchableOpacity,
   ViewStyle,
+  TextStyle,
+  StyleProp,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius, spacing, typography } from '../../constants/theme';
 
 interface InputProps extends TextInputProps {
   label?: string;
+  helpText?: string;
   error?: string;
   leftIcon?: keyof typeof Ionicons.glyphMap;
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightIconPress?: () => void;
-  containerStyle?: ViewStyle;
+  containerStyle?: StyleProp<ViewStyle>;
+  labelStyle?: StyleProp<TextStyle>;
+  inputContainerStyle?: StyleProp<ViewStyle>;
+  inputStyle?: StyleProp<TextStyle>;
 }
 
 export const Input: React.FC<InputProps> = ({
   label,
+  helpText,
   error,
   leftIcon,
   rightIcon,
   onRightIconPress,
   containerStyle,
+  labelStyle,
+  inputContainerStyle,
+  inputStyle,
   secureTextEntry,
+  placeholderTextColor,
+  style,
   ...props
 }) => {
   const [isFocused, setIsFocused] = useState(false);
@@ -35,13 +47,14 @@ export const Input: React.FC<InputProps> = ({
 
   return (
     <View style={[styles.container, containerStyle]}>
-      {label && <Text style={styles.label}>{label}</Text>}
-      
+      {label && <Text style={[styles.label, labelStyle]}>{label}</Text>}
+
       <View
         style={[
           styles.inputContainer,
           isFocused && styles.inputContainerFocused,
           error && styles.inputContainerError,
+          inputContainerStyle,
         ]}
       >
         {leftIcon && (
@@ -52,16 +65,16 @@ export const Input: React.FC<InputProps> = ({
             style={styles.leftIcon}
           />
         )}
-        
+
         <TextInput
-          style={[styles.input, leftIcon && styles.inputWithLeftIcon]}
-          placeholderTextColor={colors.textLight}
+          style={[styles.input, leftIcon && styles.inputWithLeftIcon, inputStyle, style]}
+          placeholderTextColor={placeholderTextColor || colors.textLight}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           secureTextEntry={isSecure}
           {...props}
         />
-        
+
         {secureTextEntry && (
           <TouchableOpacity
             onPress={() => setIsSecure(!isSecure)}
@@ -74,15 +87,16 @@ export const Input: React.FC<InputProps> = ({
             />
           </TouchableOpacity>
         )}
-        
+
         {rightIcon && !secureTextEntry && (
           <TouchableOpacity onPress={onRightIconPress} style={styles.rightIcon}>
             <Ionicons name={rightIcon} size={20} color={colors.textSecondary} />
           </TouchableOpacity>
         )}
       </View>
-      
-      {error && <Text style={styles.errorText}>{error}</Text>}
+
+      {!!helpText && !error && <Text style={styles.helpText}>{helpText}</Text>}
+      {!!error && <Text style={styles.errorText}>{error}</Text>}
     </View>
   );
 };
@@ -127,6 +141,13 @@ const styles = StyleSheet.create({
   },
   rightIcon: {
     padding: spacing.xs,
+  },
+  helpText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    textTransform: 'none',
+    letterSpacing: 0,
   },
   errorText: {
     ...typography.caption,

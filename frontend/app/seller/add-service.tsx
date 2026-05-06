@@ -154,7 +154,7 @@ export default function AddServiceScreen() {
       if (!address.trim()) newErrors.address = 'Service address is required';
       if (!city.trim()) newErrors.city = 'City is required';
       if (!pincode.trim()) newErrors.pincode = 'Pincode is required';
-      if (pincode.trim() && !/^\d{6}$/.test(pincode.trim())) {
+      if (pincode.trim() && !/^d{6}$/.test(pincode.trim())) {
         newErrors.pincode = 'Invalid pincode (6 digits required)';
       }
     }
@@ -391,6 +391,10 @@ export default function AddServiceScreen() {
                 
                 <Input
                   label="Service Name *"
+                  labelStyle={styles.darkLabel}
+                  inputContainerStyle={styles.darkInputContainer}
+                  inputStyle={styles.darkInputText}
+                  placeholderTextColor="#9CA3AF"
                   value={name}
                   onChangeText={setName}
                   placeholder="Enter service name"
@@ -399,6 +403,10 @@ export default function AddServiceScreen() {
 
                 <Input
                   label="Description *"
+                  labelStyle={styles.darkLabel}
+                  inputContainerStyle={styles.darkInputContainer}
+                  inputStyle={styles.darkInputText}
+                  placeholderTextColor="#9CA3AF"
                   value={description}
                   onChangeText={setDescription}
                   placeholder="Describe your service"
@@ -410,6 +418,10 @@ export default function AddServiceScreen() {
 
                 <Input
                   label="Base Price (₹) *"
+                  labelStyle={styles.darkLabel}
+                  inputContainerStyle={styles.darkInputContainer}
+                  inputStyle={styles.darkInputText}
+                  placeholderTextColor="#9CA3AF"
                   value={basePrice}
                   onChangeText={setBasePrice}
                   placeholder="0.00"
@@ -419,6 +431,10 @@ export default function AddServiceScreen() {
 
                 <Input
                   label="Duration (minutes)"
+                  labelStyle={styles.darkLabel}
+                  inputContainerStyle={styles.darkInputContainer}
+                  inputStyle={styles.darkInputText}
+                  placeholderTextColor="#9CA3AF"
                   value={duration}
                   onChangeText={setDuration}
                   placeholder="Optional"
@@ -427,6 +443,10 @@ export default function AddServiceScreen() {
 
                 <Input
                   label="YouTube Video URL (Optional)"
+                  labelStyle={styles.darkLabel}
+                  inputContainerStyle={styles.darkInputContainer}
+                  inputStyle={styles.darkInputText}
+                  placeholderTextColor="#9CA3AF"
                   value={videoUrl}
                   onChangeText={setVideoUrl}
                   placeholder="https://www.youtube.com/watch?v=..."
@@ -492,6 +512,10 @@ export default function AddServiceScreen() {
 
                 <Input
                   label="Service Address *"
+                  labelStyle={styles.darkLabel}
+                  inputContainerStyle={styles.darkInputContainer}
+                  inputStyle={styles.darkInputText}
+                  placeholderTextColor="#9CA3AF"
                   value={address}
                   onChangeText={setAddress}
                   placeholder="Street address, building name"
@@ -504,6 +528,10 @@ export default function AddServiceScreen() {
                   <View style={styles.halfInput}>
                     <Input
                       label="City *"
+                      labelStyle={styles.darkLabel}
+                      inputContainerStyle={styles.darkInputContainer}
+                      inputStyle={styles.darkInputText}
+                      placeholderTextColor="#9CA3AF"
                       value={city}
                       onChangeText={setCity}
                       placeholder="City"
@@ -513,6 +541,10 @@ export default function AddServiceScreen() {
                   <View style={styles.halfInput}>
                     <Input
                       label="Pincode *"
+                      labelStyle={styles.darkLabel}
+                      inputContainerStyle={styles.darkInputContainer}
+                      inputStyle={styles.darkInputText}
+                      placeholderTextColor="#9CA3AF"
                       value={pincode}
                       onChangeText={setPincode}
                       placeholder="000000"
@@ -525,6 +557,10 @@ export default function AddServiceScreen() {
 
                 <Input
                   label="Service Radius (km)"
+                  labelStyle={styles.darkLabel}
+                  inputContainerStyle={styles.darkInputContainer}
+                  inputStyle={styles.darkInputText}
+                  placeholderTextColor="#9CA3AF"
                   value={radiusKm}
                   onChangeText={setRadiusKm}
                   placeholder="10"
@@ -553,6 +589,10 @@ export default function AddServiceScreen() {
                     <View style={styles.halfInput}>
                       <Input
                         label="Latitude"
+                        labelStyle={styles.darkLabel}
+                        inputContainerStyle={styles.darkInputContainer}
+                        inputStyle={styles.darkInputText}
+                        placeholderTextColor="#9CA3AF"
                         value={latitude}
                         onChangeText={setLatitude}
                         placeholder="Auto-filled"
@@ -562,6 +602,10 @@ export default function AddServiceScreen() {
                     <View style={styles.halfInput}>
                       <Input
                         label="Longitude"
+                        labelStyle={styles.darkLabel}
+                        inputContainerStyle={styles.darkInputContainer}
+                        inputStyle={styles.darkInputText}
+                        placeholderTextColor="#9CA3AF"
                         value={longitude}
                         onChangeText={setLongitude}
                         placeholder="Auto-filled"
@@ -823,5 +867,21 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     width: '100%',
+  },
+   // Dark theme overrides for Input component
+  darkLabel: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
+    marginBottom: 8,
+    letterSpacing: 0.2,
+  },
+  darkInputContainer: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+  },
+  darkInputText: {
+    color: '#FFFFFF',
   },
 });

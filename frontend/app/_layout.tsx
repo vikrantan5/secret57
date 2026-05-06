@@ -29,6 +29,7 @@ export default function RootLayout() {
         <Stack.Screen name="auth/login" />
         <Stack.Screen name="auth/register" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="company/[id]" />
          <Stack.Screen name="seller/dashboard" />
         <Stack.Screen name="seller/pending-approval" />
         <Stack.Screen name="seller/company-setup" />

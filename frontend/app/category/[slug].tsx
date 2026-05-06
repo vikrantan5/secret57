@@ -1,5 +1,6 @@
 // app/category/[slug].tsx
-import React, { useEffect, useState, useRef } from 'react';
+// Companies/Vendors listing for a given category
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,46 +9,39 @@ import {
   ActivityIndicator,
   SafeAreaView,
   TouchableOpacity,
+  TextInput,
   Animated,
   Dimensions,
   Platform,
+  Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useCategoryStore, Category } from '../../src/store/categoryStore';
-import { useProductStore } from '../../src/store/productStore';
-import { useServiceStore } from '../../src/store/serviceStore';
-import { EnhancedProductCard } from '../../src/components/cards/EnhancedProductCard';
-import { ServiceCard } from '../../src/components/cards/ServiceCard';
-import { useCartStore } from '../../src/store/cartStore';
-import { useWishlistStore } from '../../src/store/wishlistStore';
-import { useAuthStore } from '../../src/store/authStore';
-import { colors, spacing, typography, borderRadius } from '../../src/constants/theme';
+import { useCompanyStore, Company } from '../../src/store/companyStore';
+import { spacing, borderRadius } from '../../src/constants/theme';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
-export default function CategoryDetailScreen() {
+export default function CategoryCompaniesScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ slug?: string }>();
+  const params = useLocalSearchParams<{ slug?: string; id?: string }>();
   const categorySlug = params.slug as string;
-  
-  const { user } = useAuthStore();
-  const { categories, getCategoryBySlug } = useCategoryStore();
-  const { products, loading: productsLoading, fetchProducts } = useProductStore();
-  const { services, loading: servicesLoading, fetchServices } = useServiceStore();
-  const { addItem } = useCartStore();
-  const { isInWishlist, toggleWishlist, fetchWishlist } = useWishlistStore();
-  
+
+  const { categories, getCategoryBySlug, fetchCategories } = useCategoryStore();
+  const { companies, loading, fetchCompaniesByCategory } = useCompanyStore();
+
   const [category, setCategory] = useState<Category | null>(null);
-  const [activeTab, setActiveTab] = useState<'products' | 'services'>('products');
-  
-  // Animation values
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Animation
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
+    if (categories.length === 0) fetchCategories();
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -67,245 +61,215 @@ export default function CategoryDetailScreen() {
       const cat = getCategoryBySlug(categorySlug);
       if (cat) {
         setCategory(cat);
-        
-        // Fetch data based on category type
-        if (cat.type === 'ecommerce' || cat.type === 'hybrid') {
-          fetchProducts(cat.id);
-          setActiveTab('products');
-        }
-        if (cat.type === 'booking') {
-          fetchServices(cat.id);
-          setActiveTab('services');
-        }
-        if (cat.type === 'hybrid') {
-          fetchServices(cat.id);
-        }
+        fetchCompaniesByCategory(cat.id);
       }
     }
   }, [categorySlug, categories]);
 
-  useEffect(() => {
-    if (user?.id) {
-      fetchWishlist(user.id);
-    }
-  }, [user?.id]);
+  const filteredCompanies = useMemo(() => {
+    if (!searchQuery.trim()) return companies;
+    const q = searchQuery.toLowerCase();
+    return companies.filter(
+      (c) =>
+        c.company_name?.toLowerCase().includes(q) ||
+        c.description?.toLowerCase().includes(q) ||
+        c.city?.toLowerCase().includes(q)
+    );
+  }, [companies, searchQuery]);
 
-  const handleProductPress = (productId: string) => {
+  const handleCompanyPress = (companyId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push(`/product/${productId}`);
+    router.push(`/company/${companyId}`);
   };
 
-  const handleServicePress = (serviceId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push(`/service/${serviceId}`);
-  };
-
-  const handleAddToCart = (product: any) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    addItem({
-      id: product.id,
-      productId: product.id,
-      sellerId: product.seller_id,
-      name: product.name,
-      price: product.price,
-      quantity: 1,
-      image: product.images?.[0],
-    });
-  };
-
-  const handleToggleWishlist = async (productId: string) => {
-    if (!user?.id) {
-      Alert.alert('Login Required', 'Please login to add items to wishlist');
-      return;
-    }
-    await toggleWishlist(productId, user.id, 'product');
-  };
-
-  const handleTabChange = (tab: 'products' | 'services') => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setActiveTab(tab);
+  const getCategoryGradient = () => {
+    if (!category) return ['#8B5CF6', '#7C3AED', '#6D28D9'];
+    if (category.type === 'ecommerce') return ['#8B5CF6', '#7C3AED', '#6D28D9'];
+    if (category.type === 'booking') return ['#10B981', '#059669', '#047857'];
+    return ['#F59E0B', '#D97706', '#B45309'];
   };
 
   if (!category) {
     return (
       <SafeAreaView style={styles.container}>
-        <LinearGradient
-          colors={['#F9FAFB', '#FFFFFF']}
-          style={styles.loadingContainer}
-        >
+        <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#8B5CF6" />
           <Text style={styles.loadingText}>Loading category...</Text>
-        </LinearGradient>
+        </View>
       </SafeAreaView>
     );
   }
 
-  const showTabs = category.type === 'hybrid';
-  const loading = activeTab === 'products' ? productsLoading : servicesLoading;
-  const data = activeTab === 'products' ? products : services;
+  const showServicesBadge = category.type === 'booking' || category.type === 'hybrid';
+  const showProductsBadge = category.type === 'ecommerce' || category.type === 'hybrid';
 
-  // Get gradient colors based on category type
-  const getCategoryGradient = () => {
-    if (category.type === 'ecommerce') {
-      return ['#8B5CF6', '#7C3AED', '#6D28D9'];
-    } else if (category.type === 'booking') {
-      return ['#10B981', '#059669', '#047857'];
-    } else {
-      return ['#F59E0B', '#D97706', '#B45309'];
-    }
+  const renderCompany = ({ item, index }: { item: Company; index: number }) => {
+    const initials = item.company_name
+      ?.split(' ')
+      .map((w) => w[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
+
+    return (
+      <Animated.View
+        style={{
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        }}
+      >
+        <TouchableOpacity
+          testID={`company-card-${item.id}`}
+          style={styles.companyCard}
+          onPress={() => handleCompanyPress(item.id)}
+          activeOpacity={0.85}
+        >
+          {/* Logo / Initials */}
+          <View style={styles.logoContainer}>
+            {item.company_logo ? (
+              <Image source={{ uri: item.company_logo }} style={styles.logoImage} resizeMode="cover" />
+            ) : (
+              <LinearGradient
+                colors={getCategoryGradient() as any}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.logoFallback}
+              >
+                <Text style={styles.logoInitials}>{initials || 'C'}</Text>
+              </LinearGradient>
+            )}
+          </View>
+
+          {/* Content */}
+          <View style={styles.companyContent}>
+            <Text style={styles.companyName} numberOfLines={1}>
+              {item.company_name}
+            </Text>
+
+            {!!item.description && (
+              <Text style={styles.companyDesc} numberOfLines={2}>
+                {item.description}
+              </Text>
+            )}
+
+            <View style={styles.cityRow}>
+              <Ionicons name="location-outline" size={12} color="#6B7280" />
+              <Text style={styles.cityText} numberOfLines={1}>
+                {item.city}
+                {item.state ? `, ${item.state}` : ''}
+              </Text>
+            </View>
+
+            <View style={styles.badgesRow}>
+              {showServicesBadge && (
+                <View style={[styles.statBadge, styles.statBadgeService]}>
+                  <Ionicons name="construct-outline" size={12} color="#059669" />
+                  <Text style={[styles.statBadgeText, { color: '#047857' }]}>
+                    {item.services_count} {item.services_count === 1 ? 'Service' : 'Services'}
+                  </Text>
+                </View>
+              )}
+              {showProductsBadge && (
+                <View style={[styles.statBadge, styles.statBadgeProduct]}>
+                  <Ionicons name="cube-outline" size={12} color="#7C3AED" />
+                  <Text style={[styles.statBadgeText, { color: '#6D28D9' }]}>
+                    {item.products_count} {item.products_count === 1 ? 'Product' : 'Products'}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Chevron */}
+          <View style={styles.chevron}>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
+    );
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container}>
       {/* Premium Gradient Header */}
       <LinearGradient
-        colors={getCategoryGradient()}
+        colors={getCategoryGradient() as any}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerGradient}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity
+            testID="category-back-btn"
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
             <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          
+
           <View style={styles.headerContent}>
-            <Text style={styles.title} numberOfLines={1}>{category.name}</Text>
-            {category.description && (
-              <Text style={styles.subtitle} numberOfLines={1}>{category.description}</Text>
-            )}
+            <Text style={styles.title} numberOfLines={1}>
+              {category.name}
+            </Text>
+            <Text style={styles.subtitle} numberOfLines={1}>
+              Browse trusted vendors
+            </Text>
           </View>
-          
-          <View style={styles.headerRight}>
-            <View style={styles.itemCountBadge}>
-              <Text style={styles.itemCountText}>
-                {activeTab === 'products' ? products.length : services.length}
-              </Text>
-            </View>
+
+          <View style={styles.itemCountBadge}>
+            <Text style={styles.itemCountText}>{filteredCompanies.length}</Text>
+          </View>
+        </View>
+
+        {/* Search bar */}
+        <View style={styles.searchWrapper}>
+          <View style={styles.searchBox}>
+            <Ionicons name="search" size={18} color="#FFFFFF" />
+            <TextInput
+              testID="company-search-input"
+              style={styles.searchInput}
+              placeholder="Search companies, city..."
+              placeholderTextColor="rgba(255,255,255,0.7)"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.85)" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </LinearGradient>
-
-      {/* Tabs for Hybrid Categories */}
-      {showTabs && (
-        <Animated.View 
-          style={[
-            styles.tabsContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            }
-          ]}
-        >
-          <View style={styles.tabsWrapper}>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'products' && styles.activeTab]}
-              onPress={() => handleTabChange('products')}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={activeTab === 'products' ? ['#8B5CF6', '#7C3AED'] : ['#F3F4F6', '#E5E7EB']}
-                style={styles.tabIcon}
-              >
-                <Ionicons
-                  name="cube-outline"
-                  size={18}
-                  color={activeTab === 'products' ? '#FFFFFF' : '#6B7280'}
-                />
-              </LinearGradient>
-              <Text
-                style={[
-                  styles.tabText,
-                  activeTab === 'products' && styles.activeTabText,
-                ]}
-              >
-                Products
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'services' && styles.activeTab]}
-              onPress={() => handleTabChange('services')}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={activeTab === 'services' ? ['#10B981', '#059669'] : ['#F3F4F6', '#E5E7EB']}
-                style={styles.tabIcon}
-              >
-                <Ionicons
-                  name="calendar-outline"
-                  size={18}
-                  color={activeTab === 'services' ? '#FFFFFF' : '#6B7280'}
-                />
-              </LinearGradient>
-              <Text
-                style={[
-                  styles.tabText,
-                  activeTab === 'services' && styles.activeTabTextServices,
-                ]}
-              >
-                Services
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      )}
 
       {/* Content */}
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#8B5CF6" />
-            <Text style={styles.loadingText}>Loading {activeTab}...</Text>
+            <Text style={styles.loadingText}>Loading vendors...</Text>
           </View>
-        ) : data.length === 0 ? (
+        ) : filteredCompanies.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <LinearGradient
-              colors={['#F3F4F6', '#E5E7EB']}
-              style={styles.emptyIconContainer}
-            >
-              <Ionicons 
-                name={activeTab === 'products' ? "cube-outline" : "calendar-outline"} 
-                size={64} 
-                color="#8B5CF6" 
-              />
+            <LinearGradient colors={['#F3F4F6', '#E5E7EB']} style={styles.emptyIconContainer}>
+              <Ionicons name="business-outline" size={56} color="#8B5CF6" />
             </LinearGradient>
-            <Text style={styles.emptyTitle}>No {activeTab} available</Text>
+            <Text style={styles.emptyTitle}>
+              {searchQuery ? 'No vendors match your search' : 'No vendors available'}
+            </Text>
             <Text style={styles.emptyText}>
-              Check back later for new {activeTab === 'products' ? 'products' : 'services'}
+              {searchQuery
+                ? 'Try a different keyword or clear your search'
+                : 'New companies will appear here once they join'}
             </Text>
           </View>
-        ) : activeTab === 'products' ? (
-          <FlatList
-            key="products-grid"
-            data={products}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            columnWrapperStyle={styles.row}
-            renderItem={({ item }) => (
-              <EnhancedProductCard
-                product={item}
-                onPress={() => handleProductPress(item.id)}
-                onAddToCart={() => handleAddToCart(item)}
-                onToggleWishlist={() => handleToggleWishlist(item.id)}
-                isInWishlist={isInWishlist(item.id)}
-              />
-            )}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          />
         ) : (
           <FlatList
-            key="services-list"
-            data={services}
+            testID="companies-list"
+            data={filteredCompanies}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <ServiceCard
-                service={item}
-                onPress={() => handleServicePress(item.id)}
-              />
-            )}
-            contentContainerStyle={styles.listContentServices}
+            renderItem={renderCompany}
+            contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
           />
         )}
@@ -320,14 +284,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   headerGradient: {
+    paddingTop: Platform.OS === 'ios' ? 50 : 32,
     paddingBottom: spacing.lg,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
     ...Platform.select({
       ios: {
-        shadowColor: '#8B5CF6',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
+        shadowOpacity: 0.25,
         shadowRadius: 12,
       },
       android: {
@@ -338,14 +303,14 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
     paddingHorizontal: spacing.lg,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -357,44 +322,64 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
   },
   subtitle: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255,255,255,0.85)',
     marginTop: 2,
   },
-  headerRight: {
-    width: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   itemCountBadge: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 8,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
+    minWidth: 32,
+    alignItems: 'center',
   },
   itemCountText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  tabsContainer: {
+  searchWrapper: {
     paddingHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
+    marginTop: spacing.md,
   },
-  tabsWrapper: {
+  searchBox: {
     flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: borderRadius.xl,
+    paddingHorizontal: spacing.md,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 6,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  searchInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 14,
+    paddingVertical: 0,
+  },
+  listContent: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxl,
+  },
+  companyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 60,
-    padding: 4,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
+        shadowOpacity: 0.06,
         shadowRadius: 8,
       },
       android: {
@@ -402,47 +387,86 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  tab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderRadius: 60,
-    position: 'relative',
-  },
-  activeTab: {
+  logoContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginRight: spacing.md,
     backgroundColor: '#F3F4F6',
   },
-  tabIcon: {
+  logoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  logoFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoInitials: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  companyContent: {
+    flex: 1,
+    paddingRight: spacing.sm,
+  },
+  companyName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  companyDesc: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 6,
+    lineHeight: 16,
+  },
+  cityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 8,
+  },
+  cityText: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  statBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    gap: 4,
+  },
+  statBadgeService: {
+    backgroundColor: '#D1FAE5',
+  },
+  statBadgeProduct: {
+    backgroundColor: '#EDE9FE',
+  },
+  statBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  chevron: {
     width: 28,
     height: 28,
     borderRadius: 14,
+    backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  activeTabText: {
-    color: '#8B5CF6',
-  },
-  activeTabTextServices: {
-    color: '#10B981',
-  },
-  listContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-  },
-  listContentServices: {
-    padding: spacing.lg,
-  },
-  row: {
-    justifyContent: 'space-between',
-    gap: spacing.md,
   },
   loadingContainer: {
     flex: 1,
@@ -469,14 +493,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: '#1F2937',
     marginBottom: spacing.sm,
+    textAlign: 'center',
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#9CA3AF',
     textAlign: 'center',
+    paddingHorizontal: spacing.lg,
   },
 });
