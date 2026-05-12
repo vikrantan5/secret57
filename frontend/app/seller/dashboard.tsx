@@ -93,6 +93,65 @@ export default function SellerDashboard() {
     loadSellerData();
   }, []);
 
+  // Set up Supabase Realtime subscriptions so seller dashboard metrics
+  // update live whenever orders/bookings/products/services change.
+  useEffect(() => {
+    if (!sellerId) return;
+
+    const ordersChannel = supabase
+      .channel(`seller-${sellerId}-orders`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        () => fetchSellerStats()
+      )
+      .subscribe();
+
+    const orderItemsChannel = supabase
+      .channel(`seller-${sellerId}-order-items`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'order_items', filter: `seller_id=eq.${sellerId}` },
+        () => fetchSellerStats()
+      )
+      .subscribe();
+
+    const bookingsChannel = supabase
+      .channel(`seller-${sellerId}-bookings`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings', filter: `seller_id=eq.${sellerId}` },
+        () => fetchSellerStats()
+      )
+      .subscribe();
+
+    const productsChannel = supabase
+      .channel(`seller-${sellerId}-products`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'products', filter: `seller_id=eq.${sellerId}` },
+        () => fetchSellerStats()
+      )
+      .subscribe();
+
+    const servicesChannel = supabase
+      .channel(`seller-${sellerId}-services`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'services', filter: `seller_id=eq.${sellerId}` },
+        () => fetchSellerStats()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ordersChannel);
+      supabase.removeChannel(orderItemsChannel);
+      supabase.removeChannel(bookingsChannel);
+      supabase.removeChannel(productsChannel);
+      supabase.removeChannel(servicesChannel);
+    };
+  }, [sellerId]);
+
   const loadSellerData = async () => {
     if (!user?.id) return;
     

@@ -123,7 +123,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         // Admin - redirect to admin dashboard
         router.replace('/admin/dashboard');
       } else if (role === 'seller') {
-        // Check if seller has a company profile
+         // STAGE 1 - Profile (account) approval check.
+        // If the user just registered as a seller, the admin must first approve the
+        // account itself before they can submit company details.
+        if (
+          userData.seller_status === 'pending' ||
+          userData.seller_status === 'rejected'
+        ) {
+          router.replace('/seller/pending-approval');
+          return { success: true };
+        }
+
+        // Profile is approved - check if seller has a company profile (Stage 2)
         const { data: sellerData } = await supabase
           .from('sellers')
           .select('*')
@@ -131,10 +142,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           .single();
 
         if (!sellerData) {
-          // No seller profile - redirect to company setup
+          // No company profile yet - redirect to company setup
           router.replace('/seller/company-setup');
         } else if (sellerData.status === 'pending' || sellerData.status === 'rejected') {
-          // Seller pending approval - redirect to pending page
+          // Company pending approval - redirect to pending page
           router.replace('/seller/pending-approval');
         } else if (sellerData.status === 'approved') {
           // Approved seller - redirect to dashboard

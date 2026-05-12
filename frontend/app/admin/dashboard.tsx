@@ -36,6 +36,60 @@ export default function AdminDashboardScreen() {
       return;
     }
     loadStats();
+
+    // Realtime subscriptions for live admin dashboard updates
+    const usersChannel = supabase
+      .channel('admin-dashboard-users')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'users' },
+        () => loadStats()
+      )
+      .subscribe();
+
+    const sellersChannel = supabase
+      .channel('admin-dashboard-sellers')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sellers' },
+        () => loadStats()
+      )
+      .subscribe();
+
+    const productsChannel = supabase
+      .channel('admin-dashboard-products')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'products' },
+        () => loadStats()
+      )
+      .subscribe();
+
+    const ordersChannel = supabase
+      .channel('admin-dashboard-orders')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        () => loadStats()
+      )
+      .subscribe();
+
+    const bookingsChannel = supabase
+      .channel('admin-dashboard-bookings')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings' },
+        () => loadStats()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(usersChannel);
+      supabase.removeChannel(sellersChannel);
+      supabase.removeChannel(productsChannel);
+      supabase.removeChannel(ordersChannel);
+      supabase.removeChannel(bookingsChannel);
+    };
   }, [user]);
 
   const loadStats = async () => {
@@ -45,16 +99,26 @@ export default function AdminDashboardScreen() {
         .from('users')
         .select('*', { count: 'exact', head: true });
 
-      // Get total sellers
+      // Get total sellers (approved companies)
       const { count: sellersCount } = await supabase
         .from('sellers')
         .select('*', { count: 'exact', head: true });
 
-      // Get pending sellers
-      const { count: pendingCount } = await supabase
+      // Get pending sellers - INCLUDES BOTH STAGES:
+      // Stage 1: users with role=seller and seller_status=pending (just registered, no company yet)
+      // Stage 2: sellers with status=pending (submitted company details)
+      const { count: pendingProfileCount } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .eq('role', 'seller')
+        .eq('seller_status', 'pending');
+
+      const { count: pendingCompanyCount } = await supabase
         .from('sellers')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'pending');
+
+      const pendingCount = (pendingProfileCount || 0) + (pendingCompanyCount || 0);
 
       // Get total products
       const { count: productsCount } = await supabase

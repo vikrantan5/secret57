@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -15,13 +15,18 @@ import { useAuthStore } from '../../src/store/authStore';
 import { useSellerStore } from '../../src/store/sellerStore';
 import { colors, spacing, typography, borderRadius } from '../../src/constants/theme';
 import { Button } from '../../src/components/ui/Button';
+import { supabase } from '../../src/services/supabase';
 
 const { width, height } = Dimensions.get('window');
 
 export default function PendingApprovalScreen() {
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user, setUser, logout } = useAuthStore();
   const { seller, fetchSellerProfile } = useSellerStore();
+  // Local copy of user.seller_status so the screen reacts instantly to realtime updates
+  const [profileStatus, setProfileStatus] = useState<
+    'pending' | 'approved' | 'rejected' | null | undefined
+  >(user?.seller_status);
 
   useEffect(() => {
     if (user?.id) {
@@ -29,30 +34,143 @@ export default function PendingApprovalScreen() {
     }
   }, [user]);
 
+  // Realtime subscription: react to admin approving/rejecting the seller's account
+  // (Stage 1 - users.seller_status) or company (Stage 2 - sellers.status).
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const userChannel = supabase
+      .channel(`pending-approval-user-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${user.id}` },
+        (payload: any) => {
+          const updated = payload?.new;
+          if (!updated) return;
+          setProfileStatus(updated.seller_status);
+          // Refresh user in auth store
+          setUser(updated);
+
+          if (updated.seller_status === 'approved') {
+            // Stage 1 approved - move them to company setup if they haven't filled it
+            // (fetchSellerProfile will tell us)
+            fetchSellerProfile(user.id).then(() => {
+              const currentSeller = useSellerStore.getState().seller;
+              if (!currentSeller) {
+                router.replace('/seller/company-setup');
+              } else if (currentSeller.status === 'approved') {
+                router.replace('/seller/dashboard');
+              }
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    const sellerChannel = supabase
+      .channel(`pending-approval-seller-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sellers', filter: `user_id=eq.${user.id}` },
+        (payload: any) => {
+          fetchSellerProfile(user.id);
+          const updated = payload?.new;
+          if (updated?.status === 'approved') {
+            router.replace('/seller/dashboard');
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(userChannel);
+      supabase.removeChannel(sellerChannel);
+    };
+  }, [user?.id]);
+
   const handleLogout = async () => {
     await logout();
     router.replace('/auth/role-selection');
   };
 
+  const handleRefresh = async () => {
+    if (!user?.id) return;
+    // Refresh both user record and seller record
+    const { data: refreshedUser } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+    if (refreshedUser) {
+      setUser(refreshedUser);
+      setProfileStatus(refreshedUser.seller_status);
+      if (refreshedUser.seller_status === 'approved') {
+        await fetchSellerProfile(user.id);
+        const currentSeller = useSellerStore.getState().seller;
+        if (!currentSeller) {
+          router.replace('/seller/company-setup');
+          return;
+        } else if (currentSeller.status === 'approved') {
+          router.replace('/seller/dashboard');
+          return;
+        }
+      }
+    }
+    await fetchSellerProfile(user.id);
+  };
+
   const getStatusInfo = () => {
-    if (seller?.status === 'rejected') {
+    // Stage 2 (company-level) - if seller record exists, use its status
+    if (seller) {
+      if (seller.status === 'rejected') {
+        return {
+          icon: 'close-circle' as const,
+          color: '#ef4444',
+          gradientColors: ['#ef4444', '#dc2626'],
+          title: 'Company Application Rejected',
+          message:
+            seller.rejection_reason ||
+            'Your company application was rejected. Please contact support for more information.',
+          action: 'Contact Support',
+          stageLabel: 'Stage 2: Company Verification',
+        };
+      }
+
+      return {
+        icon: 'hourglass-outline' as const,
+        color: '#f59e0b',
+        gradientColors: ['#f59e0b', '#d97706'],
+        title: 'Company Pending Approval',
+        message:
+          'Your company details are under review. We will notify you once approved. This usually takes 1-2 business days.',
+        action: 'Refresh Status',
+        stageLabel: 'Stage 2: Company Verification',
+      };
+    }
+
+    // Stage 1 (profile-level) - no seller record yet
+    if (profileStatus === 'rejected') {
       return {
         icon: 'close-circle' as const,
         color: '#ef4444',
         gradientColors: ['#ef4444', '#dc2626'],
-        title: 'Application Rejected',
-        message: seller.rejection_reason || 'Your application was rejected. Please contact support for more information.',
+        title: 'Seller Account Rejected',
+        message:
+          'Your seller account application was rejected. Please contact support for more information.',
         action: 'Contact Support',
+        stageLabel: 'Stage 1: Account Verification',
       };
     }
-    
+
     return {
       icon: 'hourglass-outline' as const,
       color: '#f59e0b',
       gradientColors: ['#f59e0b', '#d97706'],
-      title: 'Pending Approval',
-      message: 'Your seller account is under review. We will notify you once your account is approved. This usually takes 1-2 business days.',
+      title: 'Seller Account Pending Approval',
+      message:
+        'Your seller account is under review. Once the admin approves your account, you will be able to submit your company details. We will notify you by email.',
       action: 'Refresh Status',
+      stageLabel: 'Stage 1: Account Verification',
     };
   };
 
@@ -93,11 +211,17 @@ export default function PendingApprovalScreen() {
           {/* Title */}
           <Text style={styles.title}>{statusInfo.title}</Text>
           
+          {/* Stage Label */}
+          <View style={styles.stageBadgeWrap}>
+            <Ionicons name="layers-outline" size={14} color="#a78bfa" />
+            <Text style={styles.stageBadgeText}>{statusInfo.stageLabel}</Text>
+          </View>
+
           {/* Message */}
           <Text style={styles.message}>{statusInfo.message}</Text>
 
-          {/* Company Info Card */}
-          {seller && (
+          {/* Company Info Card - only when seller record exists (Stage 2) */}
+          {seller ? (
             <LinearGradient
               colors={['#1e1e1e', '#161616']}
               style={styles.companyCard}
@@ -139,13 +263,48 @@ export default function PendingApprovalScreen() {
                 </View>
               )}
             </LinearGradient>
+          ) : (
+            // Stage 1 - show seller's account info instead of company info
+            <LinearGradient
+              colors={['#1e1e1e', '#161616']}
+              style={styles.companyCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.companyHeader}>
+                <View style={styles.companyIconContainer}>
+                  <Ionicons name="person-outline" size={20} color="#a78bfa" />
+                </View>
+                <Text style={styles.companyCardTitle}>Account Information</Text>
+              </View>
+
+              <View style={styles.companyDetailRow}>
+                <Text style={styles.companyLabel}>Name</Text>
+                <Text style={styles.companyName}>{user?.name}</Text>
+              </View>
+
+              <View style={styles.companyDetailRow}>
+                <Text style={styles.companyLabel}>Email</Text>
+                <Text style={styles.companyValue}>{user?.email}</Text>
+              </View>
+
+              <View style={styles.companyDetailRow}>
+                <Text style={styles.companyLabel}>Account Status</Text>
+                <View style={[styles.statusBadge, { backgroundColor: statusInfo.color + '15' }]}>
+                  <View style={[styles.statusDot, { backgroundColor: statusInfo.color }]} />
+                  <Text style={[styles.statusText, { color: statusInfo.color }]}>
+                    {(profileStatus || 'PENDING').toString().toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+            </LinearGradient>
           )}
 
           {/* Actions */}
           <View style={styles.actions}>
             <Button
               title={statusInfo.action}
-              onPress={() => user?.id && fetchSellerProfile(user.id)}
+              onPress={handleRefresh}
               variant="primary"
               fullWidth
             />
@@ -262,6 +421,25 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
     paddingHorizontal: spacing.lg,
     lineHeight: 24,
+  },
+   stageBadgeWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(167, 139, 250, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(167, 139, 250, 0.25)',
+    marginBottom: spacing.md,
+  },
+  stageBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#a78bfa',
+    letterSpacing: 0.3,
   },
   companyCard: {
     width: '100%',

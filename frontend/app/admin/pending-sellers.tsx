@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { supabase } from '../../src/services/supabase';
+import { sendApprovalEmail } from '../../src/utils/sendApprovalEmail';
 
 type ApprovalTab = 'profile' | 'company';
 
@@ -28,6 +29,31 @@ export default function PendingSellersScreen() {
 
   useEffect(() => {
     loadPendingApprovals();
+
+    // Realtime: reflect any user / seller status change instantly so the admin
+    // never has to manually refresh.
+    const usersChannel = supabase
+      .channel('admin-pending-users')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'users' },
+        () => loadPendingApprovals()
+      )
+      .subscribe();
+
+    const sellersChannel = supabase
+      .channel('admin-pending-sellers')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sellers' },
+        () => loadPendingApprovals()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(usersChannel);
+      supabase.removeChannel(sellersChannel);
+    };
   }, []);
 
   const loadPendingApprovals = async () => {
@@ -85,13 +111,31 @@ export default function PendingSellersScreen() {
           text: 'Approve',
           onPress: async () => {
             try {
+              // Look up email for the seller before update (some realtime
+              // listeners may modify state).
+              const { data: userRow } = await supabase
+                .from('users')
+                .select('id, name, email')
+                .eq('id', userId)
+                .single();
+
               const { error } = await supabase
                 .from('users')
                 .update({ seller_status: 'approved' })
                 .eq('id', userId);
-              
+
               if (error) throw error;
-              
+
+              // Fire email + in-app notification (non-blocking on errors)
+              if (userRow?.email) {
+                sendApprovalEmail({
+                  type: 'profile_approved',
+                  to: userRow.email,
+                  name: userRow.name || userName,
+                  userId: userRow.id,
+                }).catch((e) => console.warn('email send failed:', e));
+              }
+
               Alert.alert('Success', 'Seller profile approved! They can now submit company details.');
               loadPendingApprovals();
             } catch (error) {
@@ -115,13 +159,29 @@ export default function PendingSellersScreen() {
           style: 'destructive',
           onPress: async (reason) => {
             try {
+              const { data: userRow } = await supabase
+                .from('users')
+                .select('id, name, email')
+                .eq('id', userId)
+                .single();
+
               const { error } = await supabase
                 .from('users')
                 .update({ seller_status: 'rejected' })
                 .eq('id', userId);
-              
+
               if (error) throw error;
-              
+
+              if (userRow?.email) {
+                sendApprovalEmail({
+                  type: 'profile_rejected',
+                  to: userRow.email,
+                  name: userRow.name || userName,
+                  reason: reason || undefined,
+                  userId: userRow.id,
+                }).catch((e) => console.warn('email send failed:', e));
+              }
+
               Alert.alert('Success', 'Seller profile rejected');
               loadPendingApprovals();
             } catch (error) {
@@ -138,18 +198,24 @@ export default function PendingSellersScreen() {
   const handleApproveCompany = async (sellerId: string, companyName: string, userId: string) => {
     Alert.alert(
       'Approve Company',
-      `Approve company "${companyName}"?`,
+      `Approve company \"${companyName}\"?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Approve',
           onPress: async () => {
             try {
+              const { data: userRow } = await supabase
+                .from('users')
+                .select('id, name, email')
+                .eq('id', userId)
+                .single();
+
               const { error } = await supabase
                 .from('sellers')
                 .update({ status: 'approved' })
                 .eq('id', sellerId);
-              
+
               if (error) throw error;
 
               // Also update user status to approved
@@ -157,9 +223,19 @@ export default function PendingSellersScreen() {
                 .from('users')
                 .update({ seller_status: 'approved' })
                 .eq('id', userId);
-              
+
               if (userError) console.error('Error updating user status:', userError);
-              
+
+              if (userRow?.email) {
+                sendApprovalEmail({
+                  type: 'company_approved',
+                  to: userRow.email,
+                  name: userRow.name,
+                  company_name: companyName,
+                  userId: userRow.id,
+                }).catch((e) => console.warn('email send failed:', e));
+              }
+
               Alert.alert('Success', 'Company approved successfully! Seller can now start listing.');
               loadPendingApprovals();
             } catch (error) {
@@ -175,7 +251,7 @@ export default function PendingSellersScreen() {
   const handleRejectCompany = async (sellerId: string, companyName: string, userId: string) => {
     Alert.prompt(
       'Reject Company',
-      `Provide reason for rejecting "${companyName}":`,
+      `Provide reason for rejecting \"${companyName}\":`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -183,23 +259,40 @@ export default function PendingSellersScreen() {
           style: 'destructive',
           onPress: async (reason) => {
             try {
+              const { data: userRow } = await supabase
+                .from('users')
+                .select('id, name, email')
+                .eq('id', userId)
+                .single();
+
               const { error } = await supabase
                 .from('sellers')
-                .update({ 
+                .update({
                   status: 'rejected',
                   rejection_reason: reason || 'Not specified'
                 })
                 .eq('id', sellerId);
-              
+
               if (error) throw error;
 
               const { error: userError } = await supabase
                 .from('users')
                 .update({ seller_status: 'rejected' })
                 .eq('id', userId);
-              
+
               if (userError) console.error('Error updating user status:', userError);
-              
+
+              if (userRow?.email) {
+                sendApprovalEmail({
+                  type: 'company_rejected',
+                  to: userRow.email,
+                  name: userRow.name,
+                  company_name: companyName,
+                  reason: reason || undefined,
+                  userId: userRow.id,
+                }).catch((e) => console.warn('email send failed:', e));
+              }
+
               Alert.alert('Success', 'Company rejected');
               loadPendingApprovals();
             } catch (error) {
