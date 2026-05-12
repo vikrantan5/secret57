@@ -59,6 +59,8 @@ export const colors = {
   // Additional colors
   white: '#FFFFFF',
   black: '#000000',
+    purple: '#8B5CF6',
+  purpleLight: '#EDE9FE',
   
   // Role specific colors - Enhanced with personality
   customer: '#4F46E5',

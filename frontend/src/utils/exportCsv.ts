@@ -10,10 +10,8 @@ import * as Sharing from 'expo-sharing';
 const escapeCsvField = (value: any): string => {
   if (value === null || value === undefined) return '';
   const str = String(value);
-  if (str.includes(',') || str.includes('
-') || str.includes('\"') || str.includes('
-')) {
-    return `\"${str.replace(/\"/g, '\"\"')}\"`;
+  if (str.includes(',') || str.includes('\n') || str.includes('"') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
 };
@@ -29,8 +27,7 @@ export const buildCsv = (
   const headerLine = headers.map(escapeCsvField).join(',');
   const dataLines = rows.map(row => row.map(escapeCsvField).join(','));
   // Prepend BOM so Excel renders UTF-8 (₹, etc.) correctly
-  return '\uFEFF' + [headerLine, ...dataLines].join('
-');
+  return '\uFEFF' + [headerLine, ...dataLines].join('\n');
 };
 
 /**
