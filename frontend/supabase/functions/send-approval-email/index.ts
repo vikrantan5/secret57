@@ -32,7 +32,9 @@ type EmailType =
   | 'profile_approved'
   | 'profile_rejected'
   | 'company_approved'
-  | 'company_rejected';
+  | 'company_rejected'
+  | 'booking_accepted'
+  | 'booking_rejected';
 
 interface Payload {
   type: EmailType;
@@ -40,6 +42,12 @@ interface Payload {
   name?: string;
   company_name?: string;
   reason?: string;
+  // Booking-specific fields (used for booking_accepted / booking_rejected)
+  service_name?: string;
+  booking_date?: string;
+  booking_time?: string;
+  total_amount?: number;
+  booking_id?: string;
 }
 
 function buildEmail(p: Payload): { subject: string; html: string; text: string } {
@@ -136,6 +144,68 @@ Your business application for "${company}" was not approved.
             <p style="margin-top:24px;color:#9ca3af">— The ${APP_NAME} team</p>
           </div>`,
       };
+
+        case 'booking_accepted': {
+      const service = p.service_name || 'your booked service';
+      const when =
+        p.booking_date && p.booking_time
+          ? `${p.booking_date} at ${p.booking_time}`
+          : p.booking_date || 'the scheduled time';
+      const amount =
+        typeof p.total_amount === 'number'
+          ? `₹${p.total_amount.toFixed(2)}`
+          : '';
+      return {
+        subject: `${APP_NAME}: Your service request has been accepted`,
+        text:
+          `Hi ${name},
+
+Good news! The seller has accepted your service request for "${service}".
+Scheduled for: ${when}.
+` +
+          (amount ? `Amount: ${amount}
+` : '') +
+          `Please open the app and complete the payment to confirm your booking.
+
+— The ${APP_NAME} team`,
+        html: `
+          <div style="font-family:Inter,system-ui,Arial,sans-serif;max-width:560px;margin:auto;padding:24px;background:#0a0a0a;color:#fff;border-radius:16px">
+            <h2 style="margin:0 0 12px 0;color:#10b981">Service request accepted ✅</h2>
+            <p>Hi <strong>${name}</strong>,</p>
+            <p>Good news! The seller has accepted your service request for <strong>"${service}"</strong>.</p>
+            <p><strong>Scheduled for:</strong> ${when}</p>
+            ${amount ? `<p><strong>Amount:</strong> ${amount}</p>` : ''}
+            <p>Please open the ${APP_NAME} app and complete the payment to confirm your booking.</p>
+            <p style="margin-top:24px;color:#9ca3af">— The ${APP_NAME} team</p>
+          </div>`,
+      };
+    }
+
+    case 'booking_rejected': {
+      const service = p.service_name || 'your booked service';
+      return {
+        subject: `${APP_NAME}: Update on your service request`,
+        text:
+          `Hi ${name},
+
+Unfortunately, the seller was unable to accept your service request for "${service}".
+` +
+          (p.reason ? `Reason: ${p.reason}
+` : '') +
+          `You can book another seller anytime from the app.
+
+— The ${APP_NAME} team`,
+        html: `
+          <div style="font-family:Inter,system-ui,Arial,sans-serif;max-width:560px;margin:auto;padding:24px;background:#0a0a0a;color:#fff;border-radius:16px">
+            <h2 style="margin:0 0 12px 0;color:#ef4444">Service request update</h2>
+            <p>Hi <strong>${name}</strong>,</p>
+            <p>Unfortunately, the seller was unable to accept your service request for <strong>"${service}"</strong>.</p>
+            ${p.reason ? `<p><strong>Reason:</strong> ${p.reason}</p>` : ''}
+            <p>You can book another seller anytime from the ${APP_NAME} app.</p>
+            <p style="margin-top:24px;color:#9ca3af">— The ${APP_NAME} team</p>
+          </div>`,
+      };
+    }
   }
 }
 

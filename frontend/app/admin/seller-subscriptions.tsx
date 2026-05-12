@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+    useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -44,6 +45,9 @@ interface SellerSubscription {
 export default function SellerSubscriptionsScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
+    const { width: windowWidth } = useWindowDimensions();
+  const isCompact = windowWidth < 480; // phones
+  const isMedium = windowWidth < 720;  // small tablets
   const [subscriptions, setSubscriptions] = useState<SellerSubscription[]>([]);
   const [filteredSubscriptions, setFilteredSubscriptions] = useState<SellerSubscription[]>([]);
   const [loading, setLoading] = useState(true);
@@ -225,8 +229,19 @@ export default function SellerSubscriptionsScreen() {
         }
       >
         {/* Stats Cards */}
-        <View style={styles.statsContainer}>
-          <View style={[styles.statCard, shadows.sm]}>
+        <View
+          style={[
+            styles.statsContainer,
+            isCompact && styles.statsContainerCompact,
+          ]}
+        >
+          <View
+            style={[
+              styles.statCard,
+              isCompact && styles.statCardCompact,
+              shadows.sm,
+            ]}
+          >
             <View style={[styles.statIconBox, { backgroundColor: colors.primary + '15' }]}>
               <Ionicons name="card" size={24} color={colors.primary} />
             </View>
@@ -234,7 +249,13 @@ export default function SellerSubscriptionsScreen() {
             <Text style={styles.statLabel}>Total</Text>
           </View>
 
-          <View style={[styles.statCard, shadows.sm]}>
+          <View
+            style={[
+              styles.statCard,
+              isCompact && styles.statCardCompact,
+              shadows.sm,
+            ]}
+          >
             <View style={[styles.statIconBox, { backgroundColor: colors.success + '15' }]}>
               <Ionicons name="checkmark-circle" size={24} color={colors.success} />
             </View>
@@ -242,7 +263,13 @@ export default function SellerSubscriptionsScreen() {
             <Text style={styles.statLabel}>Completed</Text>
           </View>
 
-          <View style={[styles.statCard, shadows.sm]}>
+          <View
+            style={[
+              styles.statCard,
+              isCompact && styles.statCardCompact,
+              shadows.sm,
+            ]}
+          >
             <View style={[styles.statIconBox, { backgroundColor: colors.warning + '15' }]}>
               <Ionicons name="time" size={24} color={colors.warning} />
             </View>
@@ -250,7 +277,13 @@ export default function SellerSubscriptionsScreen() {
             <Text style={styles.statLabel}>Pending</Text>
           </View>
 
-          <View style={[styles.statCard, shadows.sm]}>
+          <View
+            style={[
+              styles.statCard,
+              isCompact && styles.statCardCompact,
+              shadows.sm,
+            ]}
+          >
             <View style={[styles.statIconBox, { backgroundColor: colors.error + '15' }]}>
               <Ionicons name="close-circle" size={24} color={colors.error} />
             </View>
@@ -473,13 +506,24 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.md,
   },
+  // On phones, wrap to a 2x2 grid instead of cramming 4 cards in one row.
+  statsContainerCompact: {
+    flexWrap: 'wrap',
+  },
   statCard: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  statCardCompact: {
+    // Two cards per row, accounting for the gap between them.
+    flexBasis: '47%',
+    flexGrow: 0,
+    flexShrink: 0,
   },
   statIconBox: {
     width: 40,
@@ -667,6 +711,8 @@ const styles = StyleSheet.create({
   },
   detailItem: {
     width: '47%',
+    minWidth: 120,
+    flexGrow: 1,
     gap: spacing.xs,
   },
   detailLabel: {
@@ -680,8 +726,10 @@ const styles = StyleSheet.create({
   },
   cardFooter: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.xs,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.border,

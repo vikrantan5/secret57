@@ -334,7 +334,9 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         .from('bookings')
         .update(updates)
         .eq('id', id)
-        .select('*, customer_id')
+        .select(
+          '*, customer_id, booking_date, booking_time, total_amount, service:services(name)'
+        )
         .single();
 
       if (error) {
@@ -349,7 +351,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         created_at: new Date().toISOString(),
       }]);
 
-      // 🔔 Notify customer to pay
+      // 🔔 Notify customer to pay (in-app notification)
       try {
         if (updated?.customer_id) {
           await supabase.from('notifications').insert({
@@ -363,6 +365,50 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         }
       } catch (e) {
         console.warn('Notify customer failed (non-critical):', e);
+      }
+
+      // 📧 Email customer that their service request was accepted
+      try {
+        // Always resolve email + name from the users table (the bookings
+        // table may not have denormalized customer_email / customer_name
+        // columns in every deployment).
+        let customerEmail: string | undefined = (updated as any)?.customer_email;
+        let customerName: string | undefined = (updated as any)?.customer_name;
+        if (!customerEmail && updated?.customer_id) {
+          const { data: userRow } = await supabase
+            .from('users')
+            .select('email, name')
+            .eq('id', updated.customer_id)
+            .maybeSingle();
+          customerEmail = userRow?.email;
+          if (!customerName) customerName = userRow?.name;
+        }
+
+        if (customerEmail) {
+          const serviceRoleKey = process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
+          await fetch(
+            `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-approval-email`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${serviceRoleKey}`,
+              },
+              body: JSON.stringify({
+                type: 'booking_accepted',
+                to: customerEmail,
+                name: customerName,
+                service_name: (updated as any)?.service?.name,
+                booking_date: (updated as any)?.booking_date,
+                booking_time: (updated as any)?.booking_time,
+                total_amount: (updated as any)?.total_amount,
+                booking_id: id,
+              }),
+            }
+          );
+        }
+      } catch (mailErr) {
+        console.warn('Booking accepted email failed (non-critical):', mailErr);
       }
 
       set(state => ({
@@ -380,7 +426,6 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       return { success: false, error: error.message };
     }
   },
-
   rejectBooking: async (id, reason) => {
     try {
       set({ loading: true });
@@ -395,7 +440,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         .from('bookings')
         .update(updates)
         .eq('id', id)
-        .select('*, customer_id')
+        .select('*, customer_id, customer_name, customer_email, service:services(name)')
         .single();
 
       if (error) {
@@ -410,7 +455,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         created_at: new Date().toISOString(),
       }]);
 
-      // 🔔 Notify customer of rejection
+      // 🔔 Notify customer of rejection (in-app)
       try {
         if (updated?.customer_id) {
           await supabase.from('notifications').insert({
@@ -424,6 +469,44 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         }
       } catch (e) {
         console.warn('Notify customer failed (non-critical):', e);
+      }
+
+      // 📧 Email customer about rejection
+      try {
+        let customerEmail: string | undefined = (updated as any)?.customer_email;
+        let customerName: string | undefined = (updated as any)?.customer_name;
+        if (!customerEmail && updated?.customer_id) {
+          const { data: userRow } = await supabase
+            .from('users')
+            .select('email, name')
+            .eq('id', updated.customer_id)
+            .maybeSingle();
+          customerEmail = userRow?.email;
+          if (!customerName) customerName = userRow?.name;
+        }
+        if (customerEmail) {
+          const serviceRoleKey = process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
+          await fetch(
+            `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-approval-email`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${serviceRoleKey}`,
+              },
+              body: JSON.stringify({
+                type: 'booking_rejected',
+                to: customerEmail,
+                name: customerName,
+                service_name: (updated as any)?.service?.name,
+                reason: reason,
+                booking_id: id,
+              }),
+            }
+          );
+        }
+      } catch (mailErr) {
+        console.warn('Booking rejected email failed (non-critical):', mailErr);
       }
 
       set(state => ({
@@ -441,7 +524,6 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       return { success: false, error: error.message };
     }
   },
-
   cancelBooking: async (id, reason) => {
      try {
       set({ loading: true });
