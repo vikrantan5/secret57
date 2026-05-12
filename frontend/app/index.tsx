@@ -133,7 +133,10 @@ export default function SplashScreen() {
     }
 
     const checkUserStatus = async () => {
-      if (!loading && isAuthenticated && user) {
+      // Wait until auth status has been determined
+      if (loading) return;
+
+      if (isAuthenticated && user) {
         if (user.role === 'seller') {
           await fetchSellerProfile(user.id);
         }
@@ -162,7 +165,12 @@ export default function SplashScreen() {
           } else {
             router.replace('/(tabs)/home');
           }
-        }, 2000);
+        }, 1500);
+      } else {
+        // Not authenticated → take user to role-selection (auth entry)
+        setTimeout(() => {
+          router.replace('/auth/role-selection');
+        }, 1500);
       }
     };
 

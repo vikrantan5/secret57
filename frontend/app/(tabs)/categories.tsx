@@ -208,8 +208,8 @@ export default function CategoriesScreen() {
         <View style={styles.filterContainer}>
           {[
             { key: 'all', label: 'All', icon: 'grid-outline' },
-            { key: 'services', label: 'Services', icon: 'construct-outline' },
-            { key: 'products', label: 'Products', icon: 'cube-outline' },
+            // { key: 'services', label: 'Services', icon: 'construct-outline' },
+            // { key: 'products', label: 'Products', icon: 'cube-outline' },
           ].map((filter) => (
             <TouchableOpacity
               key={filter.key}

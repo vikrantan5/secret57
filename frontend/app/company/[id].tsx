@@ -1,7 +1,7 @@
 // app/company/[id].tsx
 // Company Detail page - shows the company profile + tabs for Services & Products
 // FIXED: numColumns FlatList error + collapsible header that scrolls with the list
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import {
   Image,
   Alert,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -55,14 +55,8 @@ export default function CompanyDetailScreen() {
     }).start();
   }, []);
 
-  useEffect(() => {
-    if (companyId) {
-       // Clear stale selected company so we don't render data from a
-      // previously-opened company while the new one is loading.
-      useCompanyStore.setState({ selectedCompany: null });
-      fetchCompanyById(companyId);
-    }
-  }, [companyId]);
+// Note: company + items fetching is handled by useFocusEffect below so the
+  // screen reliably refreshes on every focus (including back-navigation revisits).
 
   useEffect(() => {
     if (user?.id) fetchWishlist(user.id);
@@ -75,44 +69,66 @@ export default function CompanyDetailScreen() {
     else setTab('services');
   }, [selectedCompany?.id]);
 
+  // Load services + products for this company. Use a dedicated loader so we
+  // can call it from both the initial mount and useFocusEffect (so revisiting
+  // the screen via the back button reliably re-fetches data instead of
+  // showing the blank state from a previous mount).
+  const loadCompanyItems = useCallback(async (cid: string) => {
+    if (!cid) return;
+    try {
+      setTabLoading(true);
+      const [svcRes, prodRes] = await Promise.all([
+        supabase
+          .from('services')
+          .select('*, seller:sellers(*), category:categories(*)')
+          .eq('seller_id', cid)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('products')
+          .select('*, seller:sellers(*), category:categories(*)')
+          .eq('seller_id', cid)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false }),
+      ]);
+
+      const svc = (svcRes.data || []).filter((s: any) => !s.is_deleted);
+      const prod = (prodRes.data || []).filter((p: any) => !p.is_deleted);
+      setServices(svc);
+      setProducts(prod);
+    } catch (e) {
+      console.error('Error loading company items', e);
+    } finally {
+      setTabLoading(false);
+    }
+  }, []);
+
+  // Re-fetch the company + its items every time the screen regains focus
+  // (handles back navigation + revisit reliably even when the same companyId
+  // is opened twice, which previously left the lists empty).
+  useFocusEffect(
+    useCallback(() => {
+      if (!companyId) return;
+      let active = true;
+      (async () => {
+        await fetchCompanyById(companyId);
+        if (active) await loadCompanyItems(companyId);
+      })();
+      return () => {
+        active = false;
+      };
+    }, [companyId, loadCompanyItems])
+  );
+
+  // Clear stale company + items when navigating away so a fresh visit
+  // always starts from a clean slate.
   useEffect(() => {
-    if (!companyId) return;
-    let cancelled = false;
-    const load = async () => {
-      try {
-        setTabLoading(true);
-        const [svcRes, prodRes] = await Promise.all([
-          supabase
-            .from('services')
-            .select('*, seller:sellers(*), category:categories(*)')
-            .eq('seller_id', companyId)
-            .eq('is_active', true)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('products')
-            .select('*, seller:sellers(*), category:categories(*)')
-            .eq('seller_id', companyId)
-            .eq('is_active', true)
-            .order('created_at', { ascending: false }),
-        ]);
-
-        if (cancelled) return;
-
-        const svc = (svcRes.data || []).filter((s: any) => !s.is_deleted);
-        const prod = (prodRes.data || []).filter((p: any) => !p.is_deleted);
-        setServices(svc);
-        setProducts(prod);
-      } catch (e) {
-        console.error('Error loading company items', e);
-      } finally {
-        if (!cancelled) setTabLoading(false);
-      }
-    };
-    load();
     return () => {
-      cancelled = true;
+      useCompanyStore.setState({ selectedCompany: null });
+      setServices([]);
+      setProducts([]);
     };
-  }, [companyId]);
+  }, []);
 
   const handleProductPress = (productId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

@@ -1,6 +1,6 @@
 // app/category/[slug].tsx
 // Companies/Vendors listing for a given category
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import {
   Platform,
   Image,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -65,6 +65,22 @@ export default function CategoryCompaniesScreen() {
       }
     }
   }, [categorySlug, categories]);
+
+  
+  // Always re-fetch companies when the screen regains focus so users see
+  // fresh data after navigating back from a company detail page (and so
+  // brand-new sellers appear without a manual reload).
+  useFocusEffect(
+    useCallback(() => {
+      if (categorySlug && categories.length > 0) {
+        const cat = getCategoryBySlug(categorySlug);
+        if (cat) {
+          setCategory(cat);
+          fetchCompaniesByCategory(cat.id);
+        }
+      }
+    }, [categorySlug, categories])
+  );
 
   const filteredCompanies = useMemo(() => {
     if (!searchQuery.trim()) return companies;

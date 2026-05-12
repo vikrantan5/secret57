@@ -448,6 +448,15 @@ export default function SellerDashboard() {
         <ScrollView 
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.accentPrimary}
+              colors={[colors.accentPrimary]}
+              progressBackgroundColor={colors.surface}
+            />
+          }
         >
           {/* Header */}
           <View style={styles.header}>
@@ -466,6 +475,24 @@ export default function SellerDashboard() {
               </LinearGradient>
             </View>
             <View style={styles.headerActions}>
+                 <TouchableOpacity
+                testID="seller-dashboard-refresh-btn"
+                onPress={onRefresh}
+                disabled={refreshing}
+                style={styles.iconButton}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={[colors.surfaceElevated, colors.surface]}
+                  style={styles.iconGradient}
+                >
+                  {refreshing ? (
+                    <ActivityIndicator size="small" color={colors.accentPrimary} />
+                  ) : (
+                    <Ionicons name="refresh" size={20} color={colors.textSecondary} />
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
               <TouchableOpacity 
                onPress={() => router.push('/notifications' as any)}
                 style={styles.iconButton}
