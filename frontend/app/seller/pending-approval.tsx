@@ -6,6 +6,7 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Dimensions,
+    ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -195,7 +196,12 @@ export default function PendingApprovalScreen() {
           </View>
         </BlurView>
 
-        <View style={styles.content}>
+                <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           {/* Animated Icon Container */}
           <LinearGradient
             colors={[statusInfo.gradientColors[0] + '20', statusInfo.gradientColors[1] + '20']}
@@ -338,7 +344,7 @@ export default function PendingApprovalScreen() {
               Need help? Contact us at support@servicehub.com
             </Text>
           </LinearGradient>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -382,11 +388,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
     paddingTop: 100,
+    paddingBottom: spacing.xxl,
+  },
+  scrollView: {
+    flex: 1,
   },
   iconContainer: {
     width: 160,

@@ -62,7 +62,7 @@ export const useSellerStore = create<SellerState>((set, get) => ({
   fetchSellerProfile: async (userId: string) => {
     try {
       set({ loading: true });
-      
+
       const { data, error } = await supabase
         .from('sellers')
         .select(`
@@ -70,18 +70,24 @@ export const useSellerStore = create<SellerState>((set, get) => ({
           category:categories(id, name, slug, type, icon)
         `)
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
+        // PGRST116 means \"no rows returned\" — this is normal for sellers
+        // who haven't created a company profile yet (Stage 1 pending).
+        if ((error as any).code === 'PGRST116') {
+          set({ seller: null, loading: false });
+          return;
+        }
         console.error('Error fetching seller profile:', error);
         set({ seller: null, loading: false });
         return;
       }
 
-      set({ seller: data, loading: false });
+      set({ seller: data ?? null, loading: false });
     } catch (error) {
       console.error('Error in fetchSellerProfile:', error);
-      set({ loading: false });
+      set({ seller: null, loading: false });
     }
   },
 

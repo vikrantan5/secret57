@@ -48,6 +48,19 @@ export default function CompanySetupScreen() {
     fetchCategories();
   }, []);
 
+
+  
+  // Stage 1 guard: a seller whose account is still pending/rejected
+  // approval from the admin must not be allowed to fill company details.
+  useEffect(() => {
+    if (
+      user?.role === 'seller' &&
+      (user?.seller_status === 'pending' || user?.seller_status === 'rejected')
+    ) {
+      router.replace('/seller/pending-approval');
+    }
+  }, [user?.seller_status]);
+
   // Request permission and pick image
   const pickImage = async (type: 'logo' | 'document') => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();

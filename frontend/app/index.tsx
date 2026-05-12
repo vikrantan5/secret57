@@ -142,7 +142,17 @@ export default function SplashScreen() {
           if (user.role === 'admin') {
             router.replace('/admin/dashboard');
           } else if (user.role === 'seller') {
-            if (!seller) {
+            // STAGE 1 – Profile (account) approval must come BEFORE we look at
+            // the seller company record. If the seller signed up and is still
+            // waiting for admin approval (or was rejected), they should land
+            // on the pending-approval screen — NOT the company-setup screen.
+            if (
+              user.seller_status === 'pending' ||
+              user.seller_status === 'rejected'
+            ) {
+              router.replace('/seller/pending-approval');
+            } else if (!seller) {
+              // Stage 1 approved, no company yet → set up company
               router.replace('/seller/company-setup');
             } else if (seller.status === 'pending' || seller.status === 'rejected') {
               router.replace('/seller/pending-approval');
@@ -152,10 +162,6 @@ export default function SplashScreen() {
           } else {
             router.replace('/(tabs)/home');
           }
-        }, 2000);
-      } else if (!loading && !isAuthenticated) {
-        setTimeout(() => {
-          router.replace('/auth/role-selection');
         }, 2000);
       }
     };

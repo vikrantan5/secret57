@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,9 @@ import {
   ActivityIndicator,
   Alert,
   StatusBar,
+  RefreshControl,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../../src/store/authStore';
@@ -86,24 +87,58 @@ export default function SellerDashboard() {
     completedBookings: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [sellerId, setSellerId] = useState<string | null>(null);
   const [categoryType, setCategoryType] = useState<'ecommerce' | 'booking' | 'hybrid'>('hybrid');
+  // Ref to always call the latest fetch function from realtime callbacks
+  const fetchStatsRef = useRef<(silent?: boolean) => Promise<void>>(async () => {});
 
   useEffect(() => {
     loadSellerData();
   }, []);
+
+  // As soon as the seller record is available in the store, surface its id
+  // so realtime subscriptions can be wired up without waiting for the first
+  // stats fetch to complete.
+  useEffect(() => {
+    if (seller?.id && seller.id !== sellerId) {
+      setSellerId(seller.id);
+    }
+  }, [seller?.id]);
+
+  // Refetch when the dashboard regains focus (e.g., after the seller adds
+  // a product / completes an order in another screen).
+  useFocusEffect(
+    useCallback(() => {
+      if (sellerId) {
+        fetchStatsRef.current(true);
+      }
+    }, [sellerId])
+  );
+
+  // Polling fallback: refresh metrics every 20s so the dashboard stays
+  // accurate even when the Supabase Realtime publication is misconfigured.
+  useEffect(() => {
+    if (!sellerId) return;
+    const interval = setInterval(() => {
+      fetchStatsRef.current(true);
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [sellerId]);
 
   // Set up Supabase Realtime subscriptions so seller dashboard metrics
   // update live whenever orders/bookings/products/services change.
   useEffect(() => {
     if (!sellerId) return;
 
+    const handleChange = () => fetchStatsRef.current(true);
+
     const ordersChannel = supabase
       .channel(`seller-${sellerId}-orders`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },
-        () => fetchSellerStats()
+        handleChange
       )
       .subscribe();
 
@@ -112,7 +147,7 @@ export default function SellerDashboard() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'order_items', filter: `seller_id=eq.${sellerId}` },
-        () => fetchSellerStats()
+        handleChange
       )
       .subscribe();
 
@@ -121,7 +156,7 @@ export default function SellerDashboard() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'bookings', filter: `seller_id=eq.${sellerId}` },
-        () => fetchSellerStats()
+        handleChange
       )
       .subscribe();
 
@@ -130,7 +165,7 @@ export default function SellerDashboard() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'products', filter: `seller_id=eq.${sellerId}` },
-        () => fetchSellerStats()
+        handleChange
       )
       .subscribe();
 
@@ -139,7 +174,7 @@ export default function SellerDashboard() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'services', filter: `seller_id=eq.${sellerId}` },
-        () => fetchSellerStats()
+        handleChange
       )
       .subscribe();
 
@@ -170,9 +205,9 @@ export default function SellerDashboard() {
     }
   }, [seller]);
 
-  const fetchSellerStats = async () => {
+  const fetchSellerStats = async (silent: boolean = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
 
       const { data: sellerData } = await supabase
         .from('sellers')
@@ -181,16 +216,30 @@ export default function SellerDashboard() {
           category:categories(type)
         `)
         .eq('user_id', user?.id)
-        .single();
+        .maybeSingle();
 
       if (!sellerData) {
-        setLoading(false);
+        if (!silent) setLoading(false);
         return;
       }
 
       setSellerId(sellerData.id);
       const type = (sellerData.category as any)?.type || 'hybrid';
       setCategoryType(type);
+
+      // Accumulate into a local stats object to avoid double-counting
+      // revenue when we set state in two phases (orders + bookings).
+      let nextStats = {
+        totalRevenue: 0,
+        totalOrders: 0,
+        totalBookings: 0,
+        activeProducts: 0,
+        activeServices: 0,
+        pendingOrders: 0,
+        completedOrders: 0,
+        pendingBookings: 0,
+        completedBookings: 0,
+      };
 
       if (type === 'ecommerce' || type === 'hybrid') {
         const { data: orderItems } = await supabase
@@ -208,7 +257,7 @@ export default function SellerDashboard() {
         );
 
         const uniqueOrders = new Set(paidOrders.map((item: any) => item.order_id));
-        
+
         const pendingOrders = orderItems?.filter(
           (item: any) => item.order?.status === 'pending' || item.order?.status === 'processing'
         ).length || 0;
@@ -223,14 +272,14 @@ export default function SellerDashboard() {
           .eq('seller_id', sellerData.id)
           .eq('is_active', true);
 
-        setStats(prev => ({
-          ...prev,
+        nextStats = {
+          ...nextStats,
           totalRevenue,
           totalOrders: uniqueOrders.size,
           activeProducts: productsCount || 0,
           pendingOrders,
           completedOrders,
-        }));
+        };
       }
 
       if (type === 'booking' || type === 'hybrid') {
@@ -268,22 +317,36 @@ export default function SellerDashboard() {
           0
         ) || 0;
 
-        setStats(prev => ({
-          ...prev,
-          totalRevenue: prev.totalRevenue + bookingRevenue,
+        nextStats = {
+          ...nextStats,
+          totalRevenue: nextStats.totalRevenue + bookingRevenue,
           totalBookings: bookingsCount || 0,
           activeServices: servicesCount || 0,
           pendingBookings: pendingBookingsCount || 0,
           completedBookings: completedBookingsCount || 0,
-        }));
+        };
       }
 
-      setLoading(false);
+      setStats(nextStats);
+
+      if (!silent) setLoading(false);
     } catch (error) {
       console.error('Error fetching seller stats:', error);
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
+
+  // Keep the ref in sync so realtime / focus / polling callbacks always
+  // invoke the freshest version of fetchSellerStats.
+  useEffect(() => {
+    fetchStatsRef.current = fetchSellerStats;
+  });
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchSellerStats(true);
+    setRefreshing(false);
+  }, []);
 
   const formatRevenue = (amount: number) => {
     return new Intl.NumberFormat('en-US', {

@@ -139,8 +139,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           .from('sellers')
           .select('*')
           .eq('user_id', userData.id)
-          .single();
-
+          .maybeSingle();
         if (!sellerData) {
           // No company profile yet - redirect to company setup
           router.replace('/seller/company-setup');
@@ -253,7 +252,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           .from('users')
           .select('*')
           .eq('id', session.user.id)
-          .single();
+          .maybeSingle();
 
         if (userData) {
           set({ 

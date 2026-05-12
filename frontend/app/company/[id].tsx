@@ -57,6 +57,9 @@ export default function CompanyDetailScreen() {
 
   useEffect(() => {
     if (companyId) {
+       // Clear stale selected company so we don't render data from a
+      // previously-opened company while the new one is loading.
+      useCompanyStore.setState({ selectedCompany: null });
       fetchCompanyById(companyId);
     }
   }, [companyId]);
