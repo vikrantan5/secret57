@@ -5,14 +5,15 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   ActivityIndicator,
   Alert,
   Modal,
   TextInput,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRefundStore, RefundRequest } from '../../src/store/refundStore';
 import { supabase } from '../../src/services/supabase';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
@@ -137,17 +138,27 @@ export default function AdminRefundsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Refund Requests</Text>
-        <TouchableOpacity onPress={loadAllRefunds}>
-          <Ionicons name="refresh" size={24} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Gradient Header */}
+      <LinearGradient
+        colors={[colors.primary, colors.primaryDark]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} data-testid="refunds-back-button">
+            <Ionicons name="arrow-back" size={24} color={colors.white} />
+          </TouchableOpacity>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle}>Refund Requests</Text>
+            <Text style={styles.headerSubtitle}>{allRefunds.length} total refunds</Text>
+          </View>
+          <TouchableOpacity onPress={loadAllRefunds} style={styles.refreshButton} data-testid="refunds-refresh-button">
+            <Ionicons name="refresh" size={24} color={colors.white} />
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
 
       {/* Filter Tabs */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
@@ -386,24 +397,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
+  headerGradient: {
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
+    borderBottomLeftRadius: borderRadius.xxl,
+    borderBottomRightRadius: borderRadius.xxl,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   backButton: {
-    width: 40,
+    padding: spacing.sm,
+    marginRight: spacing.sm,
+  },
+  headerTextContainer: {
+    flex: 1,
   },
   headerTitle: {
     ...typography.h3,
-    color: colors.text,
+    color: colors.white,
     fontWeight: '700',
-    flex: 1,
-    marginLeft: spacing.md,
+  },
+  headerSubtitle: {
+    ...typography.bodySmall,
+    color: colors.primaryVeryLight,
+    marginTop: spacing.xs / 2,
+  },
+  refreshButton: {
+    padding: spacing.sm,
   },
   filterContainer: {
     paddingHorizontal: spacing.lg,

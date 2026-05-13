@@ -222,14 +222,14 @@ export default function AdminDashboardScreen() {
       gradient: ['#FB923C', '#EA580C'],
       route: '/admin/complaints',
     },
-    {
-      id: 'categories',
-      title: 'Categories',
-      icon: 'apps' as const,
-      count: null,
-      gradient: ['#A78BFA', '#7C3AED'],
-      route: '/admin/categories',
-    },
+    // {
+    //   id: 'categories',
+    //   title: 'Categories',
+    //   icon: 'apps' as const,
+    //   count: null,
+    //   gradient: ['#A78BFA', '#7C3AED'],
+    //   route: '/admin/categories',
+    // },
   ];
 
     const financialMenuItems = [

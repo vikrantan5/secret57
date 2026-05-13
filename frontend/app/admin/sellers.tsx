@@ -3,16 +3,19 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   Alert,
   RefreshControl,
   TextInput,
   Image,
+  Modal,
+  Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import { supabase } from '../../src/services/supabase';
 
@@ -24,6 +27,10 @@ export default function AllSellersScreen() {
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
+  const [blockModalVisible, setBlockModalVisible] = useState(false);
+  const [blockTarget, setBlockTarget] = useState<{ id: string; isBlocked: boolean; name: string } | null>(null);
+  const [blockReason, setBlockReason] = useState('');
+  const [blockProcessing, setBlockProcessing] = useState(false);
 
   useEffect(() => {
     loadSellers();
@@ -108,56 +115,59 @@ export default function AllSellersScreen() {
   };
 
 
-
-    const handleBlockSeller = async (sellerId: string, isBlocked: boolean) => {
-    Alert.prompt(
-      isBlocked ? 'Unblock Seller' : 'Block Seller',
-      isBlocked 
-        ? 'Unblocking will allow the seller to login and their listings will be visible again.' 
-        : 'Please provide a reason for blocking this seller:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: isBlocked ? 'Unblock' : 'Block',
-          onPress: async (reason?: string) => {
-            try {
-              const { data: { user } } = await supabase.auth.getUser();
-              
-              const updates: any = {
-                is_blocked: !isBlocked,
-                updated_at: new Date().toISOString()
-              };
-
-              if (!isBlocked && reason) {
-                updates.block_reason = reason;
-                updates.blocked_at = new Date().toISOString();
-                updates.blocked_by = user?.id;
-              } else if (isBlocked) {
-                updates.block_reason = null;
-                updates.blocked_at = null;
-                updates.blocked_by = null;
-              }
-
-              const { error } = await supabase
-                .from('sellers')
-                .update(updates)
-                .eq('id', sellerId);
-
-              if (error) throw error;
-              
-              Alert.alert('Success', `Seller ${isBlocked ? 'unblocked' : 'blocked'} successfully`);
-              loadSellers();
-            } catch (error: any) {
-              console.error('Block/Unblock error:', error);
-              Alert.alert('Error', error.message || `Failed to ${isBlocked ? 'unblock' : 'block'} seller`);
-            }
-          },
-        },
-      ],
-      'plain-text'
-    );
+    const handleBlockSeller = (sellerId: string, isBlocked: boolean, name: string) => {
+    setBlockTarget({ id: sellerId, isBlocked, name });
+    setBlockReason('');
+    setBlockModalVisible(true);
   };
 
+  const confirmBlockSeller = async () => {
+    if (!blockTarget) return;
+    const { id, isBlocked } = blockTarget;
+
+    if (!isBlocked && !blockReason.trim()) {
+      Alert.alert('Reason required', 'Please provide a reason for blocking this seller.');
+      return;
+    }
+
+    try {
+      setBlockProcessing(true);
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const updates: any = {
+        is_blocked: !isBlocked,
+        updated_at: new Date().toISOString()
+      };
+
+      if (!isBlocked) {
+        updates.block_reason = blockReason.trim();
+        updates.blocked_at = new Date().toISOString();
+        updates.blocked_by = user?.id;
+      } else {
+        updates.block_reason = null;
+        updates.blocked_at = null;
+        updates.blocked_by = null;
+      }
+
+      const { error } = await supabase
+        .from('sellers')
+        .update(updates)
+        .eq('id', id);
+
+      if (error) throw error;
+
+      Alert.alert('Success', `Seller ${isBlocked ? 'unblocked' : 'blocked'} successfully`);
+      setBlockModalVisible(false);
+      setBlockTarget(null);
+      setBlockReason('');
+      loadSellers();
+    } catch (error: any) {
+      console.error('Block/Unblock error:', error);
+      Alert.alert('Error', error.message || `Failed to ${isBlocked ? 'unblock' : 'block'} seller`);
+    } finally {
+      setBlockProcessing(false);
+    }
+  };
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'approved': return colors.success;
@@ -168,16 +178,27 @@ export default function AllSellersScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>All Sellers</Text>
-        <TouchableOpacity onPress={loadSellers}>
-          <Ionicons name="refresh" size={24} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Gradient Header */}
+      <LinearGradient
+        colors={[colors.primary, colors.primaryDark]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} data-testid="sellers-back-button">
+            <Ionicons name="arrow-back" size={24} color={colors.white} />
+          </TouchableOpacity>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.title}>All Sellers</Text>
+            <Text style={styles.headerSubtitle}>{sellers.length} sellers registered</Text>
+          </View>
+          <TouchableOpacity onPress={loadSellers} style={styles.refreshButton} data-testid="sellers-refresh-button">
+            <Ionicons name="refresh" size={24} color={colors.white} />
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
 
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
@@ -332,7 +353,7 @@ export default function AllSellersScreen() {
                   <View style={styles.actions}>
                     <TouchableOpacity
                       style={[styles.actionButton, seller.is_blocked ? styles.approveButton : styles.blockButton]}
-                      onPress={() => handleBlockSeller(seller.id, seller.is_blocked)}
+                      onPress={() => handleBlockSeller(seller.id, seller.is_blocked, seller.company_name)}
                       data-testid={seller.is_blocked ? "unblock-seller-button" : "block-seller-button"}
                     >
                       <Ionicons 
@@ -351,6 +372,77 @@ export default function AllSellersScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Block / Unblock Seller Modal */}
+      <Modal
+        visible={blockModalVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setBlockModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, shadows.lg]}>
+            <View style={styles.modalIconBox}>
+              <Ionicons
+                name={blockTarget?.isBlocked ? 'checkmark-circle' : 'ban'}
+                size={36}
+                color={blockTarget?.isBlocked ? colors.success : colors.error}
+              />
+            </View>
+            <Text style={styles.modalTitle}>
+              {blockTarget?.isBlocked ? 'Unblock Seller' : 'Block Seller'}
+            </Text>
+            <Text style={styles.modalSubtitle} numberOfLines={2}>
+              {blockTarget?.isBlocked
+                ? `Unblocking ${blockTarget?.name} will allow them to login and make their listings visible again.`
+                : `You are about to block ${blockTarget?.name}. Please provide a reason.`}
+            </Text>
+
+            {!blockTarget?.isBlocked && (
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Reason for blocking (required)"
+                placeholderTextColor={colors.textLight}
+                value={blockReason}
+                onChangeText={setBlockReason}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+                data-testid="block-reason-input"
+              />
+            )}
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => setBlockModalVisible(false)}
+                disabled={blockProcessing}
+                data-testid="block-cancel-button"
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  blockTarget?.isBlocked ? styles.modalUnblockButton : styles.modalBlockButton,
+                  blockProcessing && { opacity: 0.6 },
+                ]}
+                onPress={confirmBlockSeller}
+                disabled={blockProcessing}
+                data-testid="block-confirm-button"
+              >
+                <Text style={styles.modalConfirmText}>
+                  {blockProcessing
+                    ? 'Processing...'
+                    : blockTarget?.isBlocked
+                    ? 'Unblock'
+                    : 'Block Seller'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -360,21 +452,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
+  headerGradient: {
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
+    borderBottomLeftRadius: borderRadius.xxl,
+    borderBottomRightRadius: borderRadius.xxl,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.lg,
-    paddingTop: spacing.xl,
+    paddingHorizontal: spacing.lg,
   },
   backButton: {
-    padding: spacing.xs,
+    padding: spacing.sm,
+    marginRight: spacing.sm,
+  },
+  refreshButton: {
+    padding: spacing.sm,
+  },
+  headerTextContainer: {
+    flex: 1,
   },
   title: {
     ...typography.h3,
-    color: colors.text,
-    flex: 1,
-    textAlign: 'center',
+    color: colors.white,
+    fontWeight: '700',
+  },
+  headerSubtitle: {
+    ...typography.bodySmall,
+    color: colors.primaryVeryLight,
+    marginTop: spacing.xs / 2,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -560,5 +667,88 @@ statsContainer: {
     ...typography.body,
     color: colors.white,
     fontWeight: '600',
+  },
+   // Block / Unblock Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    alignItems: 'center',
+  },
+  modalIconBox: {
+    width: 72,
+    height: 72,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  modalTitle: {
+    ...typography.h3,
+    color: colors.text,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
+  },
+  modalSubtitle: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+    lineHeight: 20,
+  },
+  modalInput: {
+    width: '100%',
+    minHeight: 90,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    color: colors.text,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.lg,
+    fontSize: 14,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelButton: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modalBlockButton: {
+    backgroundColor: '#EF4444',
+  },
+  modalUnblockButton: {
+    backgroundColor: colors.success,
+  },
+  modalCancelText: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  modalConfirmText: {
+    ...typography.body,
+    color: colors.white,
+    fontWeight: '700',
   },
 });

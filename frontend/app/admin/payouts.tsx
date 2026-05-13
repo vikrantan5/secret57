@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useBankAccountStore } from '../../src/store/bankAccountStore';
 import { usePayoutStore } from '../../src/store/payoutStore';
 import { supabase } from '../../src/services/supabase';
@@ -256,16 +257,28 @@ ${result.errors.join('')}` : ''
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Seller Payouts</Text>
-        <TouchableOpacity onPress={loadData}>
-          <Ionicons name="refresh" size={24} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
+      {/* Gradient Header */}
+      <LinearGradient
+        colors={[colors.primary, colors.primaryDark]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} data-testid="payouts-back-button">
+            <Ionicons name="arrow-back" size={24} color={colors.white} />
+          </TouchableOpacity>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.title}>Seller Payouts</Text>
+            <Text style={styles.headerSubtitle}>
+              {eligibleSellers.length} eligible • {allPayouts.length} total
+            </Text>
+          </View>
+          <TouchableOpacity onPress={loadData} style={styles.refreshButton} data-testid="payouts-refresh-button">
+            <Ionicons name="refresh" size={24} color={colors.white} />
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
 
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Batch Payout Generation Button */}
@@ -532,21 +545,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
+  headerGradient: {
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
+    borderBottomLeftRadius: borderRadius.xxl,
+    borderBottomRightRadius: borderRadius.xxl,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.lg,
-    paddingTop: spacing.xl,
+    paddingHorizontal: spacing.lg,
   },
   backButton: {
-    padding: spacing.xs,
+    padding: spacing.sm,
+    marginRight: spacing.sm,
+  },
+  headerTextContainer: {
+    flex: 1,
+  },
+  refreshButton: {
+    padding: spacing.sm,
   },
   title: {
     ...typography.h3,
-    color: colors.text,
-    flex: 1,
-    textAlign: 'center',
+    color: colors.white,
+    fontWeight: '700',
+  },
+  headerSubtitle: {
+    ...typography.bodySmall,
+    color: colors.primaryVeryLight,
+    marginTop: spacing.xs / 2,
   },
     batchSection: {
     backgroundColor: colors.surface,

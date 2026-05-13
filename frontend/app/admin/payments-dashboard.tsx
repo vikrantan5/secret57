@@ -38,14 +38,7 @@ interface PaymentData {
 
 const COMMISSION_RATE = 0.1;
 
-function csvEscape(value: any): string {
-  if (value === null || value === undefined) return '';
-  const s = String(value);
-  if (/[",]/.test(s)) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
-}
+
 
 export default function AdminPaymentsDashboardScreen() {
   const router = useRouter();
@@ -197,23 +190,8 @@ export default function AdminPaymentsDashboardScreen() {
     };
   }, [filteredPayments]);
 
-  const buildCsv = (rows: PaymentData[]) => {
-    const header = [
-      'Type',
-      'Transaction ID',
-      'Order/Booking ID',
-      'Customer Name',
-      'Customer Email',
-      'Seller',
-      'Category',
-      'Amount (INR)',
-      'Commission (INR)',
-      'Seller Payout (INR)',
-      'Payment Method',
-      'Status',
-      'Created At',
-    ];
-    const lines = rows.map((p) => {
+  const buildRows = (rows: PaymentData[]): (string | number)[][] => {
+    return rows.map((p) => {
       const commission = +(p.amount * COMMISSION_RATE).toFixed(2);
       const payout = +(p.amount - commission).toFixed(2);
       return [
@@ -224,60 +202,31 @@ export default function AdminPaymentsDashboardScreen() {
         p.customer_email || '',
         p.seller_name || '',
         p.category_name || '',
-        p.amount?.toFixed(2),
+        Number(p.amount?.toFixed(2)) || 0,
         commission.toFixed(2),
         payout.toFixed(2),
         p.payment_method || '',
         p.status || '',
-        new Date(p.created_at).toISOString(),
-      ]
-        .map(csvEscape)
-        .join(',');
+        csvDate(p.created_at),
+      ];
     });
-return ['\uFEFF' + header.join(','), ...lines].join('\n');
   };
 
-  const downloadFile = async (csv: string, fileName: string) => {
-    try {
-      // Web fallback
-      if (Platform.OS === 'web') {
-        // @ts-ignore - browser globals
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        // @ts-ignore
-        const url = URL.createObjectURL(blob);
-        // @ts-ignore
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        // @ts-ignore
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        // @ts-ignore
-        URL.revokeObjectURL(url);
-        Alert.alert('Success', 'CSV download started.');
-        return;
-      }
-
-      const dir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
-      const fileUri = `${dir}${fileName}`;
-      await FileSystem.writeAsStringAsync(fileUri, csv, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'text/csv',
-          dialogTitle: 'Export Payment Data',
-          UTI: 'public.comma-separated-values-text',
-        });
-      } else {
-        Alert.alert('Saved', `File saved to ${fileUri}`);
-      }
-    } catch (err: any) {
-      console.error('Export error:', err);
-      Alert.alert('Export failed', err?.message || 'Unable to export CSV.');
-    }
-  };
+  const CSV_HEADERS = [
+    'Type',
+    'Transaction ID',
+    'Order/Booking ID',
+    'Customer Name',
+    'Customer Email',
+    'Seller',
+    'Category',
+    'Amount (INR)',
+    'Commission (INR)',
+    'Seller Payout (INR)',
+    'Payment Method',
+    'Status',
+    'Created At',
+  ];
 
   const exportFiltered = async () => {
     if (filteredPayments.length === 0) {
@@ -286,9 +235,14 @@ return ['\uFEFF' + header.join(','), ...lines].join('\n');
     }
     setExporting(true);
     try {
-      const csv = buildCsv(filteredPayments);
       const ts = new Date().toISOString().replace(/[:.]/g, '-');
-      await downloadFile(csv, `payments_filtered_${ts}.csv`);
+      await exportRowsToCsv(`payments_filtered_${ts}.csv`, CSV_HEADERS, buildRows(filteredPayments));
+      if (Platform.OS === 'web') {
+        Alert.alert('Success', 'CSV download started.');
+      }
+    } catch (err: any) {
+      console.error('Export error:', err);
+      Alert.alert('Export failed', err?.message || 'Unable to export CSV.');
     } finally {
       setExporting(false);
     }
@@ -299,24 +253,40 @@ return ['\uFEFF' + header.join(','), ...lines].join('\n');
       Alert.alert('No data', 'No payment records available.');
       return;
     }
+    const doExport = async () => {
+      setExporting(true);
+      try {
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+        await exportRowsToCsv(`payments_all_${ts}.csv`, CSV_HEADERS, buildRows(payments));
+        if (Platform.OS === 'web') {
+          Alert.alert('Success', 'CSV download started.');
+        }
+      } catch (err: any) {
+        console.error('Export error:', err);
+        Alert.alert('Export failed', err?.message || 'Unable to export CSV.');
+      } finally {
+        setExporting(false);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      // Alert.alert with buttons doesn't work reliably on web — just trigger directly
+      // eslint-disable-next-line no-alert
+      const confirmed = typeof window !== 'undefined' && window.confirm
+        ? window.confirm(`Export all ${payments.length} payment records as CSV?`)
+        : true;
+      if (confirmed) {
+        await doExport();
+      }
+      return;
+    }
+
     Alert.alert(
       'Download All Data',
       `Export all ${payments.length} payment records as CSV?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Download',
-          onPress: async () => {
-            setExporting(true);
-            try {
-              const csv = buildCsv(payments);
-              const ts = new Date().toISOString().replace(/[:.]/g, '-');
-              await downloadFile(csv, `payments_all_${ts}.csv`);
-            } finally {
-              setExporting(false);
-            }
-          },
-        },
+        { text: 'Download', onPress: doExport },
       ]
     );
   };

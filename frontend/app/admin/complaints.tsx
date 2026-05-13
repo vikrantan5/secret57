@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useComplaintStore, Complaint } from '../../src/store/complaintStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
@@ -99,19 +100,29 @@ export default function AdminComplaintsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Complaints Management</Text>
-        <View style={styles.statsContainer}>
-          <Text style={styles.statsText}>{complaints.length}</Text>
+      {/* Gradient Header */}
+      <LinearGradient
+        colors={[colors.primary, colors.primaryDark]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} data-testid="complaints-back-button">
+            <Ionicons name="arrow-back" size={24} color={colors.white} />
+          </TouchableOpacity>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle}>Complaints</Text>
+            <Text style={styles.headerSubtitle}>{complaints.length} total complaints</Text>
+          </View>
+          <TouchableOpacity onPress={fetchAllComplaints} style={styles.refreshButton} data-testid="complaints-refresh-button">
+            <Ionicons name="refresh" size={24} color={colors.white} />
+          </TouchableOpacity>
         </View>
-      </View>
+      </LinearGradient>
 
       {/* Filter Tabs */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer} contentContainerStyle={styles.filterContent}>
         {['all', 'pending', 'under_review', 'resolved', 'closed', 'rejected'].map((status) => (
           <TouchableOpacity
             key={status}
@@ -337,27 +348,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
+  headerGradient: {
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
+    borderBottomLeftRadius: borderRadius.xxl,
+    borderBottomRightRadius: borderRadius.xxl,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: spacing.sm,
+    marginRight: spacing.sm,
+  },
+  headerTextContainer: {
+    flex: 1,
   },
   headerTitle: {
-    flex: 1,
     ...typography.h3,
-    color: colors.text,
+    color: colors.white,
     fontWeight: '700',
-    marginLeft: spacing.md,
+  },
+  headerSubtitle: {
+    ...typography.bodySmall,
+    color: colors.primaryVeryLight,
+    marginTop: spacing.xs / 2,
+  },
+  refreshButton: {
+    padding: spacing.sm,
   },
   statsContainer: {
     backgroundColor: colors.error + '20',
@@ -372,7 +392,13 @@ const styles = StyleSheet.create({
   },
 filterContainer: {
   paddingHorizontal: spacing.lg,
-  paddingVertical: spacing.sm, // was md — TOO BIG
+  paddingTop: spacing.md,
+  paddingBottom: spacing.sm,
+  maxHeight: 64,
+},
+filterContent: {
+  alignItems: 'center',
+  paddingRight: spacing.md,
 },
 
 filterTab: {
