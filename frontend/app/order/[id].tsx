@@ -322,7 +322,7 @@ export default function OrderDetailScreen() {
             </LinearGradient>
             <View style={styles.statusInfo}>
               <Text style={styles.statusTitle}>
-                {activeStatus.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                {activeStatus.replace(/_/g, ' ').replace(/bw/g, (c) => c.toUpperCase())}
               </Text>
               <Text style={styles.orderNumber}>Order #{order.order_number?.slice(0, 12)}</Text>
               {order.seller_status_updated_at && (
@@ -671,6 +671,25 @@ export default function OrderDetailScreen() {
               >
                 <Ionicons name="return-down-back-outline" size={20} color="#FFFFFF" />
                 <Text style={styles.refundButtonText}>Request Refund</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+
+          
+          {order.payment_status === 'paid' && (
+            <TouchableOpacity
+              style={styles.refundButton}
+              onPress={() => router.push(`/orders/${orderId}/invoice` as any)}
+              data-testid="view-invoice-button"
+            >
+              <LinearGradient
+                colors={['#8B5CF6', '#7C3AED']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.refundGradient}
+              >
+                <Ionicons name="document-text-outline" size={20} color="#FFFFFF" />
+                <Text style={styles.refundButtonText}>View Invoice</Text>
               </LinearGradient>
             </TouchableOpacity>
           )}

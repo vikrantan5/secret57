@@ -349,7 +349,7 @@ export default function AllSellersScreen() {
                     </TouchableOpacity>
                   </View>
                 )}
-                   {seller.status === 'approved' && (
+                         {/* ✅ Block / Unblock — available across all seller statuses */}
                   <View style={styles.actions}>
                     <TouchableOpacity
                       style={[styles.actionButton, seller.is_blocked ? styles.approveButton : styles.blockButton]}
@@ -366,7 +366,7 @@ export default function AllSellersScreen() {
                       </Text>
                     </TouchableOpacity>
                   </View>
-                )}
+             
               </View>
             ))}
           </View>

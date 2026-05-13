@@ -111,6 +111,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
 
+
+        // ✅ Block check: prevent blocked sellers from logging in
+      if (role === 'seller' && userData) {
+        try {
+          const { data: sellerRow } = await supabase
+            .from('sellers')
+            .select('is_blocked, block_reason')
+            .eq('user_id', userData.id)
+            .maybeSingle();
+          if (sellerRow?.is_blocked) {
+            await supabase.auth.signOut();
+            set({ loading: false });
+            return {
+              success: false,
+              error: `Your seller account has been blocked by admin.${sellerRow.block_reason ? ` Reason: ${sellerRow.block_reason}` : ''}`,
+            };
+          }
+        } catch (e) {
+          console.warn('[Auth] block-check failed (continuing):', e);
+        }
+      }
+
+
       set({ 
         user: userData, 
         session: authData.session, 

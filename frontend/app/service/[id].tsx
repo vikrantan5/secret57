@@ -27,6 +27,7 @@ import { colors, spacing, typography, borderRadius, shadows } from '../../src/co
 import { YouTubePlayerComponent } from '../../src/components/ui/YouTubePlayer';
 import BrandedSplash from '../../src/components/ui/BrandedSplash';
 import SellerRecommendations from '../../src/components/ui/SellerRecommendations';
+import ReviewSection from '../../src/components/reviews/ReviewSection';
 import CashfreePayment from '../../src/components/CashfreePayment';
 import CashfreeService from '../../src/services/cashfreeService';
 import { supabase } from '../../src/services/supabase';
@@ -1022,7 +1023,14 @@ const handleBookService = async () => {
               type="product"
               currentItemId={serviceId}
             />
+
           )}
+            {/* ⭐ Ratings & Reviews */}
+          <ReviewSection
+            kind="service"
+            subjectId={serviceId}
+            subjectName={service.name}
+          />
         </View>
       </ScrollView>
 

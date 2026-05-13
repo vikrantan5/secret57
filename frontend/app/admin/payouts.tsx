@@ -1,15 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-
   ScrollView,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
   TextInput,
   Modal,
+  RefreshControl,
+  useWindowDimensions,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -19,12 +21,11 @@ import { useBankAccountStore } from '../../src/store/bankAccountStore';
 import { usePayoutStore } from '../../src/store/payoutStore';
 import { supabase } from '../../src/services/supabase';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
-import { Button } from '../../src/components/ui/Button';
-import { Input } from '../../src/components/ui/Input';
 
 export default function AdminPayoutsScreen() {
   const router = useRouter();
-  const { createPayout, updatePayoutStatus, fetchAllPayouts, loading } = useBankAccountStore();
+  const { width } = useWindowDimensions();
+  const { createPayout, updatePayoutStatus, fetchAllPayouts } = useBankAccountStore();
   const { 
     eligibleSellers, 
     payouts: storePayouts,
@@ -41,11 +42,11 @@ export default function AdminPayoutsScreen() {
   const [payoutNotes, setPayoutNotes] = useState('');
   const [processing, setProcessing] = useState(false);
   const [generatingBatch, setGeneratingBatch] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadData();
   }, []);
-
 
   const loadData = async () => {
     await fetchEligibleSellers();
@@ -56,6 +57,12 @@ export default function AdminPayoutsScreen() {
     const payouts = await fetchAllPayouts();
     setAllPayouts(payouts);
   };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  }, []);
 
   const handleGenerateBatchPayouts = async () => {
     Alert.alert(
@@ -73,12 +80,8 @@ export default function AdminPayoutsScreen() {
               if (result.success) {
                 Alert.alert(
                   'Batch Generation Complete',
-                  `Created: ${result.created}
-Failed: ${result.failed}${
-                    result.errors.length > 0 ? `
-
-Errors:
-${result.errors.join('')}` : ''
+                  `✅ Created: ${result.created}\n❌ Failed: ${result.failed}${
+                    result.errors.length > 0 ? `\n\nErrors:\n${result.errors.join('\n')}` : ''
                   }`
                 );
                 await loadData();
@@ -97,7 +100,6 @@ ${result.errors.join('')}` : ''
   };
 
   const handleInitiatePayout = async (seller: any) => {
-    // Get seller's primary bank account
     const { data: bankAccount } = await supabase
       .from('seller_bank_accounts')
       .select('*')
@@ -135,7 +137,7 @@ ${result.errors.join('')}` : ''
               const result = await processPayout(payoutId);
               
               if (result.success) {
-                Alert.alert('Success', 'Payout processed successfully via Razorpay!');
+                Alert.alert('Success', '✅ Payout processed successfully via Razorpay!');
                 await loadData();
               } else {
                 Alert.alert('Error', result.error || 'Failed to process payout');
@@ -180,7 +182,7 @@ ${result.errors.join('')}` : ''
       });
 
       if (result.success) {
-        Alert.alert('Success', 'Payout created successfully!');
+        Alert.alert('Success', '✅ Payout created successfully!');
         setShowPayoutModal(false);
         setPayoutAmount('');
         setPayoutNotes('');
@@ -210,27 +212,37 @@ ${result.errors.join('')}` : ''
           onPress: async () => {
             let reference = undefined;
             if (newStatus === 'completed') {
-              // Prompt for transaction reference
-              Alert.prompt(
-                'Transaction Reference',
-                'Enter transaction/UTR number (optional)',
-                async (ref) => {
-                  const result = await updatePayoutStatus(payoutId, newStatus, ref || undefined);
-                  if (result.success) {
-                    Alert.alert('Success', `Payout marked as ${newStatus}`);
-                     await loadData();
-                  } else {
-                    Alert.alert('Error', result.error || 'Failed to update status');
-                  }
+              if (Platform.OS === 'web') {
+                const ref = prompt('Enter transaction/UTR number (optional)');
+                const result = await updatePayoutStatus(payoutId, newStatus, ref || undefined);
+                if (result.success) {
+                  Alert.alert('Success', `✅ Payout marked as ${newStatus}`);
+                  await loadData();
+                } else {
+                  Alert.alert('Error', result.error || 'Failed to update status');
                 }
-              );
+              } else {
+                Alert.prompt(
+                  'Transaction Reference',
+                  'Enter transaction/UTR number (optional)',
+                  async (ref) => {
+                    const result = await updatePayoutStatus(payoutId, newStatus, ref || undefined);
+                    if (result.success) {
+                      Alert.alert('Success', `✅ Payout marked as ${newStatus}`);
+                      await loadData();
+                    } else {
+                      Alert.alert('Error', result.error || 'Failed to update status');
+                    }
+                  }
+                );
+              }
               return;
             }
 
             const result = await updatePayoutStatus(payoutId, newStatus);
             if (result.success) {
-              Alert.alert('Success', `Payout marked as ${newStatus}`);
-                   await loadData();
+              Alert.alert('Success', `✅ Payout marked as ${newStatus}`);
+              await loadData();
             } else {
               Alert.alert('Error', result.error || 'Failed to update status');
             }
@@ -242,102 +254,176 @@ ${result.errors.join('')}` : ''
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed':
-        return colors.success;
-      case 'processing':
-        return colors.primary;
-      case 'pending':
-        return colors.warning;
-      case 'failed':
-        return colors.error;
-      default:
-        return colors.textSecondary;
+      case 'completed': return colors.success;
+      case 'processing': return colors.info;
+      case 'pending': return colors.warning;
+      case 'failed': return colors.error;
+      default: return colors.textSecondary;
     }
   };
 
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed': return 'checkmark-circle';
+      case 'processing': return 'sync';
+      case 'pending': return 'time';
+      case 'failed': return 'close-circle';
+      default: return 'ellipse';
+    }
+  };
+
+  const analytics = useMemo(() => {
+    const totalEligible = eligibleSellers.reduce((sum, s) => sum + s.net_eligible_amount, 0);
+    const totalOrders = eligibleSellers.reduce((sum, s) => sum + s.eligible_order_count, 0);
+    const totalPaid = allPayouts
+      .filter(p => p.status === 'completed')
+      .reduce((sum, p) => sum + p.amount, 0);
+    
+    return {
+      totalEligible,
+      totalOrders,
+      totalPaid,
+      pendingPayouts: allPayouts.filter(p => p.status === 'pending').length,
+    };
+  }, [eligibleSellers, allPayouts]);
+
+  const isTablet = width >= 768;
+  const cardWidth = isTablet ? '31%' : '100%';
+
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      {/* Gradient Header */}
+    <SafeAreaView style={styles.container} edges={['top']}>
       <LinearGradient
         colors={[colors.primary, colors.primaryDark]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerGradient}
       >
-        <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} data-testid="payouts-back-button">
-            <Ionicons name="arrow-back" size={24} color={colors.white} />
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
+            <Ionicons name="arrow-back" size={22} color="#fff" />
           </TouchableOpacity>
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.title}>Seller Payouts</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>Seller Payouts</Text>
             <Text style={styles.headerSubtitle}>
               {eligibleSellers.length} eligible • {allPayouts.length} total
             </Text>
           </View>
-          <TouchableOpacity onPress={loadData} style={styles.refreshButton} data-testid="payouts-refresh-button">
-            <Ionicons name="refresh" size={24} color={colors.white} />
+          <TouchableOpacity onPress={onRefresh} style={styles.iconButton}>
+            <Ionicons name="refresh" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
       </LinearGradient>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Batch Payout Generation Button */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        contentContainerStyle={{ paddingBottom: spacing.xxl }}
+      >
+        {/* KPI Cards */}
+        <View style={[styles.kpiGrid, { paddingHorizontal: spacing.lg }]}>
+          <View style={[styles.kpiCard, shadows.sm, { width: cardWidth }]}>
+            <LinearGradient colors={['#4F46E5', '#7C3AED']} style={styles.kpiIcon}>
+              <Ionicons name="people-outline" size={18} color="#fff" />
+            </LinearGradient>
+            <Text style={styles.kpiLabel}>Eligible Sellers</Text>
+            <Text style={styles.kpiValue}>{eligibleSellers.length}</Text>
+            <Text style={styles.kpiSub}>{analytics.totalOrders} orders pending</Text>
+          </View>
+
+          <View style={[styles.kpiCard, shadows.sm, { width: cardWidth }]}>
+            <LinearGradient colors={['#10B981', '#059669']} style={styles.kpiIcon}>
+              <Ionicons name="cash-outline" size={18} color="#fff" />
+            </LinearGradient>
+            <Text style={styles.kpiLabel}>Total Pending</Text>
+            <Text style={styles.kpiValue}>
+              ₹{analytics.totalEligible.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            </Text>
+            <Text style={styles.kpiSub}>To be paid out</Text>
+          </View>
+
+          <View style={[styles.kpiCard, shadows.sm, { width: cardWidth }]}>
+            <LinearGradient colors={['#F59E0B', '#D97706']} style={styles.kpiIcon}>
+              <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+            </LinearGradient>
+            <Text style={styles.kpiLabel}>Total Paid</Text>
+            <Text style={styles.kpiValue}>
+              ₹{analytics.totalPaid.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            </Text>
+            <Text style={styles.kpiSub}>Completed payouts</Text>
+          </View>
+        </View>
+
+        {/* Batch Payout Section */}
         {eligibleSellers.length > 0 && (
-          <View style={[styles.batchSection, shadows.md]}>
-            <View style={styles.batchInfo}>
-              <Ionicons name="flash" size={32} color={colors.warning} />
-              <View style={styles.batchTextContainer}>
-                <Text style={styles.batchTitle}>Eligible for Batch Payout</Text>
-                <Text style={styles.batchSubtitle}>
-                  {eligibleSellers.length} sellers • Total: ₹
-                  {eligibleSellers.reduce((sum, s) => sum + s.net_eligible_amount, 0).toFixed(2)}
-                </Text>
-                <Text style={styles.batchNote}>
-                  (Orders delivered ≥7 days ago • Min ₹500)
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              style={[styles.batchButton, shadows.sm]}
-              onPress={handleGenerateBatchPayouts}
-              disabled={generatingBatch}
+          <View style={[styles.batchSection, shadows.md, { marginHorizontal: spacing.lg }]}>
+            <LinearGradient
+              colors={['#FBBF2415', '#FBBF2408']}
+              style={styles.batchGradient}
             >
-              {generatingBatch ? (
-                <ActivityIndicator color={colors.surface} />
-              ) : (
-                <>
-                  <Ionicons name="layers" size={20} color={colors.surface} />
-                  <Text style={styles.batchButtonText}>Generate Batch Payouts</Text>
-                </>
-              )}
-            </TouchableOpacity>
+              <View style={styles.batchInfo}>
+                <View style={styles.batchIcon}>
+                  <Ionicons name="flash" size={28} color={colors.warning} />
+                </View>
+                <View style={styles.batchTextContainer}>
+                  <Text style={styles.batchTitle}>Batch Payout Ready</Text>
+                  <Text style={styles.batchSubtitle}>
+                    {eligibleSellers.length} sellers • ₹{analytics.totalEligible.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  </Text>
+                  <Text style={styles.batchNote}>
+                    Orders delivered ≥7 days ago • Min ₹500
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.batchButton}
+                onPress={handleGenerateBatchPayouts}
+                disabled={generatingBatch}
+              >
+                {generatingBatch ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="layers-outline" size={20} color="#fff" />
+                    <Text style={styles.batchButtonText}>Generate Batch Payouts</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </LinearGradient>
           </View>
         )}
 
-        {/* Eligible Sellers */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Eligible Sellers (≥₹500)</Text>
+        {/* Eligible Sellers Section */}
+        <View style={[styles.section, { paddingHorizontal: spacing.lg }]}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Eligible Sellers</Text>
+            <Text style={styles.sectionCount}>{eligibleSellers.length} sellers</Text>
+          </View>
 
           {payoutLoading ? (
-            <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
-                   ) : eligibleSellers.length === 0 ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.loadingText}>Loading sellers...</Text>
+            </View>
+          ) : eligibleSellers.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="checkmark-circle-outline" size={60} color={colors.success} />
-              <Text style={styles.emptyText}>All caught up!</Text>
-              <Text style={styles.emptySubtext}>No eligible sellers at the moment</Text>
+              <View style={styles.emptyIconBox}>
+                <Ionicons name="checkmark-circle-outline" size={48} color={colors.success} />
+              </View>
+              <Text style={styles.emptyTitle}>All caught up!</Text>
+              <Text style={styles.emptySubtitle}>No eligible sellers at the moment</Text>
             </View>
           ) : (
             <View style={styles.sellersList}>
               {eligibleSellers.map((seller) => (
                 <View key={seller.seller_id} style={[styles.sellerCard, shadows.sm]}>
                   <View style={styles.sellerHeader}>
-                    <View style={styles.sellerIcon}>
-                      <Ionicons name="business" size={24} color={colors.primary} />
+                    <View style={[styles.sellerIcon, { backgroundColor: colors.primary + '15' }]}>
+                      <Ionicons name="business-outline" size={24} color={colors.primary} />
                     </View>
                     <View style={styles.sellerInfo}>
                       <Text style={styles.sellerName}>{seller.company_name}</Text>
                       <Text style={styles.sellerSubtext}>
-                        {seller.eligible_order_count} orders eligible
+                        {seller.eligible_order_count} eligible order{seller.eligible_order_count !== 1 ? 's' : ''}
                       </Text>
                     </View>
                   </View>
@@ -364,10 +450,10 @@ ${result.errors.join('')}` : ''
                   </View>
 
                   <TouchableOpacity
-                    style={[styles.payoutButton, shadows.sm]}
+                    style={styles.payoutButton}
                     onPress={() => handleInitiatePayout(seller)}
                   >
-                    <Ionicons name="cash-outline" size={20} color={colors.surface} />
+                    <Ionicons name="cash-outline" size={20} color="#fff" />
                     <Text style={styles.payoutButtonText}>Create Payout</Text>
                   </TouchableOpacity>
                 </View>
@@ -376,42 +462,53 @@ ${result.errors.join('')}` : ''
           )}
         </View>
 
-        {/* Removed - Now showing eligible sellers above */}
-
-        {/* Payout History */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Payouts</Text>
+        {/* Payout History Section */}
+        <View style={[styles.section, { paddingHorizontal: spacing.lg }]}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Payouts</Text>
+            <Text style={styles.sectionCount}>{allPayouts.length} total</Text>
+          </View>
 
           {allPayouts.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="receipt-outline" size={60} color={colors.textSecondary} />
-              <Text style={styles.emptyText}>No payouts yet</Text>
+              <View style={styles.emptyIconBox}>
+                <Ionicons name="receipt-outline" size={48} color={colors.textSecondary} />
+              </View>
+              <Text style={styles.emptyTitle}>No payouts yet</Text>
+              <Text style={styles.emptySubtitle}>Payouts will appear here once created</Text>
             </View>
           ) : (
             <View style={styles.payoutsList}>
               {allPayouts.map((payout) => (
                 <View key={payout.id} style={[styles.payoutCard, shadows.sm]}>
                   <View style={styles.payoutHeader}>
-                    <View>
-                      <Text style={styles.payoutCompany}>
-                        {payout.seller?.company_name || 'Unknown Seller'}
-                      </Text>
-                      <Text style={styles.payoutDate}>
-                        {new Date(payout.created_at).toLocaleDateString('en-IN', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric'
-                        })}
-                      </Text>
+                    <View style={styles.payoutSellerInfo}>
+                      <View style={[styles.payoutIcon, { backgroundColor: colors.primary + '10' }]}>
+                        <Ionicons name="business-outline" size={16} color={colors.primary} />
+                      </View>
+                      <View>
+                        <Text style={styles.payoutCompany}>
+                          {payout.seller?.company_name || 'Unknown Seller'}
+                        </Text>
+                        <Text style={styles.payoutDate}>
+                          {new Date(payout.created_at).toLocaleDateString('en-IN', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </Text>
+                      </View>
                     </View>
                     <View style={[
                       styles.statusBadge,
-                      { backgroundColor: getStatusColor(payout.status) + '20' }
+                      { backgroundColor: getStatusColor(payout.status) + '15' }
                     ]}>
-                      <Text style={[
-                        styles.statusText,
-                        { color: getStatusColor(payout.status) }
-                      ]}>
+                      <Ionicons 
+                        name={getStatusIcon(payout.status)} 
+                        size={12} 
+                        color={getStatusColor(payout.status)} 
+                      />
+                      <Text style={[styles.statusText, { color: getStatusColor(payout.status) }]}>
                         {payout.status.toUpperCase()}
                       </Text>
                     </View>
@@ -420,31 +517,38 @@ ${result.errors.join('')}` : ''
                   <Text style={styles.payoutAmount}>₹{payout.amount.toFixed(2)}</Text>
                   
                   {payout.bank_account && (
-                    <Text style={styles.payoutBank}>
-                      {payout.bank_account.bank_name} - XXXX{payout.bank_account.account_number.slice(-4)}
-                    </Text>
+                    <View style={styles.payoutBankInfo}>
+                      <Ionicons name="card-outline" size={14} color={colors.textSecondary} />
+                      <Text style={styles.payoutBank}>
+                        {payout.bank_account.bank_name} • XXXX{payout.bank_account.account_number.slice(-4)}
+                      </Text>
+                    </View>
                   )}
 
                   {payout.transaction_reference && (
-                    <Text style={styles.payoutRef}>Ref: {payout.transaction_reference}</Text>
+                    <View style={styles.payoutRefInfo}>
+                      <Ionicons name="document-text-outline" size={14} color={colors.textSecondary} />
+                      <Text style={styles.payoutRef}>Ref: {payout.transaction_reference}</Text>
+                    </View>
                   )}
 
-                                {payout.status === 'pending' && (
+                  {payout.status === 'pending' && (
                     <View style={styles.payoutActions}>
                       <TouchableOpacity
-                        style={[styles.actionButton, { backgroundColor: colors.primary + '15' }]}
+                        style={[styles.actionButton, styles.razorpayButton]}
                         onPress={() => handleProcessPayoutViaRazorpay(payout.id)}
                         disabled={processing}
                       >
-                        <Ionicons name="logo-usd" size={16} color={colors.primary} />
+                        <Ionicons name="flash-outline" size={16} color={colors.primary} />
                         <Text style={[styles.actionButtonText, { color: colors.primary }]}>
                           Process via Razorpay
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.actionButton, { backgroundColor: colors.success + '15' }]}
+                        style={[styles.actionButton, styles.completeButton]}
                         onPress={() => handleUpdatePayoutStatus(payout.id, 'completed')}
                       >
+                        <Ionicons name="checkmark-outline" size={16} color={colors.success} />
                         <Text style={[styles.actionButtonText, { color: colors.success }]}>
                           Mark Completed
                         </Text>
@@ -454,11 +558,12 @@ ${result.errors.join('')}` : ''
 
                   {payout.status === 'processing' && (
                     <TouchableOpacity
-                      style={[styles.actionButton, { backgroundColor: colors.success + '15', width: '100%' }]}
+                      style={[styles.actionButton, styles.completeButton, { width: '100%' }]}
                       onPress={() => handleUpdatePayoutStatus(payout.id, 'completed')}
                     >
+                      <Ionicons name="checkmark-outline" size={16} color={colors.success} />
                       <Text style={[styles.actionButtonText, { color: colors.success }]}>
-                        Mark Completed
+                        Mark as Completed
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -478,60 +583,85 @@ ${result.errors.join('')}` : ''
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, shadows.lg]}>
-            <View style={styles.modalHeader}>
+            <LinearGradient
+              colors={[colors.primary, colors.primaryDark]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.modalHeader}
+            >
               <Text style={styles.modalTitle}>Initiate Payout</Text>
               <TouchableOpacity onPress={() => setShowPayoutModal(false)}>
-                <Ionicons name="close" size={24} color={colors.text} />
+                <Ionicons name="close" size={24} color="#fff" />
               </TouchableOpacity>
-            </View>
+            </LinearGradient>
 
             {selectedSeller && (
-              <>
+              <View style={styles.modalBody}>
                 <View style={styles.modalSellerInfo}>
-                  <Text style={styles.modalSellerName}>{selectedSeller.company_name}</Text>
-                  <Text style={styles.modalBankInfo}>
-                    {selectedSeller.bank_account?.bank_name} - 
-                    {selectedSeller.bank_account?.account_holder_name}
-                  </Text>
-                  <Text style={styles.modalPendingAmount}>
-                    Pending Amount: ₹{selectedSeller.pending_amount.toFixed(2)}
-                  </Text>
+                  <View style={styles.modalSellerIcon}>
+                    <Ionicons name="business-outline" size={32} color={colors.primary} />
+                  </View>
+                  <View style={styles.modalSellerDetails}>
+                    <Text style={styles.modalSellerName}>{selectedSeller.company_name}</Text>
+                    <Text style={styles.modalBankInfo}>
+                      {selectedSeller.bank_account?.bank_name} • {selectedSeller.bank_account?.account_holder_name}
+                    </Text>
+                    <View style={styles.modalAmountBadge}>
+                      <Text style={styles.modalPendingAmount}>
+                        Eligible: ₹{selectedSeller.net_eligible_amount.toFixed(2)}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
 
-                <Input
-                  label="Payout Amount (₹)"
-                  value={payoutAmount}
-                  onChangeText={setPayoutAmount}
-                  placeholder="Enter amount"
-                  keyboardType="decimal-pad"
-                />
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Payout Amount (₹)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={payoutAmount}
+                    onChangeText={setPayoutAmount}
+                    placeholder="Enter amount"
+                    placeholderTextColor={colors.textTertiary}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
 
-                <Input
-                  label="Notes (Optional)"
-                  value={payoutNotes}
-                  onChangeText={setPayoutNotes}
-                  placeholder="Add any notes"
-                  multiline
-                  numberOfLines={3}
-                  style={styles.notesInput}
-                />
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Notes (Optional)</Text>
+                  <TextInput
+                    style={[styles.input, styles.textArea]}
+                    value={payoutNotes}
+                    onChangeText={setPayoutNotes}
+                    placeholder="Add any notes"
+                    placeholderTextColor={colors.textTertiary}
+                    multiline
+                    numberOfLines={3}
+                  />
+                </View>
 
                 <View style={styles.modalActions}>
-                  <Button
-                    title="Cancel"
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.cancelButton]}
                     onPress={() => setShowPayoutModal(false)}
-                    variant="outline"
-                    style={{ flex: 1, marginRight: spacing.sm }}
-                  />
-                  <Button
-                    title="Create Payout"
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.createButton]}
                     onPress={handleCreatePayout}
-                    loading={processing}
-                    variant="primary"
-                    style={{ flex: 1 }}
-                  />
+                    disabled={processing}
+                  >
+                    {processing ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="cash-outline" size={18} color="#fff" />
+                        <Text style={styles.createButtonText}>Create Payout</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
                 </View>
-              </>
+              </View>
             )}
           </View>
         </View>
@@ -546,239 +676,348 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   headerGradient: {
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xl,
+    paddingTop: Platform.OS === 'ios' ? spacing.md : spacing.lg,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
     borderBottomLeftRadius: borderRadius.xxl,
     borderBottomRightRadius: borderRadius.xxl,
   },
-  headerContent: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
   },
-  backButton: {
-    padding: spacing.sm,
-    marginRight: spacing.sm,
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  headerTextContainer: {
-    flex: 1,
-  },
-  refreshButton: {
-    padding: spacing.sm,
-  },
-  title: {
-    ...typography.h3,
-    color: colors.white,
-    fontWeight: '700',
+  headerTitle: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
   headerSubtitle: {
-    ...typography.bodySmall,
-    color: colors.primaryVeryLight,
-    marginTop: spacing.xs / 2,
+    color: '#fff',
+    opacity: 0.85,
+    fontSize: 12,
+    marginTop: 2,
   },
-    batchSection: {
+  kpiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: spacing.lg,
+  },
+  kpiCard: {
     backgroundColor: colors.surface,
-    margin: spacing.lg,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  kpiIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  kpiLabel: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  kpiValue: {
+    color: colors.text,
+    fontSize: 20,
+    fontWeight: '800',
+    marginTop: 4,
+    letterSpacing: -0.3,
+  },
+  kpiSub: {
+    color: colors.textTertiary,
+    fontSize: 11,
+    marginTop: 4,
+  },
+  batchSection: {
+    marginTop: spacing.md,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  batchGradient: {
     padding: spacing.lg,
-    borderRadius: borderRadius.lg,
   },
   batchInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: spacing.md,
   },
+  batchIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.warning + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
   batchTextContainer: {
     flex: 1,
-    marginLeft: spacing.md,
   },
   batchTitle: {
-    ...typography.h4,
-    color: colors.text,
+    fontSize: 16,
     fontWeight: '700',
+    color: colors.text,
   },
   batchSubtitle: {
-    ...typography.body,
+    fontSize: 13,
     color: colors.textSecondary,
-    marginTop: spacing.xs / 2,
+    marginTop: 2,
   },
   batchNote: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.xs / 2,
-    fontStyle: 'italic',
+    fontSize: 11,
+    color: colors.textTertiary,
+    marginTop: 2,
   },
   batchButton: {
     backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.md,
-    gap: spacing.sm,
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
   },
   batchButtonText: {
-    ...typography.body,
-    color: colors.surface,
+    color: '#fff',
     fontWeight: '600',
+    fontSize: 14,
   },
   section: {
-    padding: spacing.lg,
+    marginTop: spacing.lg,
   },
-  sectionTitle: {
-    ...typography.h4,
-    color: colors.text,
-    fontWeight: '700',
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
     marginBottom: spacing.md,
   },
-  loader: {
-    marginVertical: spacing.xl,
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  sectionCount: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  loadingContainer: {
+    paddingVertical: spacing.xxl,
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    color: colors.textSecondary,
   },
   emptyState: {
     alignItems: 'center',
     paddingVertical: spacing.xxl,
   },
-  emptyText: {
-    ...typography.h4,
-    color: colors.text,
-    marginTop: spacing.md,
+  emptyIconBox: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: colors.primaryVeryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
-    emptySubtext: {
-    ...typography.body,
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  emptySubtitle: {
+    fontSize: 13,
     color: colors.textSecondary,
-    marginTop: spacing.xs,
-    textAlign: 'center',
+    marginTop: 4,
   },
   sellersList: {
-    gap: spacing.md,
+    gap: 12,
   },
   sellerCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   sellerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: 16,
   },
   sellerIcon: {
     width: 48,
     height: 48,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.primary + '15',
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
+    marginRight: 12,
   },
   sellerInfo: {
     flex: 1,
   },
   sellerName: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 16,
     fontWeight: '700',
+    color: colors.text,
   },
   sellerSubtext: {
-    ...typography.bodySmall,
+    fontSize: 12,
     color: colors.textSecondary,
-    marginTop: spacing.xs / 2,
+    marginTop: 2,
   },
   revenueGrid: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 12,
+    marginBottom: 16,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: spacing.md,
-    marginBottom: spacing.md,
+    borderTopColor: colors.borderLight,
   },
   revenueItem: {
     flex: 1,
     alignItems: 'center',
   },
   revenueLabel: {
-    ...typography.caption,
+    fontSize: 11,
     color: colors.textSecondary,
   },
   revenueValue: {
-    ...typography.h4,
+    fontSize: 15,
     fontWeight: '700',
-    marginTop: spacing.xs,
+    marginTop: 4,
   },
   payoutButton: {
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    gap: spacing.sm,
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
   },
   payoutButtonText: {
-    ...typography.body,
-    color: colors.surface,
+    color: '#fff',
     fontWeight: '600',
+    fontSize: 14,
   },
   payoutsList: {
-    gap: spacing.md,
+    gap: 12,
   },
   payoutCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   payoutHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: 12,
+  },
+  payoutSellerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  payoutIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   payoutCompany: {
-    ...typography.body,
-    color: colors.text,
+    fontSize: 14,
     fontWeight: '600',
+    color: colors.text,
   },
   payoutDate: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.xs / 2,
+    fontSize: 11,
+    color: colors.textTertiary,
+    marginTop: 2,
   },
   statusBadge: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   statusText: {
-    ...typography.caption,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
   },
   payoutAmount: {
-    ...typography.h3,
+    fontSize: 20,
+    fontWeight: '800',
     color: colors.text,
-    fontWeight: '700',
-    marginVertical: spacing.sm,
+    marginVertical: 8,
+  },
+  payoutBankInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
   },
   payoutBank: {
-    ...typography.body,
+    fontSize: 12,
     color: colors.textSecondary,
   },
+  payoutRefInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
   payoutRef: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
+    fontSize: 11,
+    color: colors.textTertiary,
   },
   payoutActions: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.md,
+    gap: 10,
+    marginTop: 12,
   },
   actionButton: {
     flex: 1,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  razorpayButton: {
+    backgroundColor: colors.primary + '10',
+  },
+  completeButton: {
+    backgroundColor: colors.success + '10',
   },
   actionButtonText: {
-    ...typography.body,
+    fontSize: 13,
     fontWeight: '600',
   },
   modalOverlay: {
@@ -788,49 +1027,116 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    padding: spacing.xl,
-    maxHeight: '80%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    padding: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
   modalTitle: {
-    ...typography.h3,
-    color: colors.text,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  modalBody: {
+    padding: 20,
   },
   modalSellerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     backgroundColor: colors.background,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.lg,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  modalSellerIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSellerDetails: {
+    flex: 1,
   },
   modalSellerName: {
-    ...typography.h4,
-    color: colors.text,
+    fontSize: 16,
     fontWeight: '700',
+    color: colors.text,
   },
   modalBankInfo: {
-    ...typography.body,
+    fontSize: 13,
     color: colors.textSecondary,
-    marginTop: spacing.xs,
+    marginTop: 2,
+  },
+  modalAmountBadge: {
+    marginTop: 6,
   },
   modalPendingAmount: {
-    ...typography.h4,
+    fontSize: 13,
+    fontWeight: '600',
     color: colors.warning,
-    marginTop: spacing.sm,
   },
-  notesInput: {
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: 6,
+  },
+  input: {
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 14,
+    color: colors.text,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  textArea: {
     height: 80,
     textAlignVertical: 'top',
   },
   modalActions: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.lg,
+    gap: 12,
+    marginTop: 20,
+  },
+  modalButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  cancelButton: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  cancelButtonText: {
+    color: colors.textSecondary,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  createButton: {
+    backgroundColor: colors.primary,
+  },
+  createButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });

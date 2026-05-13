@@ -22,6 +22,7 @@ import { useAuthStore } from '../../src/store/authStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../src/constants/theme';
 import BrandedSplash from '../../src/components/ui/BrandedSplash';
 import SellerRecommendations from '../../src/components/ui/SellerRecommendations';
+import ReviewSection from '../../src/components/reviews/ReviewSection';
 
 const { width } = Dimensions.get('window');
 
@@ -291,6 +292,13 @@ export default function ProductDetailScreen() {
               currentItemId={productId}
             />
           )}
+
+             {/* ⭐ Ratings & Reviews */}
+          <ReviewSection
+            kind="product"
+            subjectId={productId}
+            subjectName={product.name}
+          />
         </View>
       </ScrollView>
 
