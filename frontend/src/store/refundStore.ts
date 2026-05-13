@@ -359,7 +359,7 @@ export const useRefundStore = create<RefundState>((set, get) => ({
         .select(`
           *,
           order:orders(id, order_number, total_amount, status, shipping_name, shipping_phone, created_at),
-          booking:bookings(id, booking_date, booking_time, total_amount, status, address, phone, service:services(id, name, images, price)),
+               booking:bookings(id, booking_date, booking_time, total_amount, status, address, service:services(id, name, images, price)),
           user:users!refund_requests_user_id_fkey(id, name, email, phone),
           refund_items(
             id,
