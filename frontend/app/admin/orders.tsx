@@ -39,11 +39,15 @@ export default function AllOrdersScreen() {
   const loadOrders = async () => {
     try {
       setLoading(true);
+      // ✅ FIX: Use explicit relationship aliasing to disambiguate
+      // multiple FKs from orders -> users (customer_id, cancelled_by, delivery_verified_by)
       const { data, error } = await supabase
         .from('orders')
         .select(`
           *,
-          user:users(id, name, email),
+          customer:users!orders_customer_id_fkey(id, name, email, phone),
+          cancelledBy:users!orders_cancelled_by_fkey(id, name, email),
+          deliveryVerifiedBy:users!orders_delivery_verified_by_fkey(id, name, email),
           order_items(
             *,
             product:products(id, name, images),
@@ -51,6 +55,12 @@ export default function AllOrdersScreen() {
           )
         `)
         .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('[AdminOrders] supabase error:', error);
+      } else {
+        console.log('[AdminOrders] fetched orders count:', data?.length || 0);
+      }
 
       if (error) throw error;
       setOrders(data || []);
