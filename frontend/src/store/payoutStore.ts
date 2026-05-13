@@ -152,25 +152,105 @@ export const usePayoutStore = create<PayoutState>((set, get) => ({
     }
   },
   
-  fetchEligibleSellers: async () => {
+   fetchEligibleSellers: async () => {
     try {
       set({ loading: true, error: null });
-      
-      // Fetch from the seller_eligible_payouts view
-      const { data, error } = await supabase
+
+      // Try the SQL view first (fastest path)
+      const viewQuery = await supabase
         .from('seller_eligible_payouts')
         .select('*')
         .gte('net_eligible_amount', get().minimumPayoutAmount);
-      
-      if (error) {
-        console.error('Error fetching eligible sellers:', error);
-        throw error;
+
+      if (!viewQuery.error) {
+        set({ eligibleSellers: viewQuery.data || [], loading: false });
+        return;
       }
-      
-      set({ eligibleSellers: data || [], loading: false });
+
+      // ✅ Fallback: view not yet created (PGRST205) — compute client-side
+      console.warn(
+        '[fetchEligibleSellers] seller_eligible_payouts view missing — falling back to client-side compute:',
+        viewQuery.error?.message
+      );
+
+      const holdDate = new Date();
+      holdDate.setDate(holdDate.getDate() - get().holdPeriodDays);
+      const holdIso = holdDate.toISOString();
+
+      const [{ data: sellers, error: sellersErr }, { data: orderItems }, { data: bookings }, { data: paidPayouts }] =
+        await Promise.all([
+          supabase
+            .from('sellers')
+            .select('id, company_name, user_id, status, is_blocked')
+            .eq('status', 'approved'),
+          supabase
+            .from('order_items')
+            .select('seller_id, total, order_id, order:orders!inner(id, status, payment_status, actual_delivery_date, updated_at)')
+            .eq('order.status', 'delivered')
+            .eq('order.payment_status', 'paid')
+            .lte('order.actual_delivery_date', holdIso),
+          supabase
+            .from('bookings')
+            .select('seller_id, total_amount')
+            .eq('status', 'completed')
+            .lte('updated_at', holdIso),
+          supabase
+            .from('payouts')
+            .select('seller_id, amount, status')
+            .in('status', ['processing', 'completed']),
+        ]);
+
+      if (sellersErr) throw sellersErr;
+
+      const orderAgg = new Map<string, { rev: number; ids: Set<string> }>();
+      (orderItems || []).forEach((row: any) => {
+        const key = row.seller_id;
+        if (!orderAgg.has(key)) orderAgg.set(key, { rev: 0, ids: new Set() });
+        const entry = orderAgg.get(key)!;
+        entry.rev += Number(row.total || 0);
+        if (row.order_id) entry.ids.add(row.order_id);
+      });
+
+      const bookingAgg = new Map<string, number>();
+      (bookings || []).forEach((row: any) => {
+        bookingAgg.set(row.seller_id, (bookingAgg.get(row.seller_id) || 0) + Number(row.total_amount || 0));
+      });
+
+      const paidAgg = new Map<string, number>();
+      (paidPayouts || []).forEach((row: any) => {
+        paidAgg.set(row.seller_id, (paidAgg.get(row.seller_id) || 0) + Number(row.amount || 0));
+      });
+
+      const commissionRate = get().platformCommission / 100;
+      const minPayout = get().minimumPayoutAmount;
+
+      const eligible = (sellers || [])
+        .filter((s: any) => !s.is_blocked)
+        .map((s: any) => {
+          const oRev = orderAgg.get(s.id)?.rev || 0;
+          const bRev = bookingAgg.get(s.id) || 0;
+          const totalRev = oRev + bRev;
+          const paid = paidAgg.get(s.id) || 0;
+          const net = Math.max(0, totalRev * (1 - commissionRate) - paid);
+          return {
+            seller_id: s.id,
+            company_name: s.company_name,
+            user_id: s.user_id,
+            eligible_order_revenue: oRev,
+            eligible_booking_revenue: bRev,
+            total_eligible_revenue: totalRev,
+            total_paid_amount: paid,
+            net_eligible_amount: net,
+            eligible_order_count: orderAgg.get(s.id)?.ids.size || 0,
+            eligible_order_ids: Array.from(orderAgg.get(s.id)?.ids || []),
+          };
+        })
+        .filter((e: any) => e.net_eligible_amount >= minPayout);
+
+      set({ eligibleSellers: eligible, loading: false });
     } catch (error: any) {
       console.error('fetchEligibleSellers error:', error);
-      set({ error: error.message, loading: false });
+      set({ error: error.message, loading: false, eligibleSellers: [] });
     }
   },
   

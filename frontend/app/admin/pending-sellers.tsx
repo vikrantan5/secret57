@@ -558,6 +558,15 @@ export default function PendingSellersScreen() {
                       <Text style={styles.actionButtonText}>Approve</Text>
                     </TouchableOpacity>
                   </View>
+                    {/* ✅ View seller verification documents */}
+                  <TouchableOpacity
+                    style={[styles.actionButton, { backgroundColor: colors.primary, marginTop: spacing.sm, flex: 0 }, shadows.sm]}
+                    onPress={() => router.push(`/admin/sellers/${seller.id}` as any)}
+                    data-testid={`view-pending-seller-${seller.id}`}
+                  >
+                    <Ionicons name="document-text-outline" size={20} color={colors.white} />
+                    <Text style={styles.actionButtonText}>View Documents</Text>
+                  </TouchableOpacity>
                 </View>
               ))
             )}

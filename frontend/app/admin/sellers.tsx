@@ -349,6 +349,17 @@ export default function AllSellersScreen() {
                     </TouchableOpacity>
                   </View>
                 )}
+                      {/* ✅ View seller documents / verification details */}
+                <View style={styles.actions}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, { backgroundColor: colors.primary }]}
+                    onPress={() => router.push(`/admin/sellers/${seller.id}` as any)}
+                    data-testid={`view-seller-${seller.id}`}
+                  >
+                    <Ionicons name="document-text-outline" size={18} color={colors.white} />
+                    <Text style={styles.actionButtonText}>View Documents</Text>
+                  </TouchableOpacity>
+                </View>
                          {/* ✅ Block / Unblock — available across all seller statuses */}
                   <View style={styles.actions}>
                     <TouchableOpacity

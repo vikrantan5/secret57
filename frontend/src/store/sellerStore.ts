@@ -1,6 +1,6 @@
 import React from 'react';
 import { create } from 'zustand';
-import { supabase } from '../services/supabase';
+import { supabase, supabaseAdmin } from '../services/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadImageToSupabase, generateSignedUrl } from '../utils/imageUpload';
 
@@ -178,6 +178,44 @@ export const useSellerStore = create<SellerState>((set, get) => ({
       }
 
       const publicUrl = result.url;
+
+
+           // Derive a friendly document name + type from file extension
+      const fileName = (result.path || imageUri).split('/').pop() || 'document';
+      const ext = (fileName.split('.').pop() || '').toLowerCase();
+      const mimeMap: Record<string, string> = {
+        pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+        png: 'image/png', webp: 'image/webp', heic: 'image/heic',
+      };
+      const mime_type = mimeMap[ext] || 'application/octet-stream';
+      const document_type = ext === 'pdf' ? 'pdf' : 'image';
+      const document_name = `Verification Document - ${new Date().toLocaleDateString('en-IN')}`;
+
+      // ✅ CRITICAL: Persist metadata in seller_documents table so admin can list & verify
+      try {
+        console.log('[uploadVerificationDocument] inserting seller_documents row for seller', sellerId);
+        const { error: docInsertError } = await supabaseAdmin
+          .from('seller_documents')
+          .insert([{
+            seller_id: sellerId,
+            document_name,
+            document_type,
+            document_url: publicUrl,
+            storage_path: result.path,
+            mime_type,
+            verification_status: 'pending',
+          }]);
+        if (docInsertError) {
+          // Don't break upload flow — still keep legacy array updated
+          console.error('[seller_documents] insert failed:', docInsertError);
+        } else {
+          console.log('[seller_documents] metadata saved successfully');
+        }
+      } catch (e) {
+        console.error('[seller_documents] insert exception:', e);
+      }
+
+      // Maintain legacy verification_documents array on sellers row for backward compat
 
       const currentSeller = get().seller;
       if (currentSeller) {

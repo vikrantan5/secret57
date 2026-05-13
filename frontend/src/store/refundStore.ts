@@ -118,6 +118,64 @@ export const useRefundStore = create<RefundState>((set, get) => ({
         return { success: false, error: error.message };
       }
 
+
+
+      
+      // ✅ Product-level tracking — create refund_items per order_item belonging
+      // to the same seller. This allows the seller dashboard to show product info
+      // and supports orders that contain items from multiple sellers.
+      try {
+        if (data.order_id) {
+          const { data: orderItems, error: oiErr } = await supabaseAdmin
+            .from('order_items')
+            .select('id, product_id, seller_id, quantity, price, total, product:products(name, images)')
+            .eq('order_id', data.order_id);
+
+          if (oiErr) {
+            console.warn('[refund_items] order_items lookup failed:', oiErr.message);
+          } else if (orderItems && orderItems.length) {
+            const filtered = data.seller_id
+              ? orderItems.filter((oi: any) => oi.seller_id === data.seller_id)
+              : orderItems;
+
+            const subTotal = filtered.reduce((sum: number, oi: any) => sum + Number(oi.total || 0), 0) || 1;
+            const totalAmount = Number(refundData.amount) || subTotal;
+
+            const itemsPayload = filtered.map((oi: any) => {
+              const share = Number(oi.total || 0) / subTotal;
+              return {
+                refund_id: newRefund.id,
+                order_id: data.order_id,
+                order_item_id: oi.id,
+                product_id: oi.product_id,
+                seller_id: oi.seller_id,
+                customer_id: user.id,
+                product_name: oi.product?.name || 'Product',
+                product_image: oi.product?.images?.[0] || null,
+                reason: refundData.reason,
+                quantity: oi.quantity || 1,
+                refund_amount: Math.round(totalAmount * share * 100) / 100,
+                refund_status: 'requested',
+                evidence_urls: imageUrls.length ? imageUrls : null,
+              };
+            });
+
+            if (itemsPayload.length) {
+              const { error: itemsErr } = await supabaseAdmin
+                .from('refund_items')
+                .insert(itemsPayload);
+              if (itemsErr) {
+                console.warn('[refund_items] insert failed (table may not exist yet):', itemsErr.message);
+              } else {
+                console.log(`[refund_items] inserted ${itemsPayload.length} product-level rows`);
+              }
+            }
+          }
+        }
+      } catch (refundItemsErr) {
+        console.warn('[refund_items] non-fatal error:', refundItemsErr);
+      }
+
       // Send notification to seller
       if (data.seller_id) {
         try {
@@ -191,7 +249,18 @@ export const useRefundStore = create<RefundState>((set, get) => ({
         .from('refund_requests')
         .select(`
           *,
-          order:orders(id, order_number, total_amount, status, shipping_name)
+          order:orders(id, order_number, total_amount, status, shipping_name),
+          refund_items(
+            id,
+            product_id,
+            product_name,
+            product_image,
+            quantity,
+            refund_amount,
+            refund_status,
+            seller_notes,
+            product:products(id, name, images, price)
+          )
         `)
         .eq('seller_id', sellerId)
         .order('created_at', { ascending: false });
@@ -213,7 +282,18 @@ export const useRefundStore = create<RefundState>((set, get) => ({
         .from('refund_requests')
         .select(`
           *,
-          order:orders(id, order_number, total_amount, status, shipping_name, shipping_phone, created_at)
+          order:orders(id, order_number, total_amount, status, shipping_name, shipping_phone, created_at),
+          refund_items(
+            id,
+            product_id,
+            product_name,
+            product_image,
+            quantity,
+            refund_amount,
+            refund_status,
+            seller_notes,
+            product:products(id, name, images, price)
+          )
         `)
         .eq('id', id)
         .single();
@@ -230,7 +310,6 @@ export const useRefundStore = create<RefundState>((set, get) => ({
       set({ loading: false });
     }
   },
-
   updateRefundStatus: async (id, status, response) => {
     try {
       // ✅ FIX: Only allow whitelisted status values matching DB check constraint
@@ -276,6 +355,35 @@ export const useRefundStore = create<RefundState>((set, get) => ({
       }
 
       console.log('[refund_requests] update success:', data);
+         // ✅ Cascade refund status to refund_items so seller view stays in sync
+      try {
+        const itemStatusMap: Record<string, string> = {
+          requested: 'requested',
+          pending: 'requested',
+          approved: 'approved',
+          rejected: 'rejected',
+          processing: 'approved',
+          processed: 'processed',
+          refunded: 'processed',
+          cancelled: 'rejected',
+        };
+        const itemStatus = itemStatusMap[safeStatus] || 'requested';
+        const itemUpdate: any = {
+          refund_status: itemStatus,
+          updated_at: new Date().toISOString(),
+        };
+        if (response) itemUpdate.seller_notes = response;
+        const { error: itemsErr } = await supabaseAdmin
+          .from('refund_items')
+          .update(itemUpdate)
+          .eq('refund_id', id);
+        if (itemsErr) {
+          console.warn('[refund_items] cascade update failed:', itemsErr.message);
+        }
+      } catch (cascadeErr) {
+        console.warn('[refund_items] cascade update exception:', cascadeErr);
+      }
+
       // Send notification to customer about refund status update
       const refund = get().refunds.find(r => r.id === id) || get().selectedRefund;
       if (refund?.user_id) {
