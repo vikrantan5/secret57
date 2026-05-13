@@ -85,6 +85,7 @@ export default function SellerDashboard() {
     completedOrders: 0,
     pendingBookings: 0,
     completedBookings: 0,
+      pendingRefunds: 0,
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -239,7 +240,21 @@ export default function SellerDashboard() {
         completedOrders: 0,
         pendingBookings: 0,
         completedBookings: 0,
+        pendingRefunds: 0,
       };
+
+      // Always fetch pending refund count for the badge
+      try {
+        const { count: pendingRefundsCount } = await supabase
+          .from('refund_requests')
+          .select('id', { count: 'exact', head: true })
+          .eq('seller_id', sellerData.id)
+          .in('status', ['pending', 'requested', 'under_review']);
+        nextStats.pendingRefunds = pendingRefundsCount || 0;
+      } catch (e) {
+        console.warn('[dashboard] pending refunds count failed:', e);
+      }
+
 
       if (type === 'ecommerce' || type === 'hybrid') {
         const { data: orderItems } = await supabase
@@ -377,7 +392,7 @@ export default function SellerDashboard() {
     </LinearGradient>
   );
 
-  const QuickActionCard = ({ icon, title, subtitle, onPress, gradient }: any) => (
+  const QuickActionCard = ({ icon, title, subtitle, onPress, gradient, badgeCount }: any) => (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
       <LinearGradient
         colors={gradients.card}
@@ -397,11 +412,17 @@ export default function SellerDashboard() {
           <Text style={styles.quickActionTitle}>{title}</Text>
           <Text style={styles.quickActionSubtitle}>{subtitle}</Text>
         </View>
+        {badgeCount > 0 && (
+          <View style={styles.quickActionBadge} testID="refund-pending-badge">
+            <Text style={styles.quickActionBadgeText}>
+              {badgeCount > 99 ? '99+' : badgeCount}
+            </Text>
+          </View>
+        )}
         <Ionicons name="arrow-forward" size={18} color={colors.textTertiary} />
       </LinearGradient>
     </TouchableOpacity>
   );
-
   const getCategoryGradient = (type: string) => {
     switch (type) {
       case 'booking': return gradients.warning;
@@ -703,12 +724,17 @@ export default function SellerDashboard() {
               onPress={() => router.push('/seller/issues' as any)}
               gradient={[colors.accentWarning, colors.accentWarning]}
             />
-            <QuickActionCard
+             <QuickActionCard
               icon="return-down-back-outline"
-              title="Refund Requests"
-              subtitle="Manage customer refund requests"
+              title="Refund Transactions"
+              subtitle={
+                stats.pendingRefunds > 0
+                  ? `${stats.pendingRefunds} pending refund${stats.pendingRefunds === 1 ? '' : 's'} need action`
+                  : 'Manage product & service refunds'
+              }
               onPress={() => router.push('/seller/refunds' as any)}
               gradient={[colors.accentPrimary, colors.accentPrimaryLight]}
+              badgeCount={stats.pendingRefunds}
             />
             <QuickActionCard
               icon="analytics-outline"
