@@ -14,6 +14,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 
 
+
+
 -- Users table
 CREATE TABLE IF NOT EXISTS public.users (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
