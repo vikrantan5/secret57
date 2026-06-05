@@ -15,6 +15,8 @@ This guide will help you set up the Supabase database for ServiceHub Phase 1.
 
 ---
 
+
+
 ## Step 2: Create Users Table
 
 Run this SQL script to create the users table:
